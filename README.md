@@ -12,3 +12,4 @@ the modified code is not overriden.
 
 1. `$custom_form->notifications` usage in `library/modules/custom-forms/front/front-mail.php:168` see #075b18a0747850f942568da2328a6eb3f0826bc0
 2. Add `$original_message param` in `forminator_email_message` filter in `library/abstracts/abstract-class-mail.php:394` see 94d193c79a5ffa9874a44269546b5e83b6b94d73
+3. Add `composer.json`

@@ -1,0 +1,10 @@
+{
+    "name": "superhuit-agency/forminator",
+    "description": "Custom fork of the Forminator plugin.",
+    "version": "1.48.2",
+    "type": "wordpress-plugin",
+    "license": "GPL-2.0-or-later",
+    "require": {
+        "php": ">=7.4"
+    }
+}
