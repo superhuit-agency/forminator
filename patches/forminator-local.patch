@@ -1,16 +1,41 @@
-diff --git a/library/modules/custom-forms/front/front-mail.php b/library/modules/custom-forms/front/front-mail.php
---- a/library/modules/custom-forms/front/front-mail.php
-+++ b/library/modules/custom-forms/front/front-mail.php
-@@ -168,1 +168,1 @@
--			if ( ! empty( $custom_form->settings['notifications'] ) ) {
-+			if ( ! empty( $custom_form->notifications ) ) {
-@@ -171,1 +171,1 @@
--				foreach ( $custom_form->settings['notifications'] as $notification ) {
-+				foreach ( $custom_form->notifications as $notification ) {
 diff --git a/library/abstracts/abstract-class-mail.php b/library/abstracts/abstract-class-mail.php
+index 33edecf..4b7bc0b 100644
 --- a/library/abstracts/abstract-class-mail.php
 +++ b/library/abstracts/abstract-class-mail.php
-@@ -394,1 +394,1 @@
+@@ -389,8 +389,9 @@ abstract class Forminator_Mail {
+ 		 * Filter email body that will be sent by Forminator Mailer
+ 		 *
+ 		 * @param string $message
++		 * @param string $original_message
+ 		 */
 -		$message = apply_filters( 'forminator_email_message', $message );
 +		$message = apply_filters( 'forminator_email_message', $message, $this->message );
+ 
+ 		$this->message = $message;
+ 	}
+diff --git a/library/modules/custom-forms/front/front-mail.php b/library/modules/custom-forms/front/front-mail.php
+index 5d30089..e55def4 100644
+--- a/library/modules/custom-forms/front/front-mail.php
++++ b/library/modules/custom-forms/front/front-mail.php
+@@ -122,7 +122,6 @@ class Forminator_CForm_Front_Mail extends Forminator_Mail {
+ 
+ 		try {
+ 			$data          = Forminator_CForm_Front_Action::$prepared_data;
+-			$notifications = $custom_form->notifications;
+ 
+ 			if (
+ 			empty( $data ) && ! empty( $submitted_data ) &&
+@@ -166,10 +165,10 @@ class Forminator_CForm_Front_Mail extends Forminator_Mail {
+ 			do_action( 'forminator_custom_form_mail_before_send_mail', $this, $custom_form, $data, $entry );
+ 
+ 			// Process Email.
+-			if ( ! empty( $notifications ) ) {
++			if ( ! empty( $custom_form->notifications ) ) {
+ 				$this->init();
+ 				// Process admin mail.
+-				foreach ( $notifications as $notification ) {
++				foreach ( $custom_form->notifications as $notification ) {
+ 
+ 					// If notification is save_draft type, skip.
+ 					if (
 
