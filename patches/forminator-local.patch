@@ -1,0 +1,16 @@
+diff --git a/library/modules/custom-forms/front/front-mail.php b/library/modules/custom-forms/front/front-mail.php
+--- a/library/modules/custom-forms/front/front-mail.php
++++ b/library/modules/custom-forms/front/front-mail.php
+@@ -168,1 +168,1 @@
+-			if ( ! empty( $custom_form->settings['notifications'] ) ) {
++			if ( ! empty( $custom_form->notifications ) ) {
+@@ -171,1 +171,1 @@
+-				foreach ( $custom_form->settings['notifications'] as $notification ) {
++				foreach ( $custom_form->notifications as $notification ) {
+diff --git a/library/abstracts/abstract-class-mail.php b/library/abstracts/abstract-class-mail.php
+--- a/library/abstracts/abstract-class-mail.php
++++ b/library/abstracts/abstract-class-mail.php
+@@ -394,1 +394,1 @@
+-		$message = apply_filters( 'forminator_email_message', $message );
++		$message = apply_filters( 'forminator_email_message', $message, $this->message );
+

@@ -1,0 +1,77 @@
+name: Sync upstream Forminator (WP.org SVN)
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    # Weekly, Monday 03:00 UTC
+    - cron: "0 3 * * 1"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-upstream-forminator
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies (svn, rsync)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y subversion rsync
+
+      - name: Sync from WordPress.org SVN tags
+        id: sync
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          out="$(bash tools/sync-wporg-svn.sh 2>&1)"
+          echo "${out}"
+
+          tag="$(echo "${out}" | grep -E '^FORMINATOR_UPSTREAM_TAG=' | tail -n 1 | cut -d= -f2)"
+          if [[ -z "${tag}" ]]; then
+            echo "Unable to extract upstream tag from script output" >&2
+            exit 1
+          fi
+
+          patch_applied="$(echo "${out}" | grep -E '^FORMINATOR_PATCH_APPLIED=' | tail -n 1 | cut -d= -f2 || true)"
+          if [[ -z "${patch_applied}" ]]; then
+            patch_applied="0"
+          fi
+
+          patch_note="$(echo "${out}" | grep -E '^FORMINATOR_PATCH_NOTE=' | tail -n 1 | cut -d= -f2- || true)"
+          if [[ -z "${patch_note}" ]]; then
+            patch_note="(no patch note)"
+          fi
+
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+          echo "patch_applied=${patch_applied}" >> "${GITHUB_OUTPUT}"
+          echo "patch_note=${patch_note}" >> "${GITHUB_OUTPUT}"
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore(upstream): sync Forminator ${{ steps.sync.outputs.tag }}"
+          title: "${{ steps.sync.outputs.patch_applied == '1' && format('chore(upstream): sync Forminator {0}', steps.sync.outputs.tag) || format('WIP: chore(upstream): sync Forminator {0} (patch NOT applied)', steps.sync.outputs.tag) }}"
+          body: |
+            Automated upstream sync from WordPress.org SVN tags.
+
+            - Upstream tag: `${{ steps.sync.outputs.tag }}`
+            - Local patch re-applied: `patches/forminator-local.patch`
+            - Patch applied: `${{ steps.sync.outputs.patch_applied }}`
+            - Patch status: `${{ steps.sync.outputs.patch_note }}`
+
+            If `Patch applied` is `0`, this PR is intentionally created as WIP/draft and must be fixed manually before merging.
+          branch: "chore/sync-upstream-${{ steps.sync.outputs.tag }}"
+          delete-branch: true
+          draft: ${{ steps.sync.outputs.patch_applied != '1' }}
