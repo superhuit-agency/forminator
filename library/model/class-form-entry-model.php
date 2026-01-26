@@ -1797,7 +1797,7 @@ class Forminator_Form_Entry_Model {
 		if ( $allow_html ) {
 			$value  = '<hr>';
 			$value .= '<b>' . $label . ':</b><br>';
-			$value .= wp_kses_post( $post_content, 'post' );
+			$value .= wp_kses_post( forminator_replace_linebreaks( $post_content ), 'post' );
 		} else {
 			$post_content = wp_strip_all_tags( $post_content );
 			$value        = $label . ': ';

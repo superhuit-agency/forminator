@@ -135,7 +135,8 @@ class Forminator_Textarea extends Forminator_Field {
 	public function markup( $field, $views_obj, $draft_value = null ) {
 
 		$settings            = $views_obj->model->settings;
-		$use_ajax_load       = ! empty( $settings['use_ajax_load'] ) || ! empty( $field['parent_group'] );
+		$is_preview          = filter_input( INPUT_POST, 'is_preview', FILTER_VALIDATE_BOOLEAN );
+		$use_ajax_load       = ! empty( $settings['use_ajax_load'] ) || ! empty( $field['parent_group'] ) || $is_preview;
 		$this->field         = $field;
 		$this->form_settings = $settings;
 		$descr_position      = self::get_description_position( $field, $settings );

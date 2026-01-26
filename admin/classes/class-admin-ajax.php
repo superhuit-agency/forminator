@@ -167,6 +167,8 @@ class Forminator_Admin_AJAX {
 		if ( ! forminator_feedback_disabled() ) {
 			add_action( 'wp_ajax_forminator_share_feedback', array( $this, 'forminator_share_feedback' ) );
 		}
+
+		add_action( 'wp_ajax_forminator_deactivation_survey', array( $this, 'submit_deactivation_survey' ) );
 	}
 
 	/**
@@ -2473,6 +2475,8 @@ class Forminator_Admin_AJAX {
 
 		$notification_name = Forminator_Core::sanitize_text_field( 'prop' );
 		$input_value       = Forminator_Core::sanitize_text_field( 'value' );
+		$type              = Forminator_Core::sanitize_text_field( 'type' );
+		$location          = Forminator_Core::sanitize_text_field( 'location' );
 
 		$allowed_options = array(
 			'forminator_skip_pro_notice',
@@ -2496,6 +2500,15 @@ class Forminator_Admin_AJAX {
 				) {
 			wp_send_json_error( esc_html__( 'Invalid option name', 'forminator' ) );
 		}
+
+		/**
+		 * Fires before dismissing a notice
+		 *
+		 * @param string $notification_name Notification name.
+		 * @param string $type Input value.
+		 * @param string $referrer Referrer URL.
+		 */
+		do_action( 'forminator_before_rating_dismiss_notice', $notification_name, $type, $location );
 
 		if ( ! empty( $input_value ) ) {
 			update_option( $notification_name, $input_value );
@@ -2573,6 +2586,8 @@ class Forminator_Admin_AJAX {
 
 		$notification_name = Forminator_Core::sanitize_text_field( 'prop' );
 		$form_id           = filter_input( INPUT_POST, 'form_id', FILTER_VALIDATE_INT );
+		$type              = Forminator_Core::sanitize_text_field( 'type' );
+		$location          = Forminator_Core::sanitize_text_field( 'location' );
 
 		$allowed_keys = array(
 			'forminator_publish_rating_later',
@@ -2585,6 +2600,8 @@ class Forminator_Admin_AJAX {
 		if ( ! in_array( $notification_name, $allowed_keys, true ) ) {
 			wp_send_json_error( esc_html__( 'Invalid notification name', 'forminator' ) );
 		}
+
+		do_action( 'forminator_before_rating_dismiss_notice', $notification_name, $type, $location );
 
 		update_post_meta( $form_id, $notification_name, true );
 
@@ -3118,6 +3135,29 @@ class Forminator_Admin_AJAX {
 		}
 		Forminator_Core::init_mixpanel( true );
 		do_action( 'forminator_share_feedback_to_mixpanel', $rating, $additional_details );
+		wp_send_json_success();
+	}
+
+	/**
+	 * Submit deactivation survey
+	 *
+	 * @return void
+	 */
+	public function submit_deactivation_survey() {
+		forminator_validate_ajax( 'forminator_deactivation_survey' );
+
+		$reason               = Forminator_Core::sanitize_text_field( 'reason' );
+		$message              = Forminator_Core::sanitize_text_field( 'message' );
+		$action               = Forminator_Core::sanitize_text_field( 'model_action' );
+		$requested_assistance = Forminator_Core::sanitize_text_field( 'requested_assistance' );
+
+		// Do not send Skip actions if tracking is disabled.
+		if ( 'Submit' !== $action && ! Forminator_Core::is_tracking_active() ) {
+			wp_send_json_error();
+		}
+
+		Forminator_Core::init_mixpanel( true );
+		do_action( 'forminator_share_deactivation_survey_to_mixpanel', $reason, $action, $requested_assistance, $message );
 		wp_send_json_success();
 	}
 }

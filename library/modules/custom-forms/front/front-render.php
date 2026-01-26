@@ -695,7 +695,7 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 				$arg['currency'] = $paypal_setting['currency'];
 			}
 			if ( ! empty( $paypal_setting['locale'] ) ) {
-				$arg['locale'] = $paypal_setting['locale'];
+				$arg['locale'] = str_replace( '-', '_', $paypal_setting['locale'] );
 			}
 			foreach ( $funding_array as $fund ) {
 				if ( ! empty( $paypal_setting[ $fund ] ) ) {

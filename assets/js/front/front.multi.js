@@ -274,7 +274,8 @@
 				const $saveDraft = $(this),
 					$parent = $saveDraft.closest('.forminator-pagination, form');
 				var initialData	= $parent.find(':input').serializeArray();
-				$parent.find( ".forminator-field input, .forminator-row input[type=hidden], .forminator-field select, .forminator-field textarea, .forminator-field-signature").on( 'change input', function (e) {
+				let draftTimer;
+				const triggerDraftCheck = function () {
 					if ( $saveDraft.hasClass( 'disabled' ) ) {
 						clearTimeout( draftTimer );
 						draftTimer = setTimeout( function() {
@@ -283,7 +284,11 @@
 							500
 						);
 					}
-				});
+				};
+
+				$parent.on('forminator-clone-group forminator-group-item-removed', triggerDraftCheck);
+				$parent.find( ".forminator-field input, .forminator-row input[type=hidden], .forminator-field select, .forminator-field textarea, .forminator-field-signature").on( 'change input', triggerDraftCheck);
+				
 			});
 
 			if( 'undefined' !== typeof self.settings.hasLeads ) {

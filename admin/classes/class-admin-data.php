@@ -221,6 +221,7 @@ class Forminator_Admin_Data {
 			'isMultisite'                    => is_multisite(),
 			'shareFeedbackNonce'             => wp_create_nonce( 'forminator_share_feedback' ),
 			'feedbackDisabled'               => forminator_feedback_disabled(),
+			'isTrackingActive'               => Forminator_Core::is_tracking_active(),
 		);
 	}
 

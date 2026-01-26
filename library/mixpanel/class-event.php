@@ -67,4 +67,15 @@ abstract class Events {
 
 		return $value;
 	}
+
+	/**
+	 * Limit text to Mixpanel character limit
+	 *
+	 * @param mixed $text Text.
+	 * @return string
+	 */
+	protected static function limit_text( $text ) {
+		// Limit text to Mixpanel's character limit of 255.
+		return substr( $text, 0, 255 );
+	}
 }

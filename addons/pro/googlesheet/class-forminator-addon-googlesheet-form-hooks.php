@@ -141,6 +141,11 @@ class Forminator_Googlesheet_Form_Hooks extends Forminator_Integration_Form_Hook
 
 				$form_value = Forminator_Form_Entry_Model::meta_value_to_string( $field_type, $meta_value, false );
 
+				// Replace custom_option with actual custom value.
+				if ( false !== strpos( $form_value, 'custom_option' ) && isset( $submitted_data[ 'custom-' . $element_id ] ) ) {
+					$form_value = str_replace( 'custom_option', $submitted_data[ 'custom-' . $element_id ], $form_value );
+				}
+
 				$value     = new ForminatorGoogleAddon\Google\Service\Sheets\ExtendedValue();
 				$cell_data = new ForminatorGoogleAddon\Google\Service\Sheets\CellData();
 

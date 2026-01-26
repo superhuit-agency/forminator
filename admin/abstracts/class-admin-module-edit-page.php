@@ -425,7 +425,7 @@ abstract class Forminator_Admin_Module_Edit_Page extends Forminator_Admin_Page {
 										data-action="reset-views"
 										data-nonce="<?php echo esc_attr( wp_create_nonce( 'forminator-nonce-reset-views-' . $module['id'] ) ); ?>"
 									>
-										<i class="sui-icon-update" aria-hidden="true"></i> <?php esc_html_e( 'Reset Tracking data', 'forminator' ); ?>
+										<i class="sui-icon-update" aria-hidden="true"></i> <?php esc_html_e( 'Reset Tracking Data', 'forminator' ); ?>
 									</button>
 								</li>
 

@@ -784,9 +784,12 @@ class Forminator_Stripe extends Forminator_Field {
 				}
 
 				$options = array(
-					'amount'         => $this->calculate_amount( $amount, $currency ),
-					'payment_method' => $submitted_data['payment_method'],
+					'amount' => $this->calculate_amount( $amount, $currency ),
 				);
+
+				if ( 'blik' !== $submitted_data['payment_method_type'] ) {
+					$options['payment_method'] = $submitted_data['payment_method'];
+				}
 
 				// Update receipt email if set on front-end.
 				if ( isset( $submitted_data['receipt_email'] ) && ! empty( $submitted_data['receipt_email'] ) ) {

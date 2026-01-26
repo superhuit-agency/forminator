@@ -36,7 +36,7 @@ $img_path = forminator_plugin_url() . 'assets/images/';
 						</div>
 							&nbsp;&nbsp;
 							<h4 style="margin: 0;">
-								<?php esc_html_e( 'Unlock all Add-ons & advanced features with Forminator Pro – now on sale, limited time only!', 'forminator' ); ?>
+								<?php esc_html_e( 'Unlock all Add-ons & advanced features with Forminator Pro', 'forminator' ); ?>
 							</h4>
 						</div>
 						<div class="sui-actions">

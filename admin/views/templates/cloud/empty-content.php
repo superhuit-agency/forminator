@@ -19,20 +19,15 @@
 			?>
 			<br/>
 			<?php
-			printf(
-				/* translators: %1$s - opening anchor tag, %2$s - closing anchor tag */
-				esc_html__( '%1$sLearn how to save forms as cloud templates%2$s.', 'forminator' ),
-				'<a href="https://wpmudev.com/docs/wpmu-dev-plugins/forminator/#templates" target="_blank">',
-				'</a>'
-			);
+			if ( forminator_is_show_documentation_link() ) {
+				printf(
+					/* translators: %1$s - opening anchor tag, %2$s - closing anchor tag */
+					esc_html__( '%1$sLearn how to save forms as cloud templates%2$s.', 'forminator' ),
+					'<a href="https://wpmudev.com/docs/wpmu-dev-plugins/forminator/#templates" target="_blank">',
+					'</a>'
+				);
+			}
 			?>
 		</p>
-		<?php if ( ! FORMINATOR_PRO && Forminator_Hub_Connector::hub_connector_logged_in() ) : ?>
-		<div class="sui-message-footer" style="margin-top: 150px;">
-			<span class="sui-button sui-button-ghost" data-modal-open="forminator-disconnect-hub-modal">
-				<?php esc_html_e( 'Disconnect site', 'forminator' ); ?>
-			</span>
-		</div>
-		<?php endif; ?>
 	</div>
 </div>

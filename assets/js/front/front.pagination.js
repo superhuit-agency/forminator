@@ -560,6 +560,7 @@
 			//get fields on current page
 			page.find("input, select, textarea")
 				.not(":submit, :reset, :image, :disabled")
+				.not(".forminator-field-signature :input:not(.do-validate)")
 				.not('[gramm="true"]')
 				.each(function (key, element) {
 					if (

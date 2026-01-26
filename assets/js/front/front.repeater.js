@@ -248,6 +248,14 @@
 		newHtml = newHtml.replace( regexp, '$1$2-' + newSuffix + '$3' );
 
 		newHtml = newHtml.replace( /hasDatepicker|forminator-has_error|forminator-input-with-phone/g, '' );
+		
+		newHtml = newHtml.replace( /(data-(?:start|end)-field=)"([^"]+?)"/g, function(match, p1, p2) {
+			const newField = p2 + '-' + newSuffix;
+			if (!newHtml.includes(`name="${newField}"`)) {
+				return match;
+			}
+			return p1 + '"' + newField + '"';
+		});
 
 		newHtml = forminatorUpdateCalculationFormulas( newHtml, newSuffix, baseBlock );
 

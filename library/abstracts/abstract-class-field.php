@@ -1233,6 +1233,14 @@ abstract class Forminator_Field {
 		} elseif ( stripos( $element_id, 'rating-' ) !== false ) {
 			$rating_value           = explode( '/', $field_value )[0] ?? 0;
 			$is_condition_fulfilled = self::is_condition_fulfilled( $rating_value, $condition );
+		} elseif ( stripos( $element_id, 'currency-' ) !== false
+			|| stripos( $element_id, 'number-' ) !== false ) {
+			$is_condition_fulfilled = false;
+			$form_field             = Forminator_Front_Action::$module_object->get_field( $element_id );
+			if ( $form_field ) {
+				$field_value            = self::forminator_replace_number( $form_field, $field_value );
+				$is_condition_fulfilled = self::is_condition_fulfilled( $field_value, $condition );
+			}
 		} else {
 			$is_condition_fulfilled = self::is_condition_fulfilled( $field_value, $condition, $form_id );
 		}

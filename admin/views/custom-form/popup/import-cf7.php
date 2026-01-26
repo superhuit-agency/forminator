@@ -59,8 +59,8 @@ $forms     = forminator_list_thirdparty_contact_forms( 'cf7' );
 									esc_html__( "%1\$s2. ConstantContact:%2\$s Forminator doesn't integrate directly with ConstantContact. However, you can use %3\$sWebhook integration%4\$s to send your leads to ConstantContact.", 'forminator' ),
 									'<strong>',
 									'</strong>',
-									'<a href="https://wpmudev.com/docs/wpmu-dev-plugins/forminator/#webhook" target="_blank">',
-									'</a>'
+									forminator_is_show_documentation_link() ? '<a href="https://wpmudev.com/docs/wpmu-dev-plugins/forminator/#webhook" target="_blank">' : '',
+									forminator_is_show_documentation_link() ? '</a>' : ''
 								);
 								?>
 							</li>
@@ -537,14 +537,17 @@ $forms     = forminator_list_thirdparty_contact_forms( 'cf7' );
 	<div class="sui-box-body wpmudev-popup-form">
 		<?php $support_url = FORMINATOR_PRO ? 'https://wpmudev.com/hub2/support/' : 'https://wordpress.org/support/plugin/forminator'; ?>
 		<p>
-			<?php
+		<?php
+		esc_html_e( 'We have encountered an error while importing your forms from Contact Form 7 and selected add-ons.', 'forminator' );
+		if ( forminator_is_show_documentation_link() ) {
 			printf(
 			/* Translators: 1. Opening <a> tag with link to the support url, 2. closing <a> tag. */
-				esc_html__( 'We have encountered an error while importing your forms from Contact Form 7 and selected add-ons. Unable to solve this? Contact our %1$ssupport%2$s team for further help.', 'forminator' ),
+				' ' . esc_html__( 'Unable to solve this? Contact our %1$ssupport%2$s team for further help.', 'forminator' ),
 				'<a href="' . esc_url( $support_url ) . '" target="_blank">',
 				'</a>'
 			);
-			?>
+		}
+		?>
 		</p>
 
 		<div class="sui-notice sui-notice-error">

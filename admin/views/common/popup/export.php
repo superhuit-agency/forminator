@@ -39,7 +39,7 @@ $text_area_id = uniqid( 'export-text-' );
 		</div>
 
 	<?php
-	if ( 'form' === $slug ) {
+	if ( 'form' === $slug && forminator_is_show_documentation_link() ) {
 		echo forminator_template( 'common/popup/cloud-templates-notice', array( 'slug' => $slug ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 	}
 	?>

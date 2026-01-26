@@ -34,7 +34,7 @@ class Forminator_Mixpanel_Feedback extends Events {
 			array(
 				'Survey Topic' => 'Form editor phase one',
 				'rating'       => $rating,
-				'message'      => $message,
+				'message'      => ! empty( $message ) ? self::limit_text( $message ) : '',
 			)
 		);
 	}
