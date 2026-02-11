@@ -6,7 +6,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 SVN_BASE_URL="${FORMINATOR_SVN_BASE_URL:-https://plugins.svn.wordpress.org/forminator}"
 SVN_TAGS_URL="${SVN_BASE_URL%/}/tags"
-PATCH_FILE="${REPO_ROOT}/patches/forminator-local.patch"
+PATCH_FILE="${REPO_ROOT}/patches/custom-changes.patch"
 
 log() {
   printf '%s\n' "$*" >&2

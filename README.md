@@ -19,7 +19,7 @@ the modified code is not overriden.
 
 This fork includes an automation pipeline that imports the latest **WordPress.org SVN tag** for Forminator and then re-applies this fork's minimal patch.
 
-- **Patch file**: `patches/forminator-local.patch`
+- **Patch file**: `patches/custom-changes.patch`
 - **Sync script**: `tools/sync-wporg-svn.sh`
 - **CI workflow**: `.github/workflows/sync-upstream-forminator.yml`
 
@@ -49,5 +49,5 @@ Run:
 Upstream can occasionally refactor the relevant code and the patch may fail. When that happens:
 
 1. Update the affected code manually to restore the fork behavior described above.
-2. Update `patches/forminator-local.patch` to match the new upstream context.
+2. Update `patches/custom-changes.patch` to match the new upstream context.
 3. Re-run the sync to confirm the workflow verification passes.
