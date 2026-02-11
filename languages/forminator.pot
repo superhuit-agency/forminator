@@ -2,9 +2,9 @@
 # This file is distributed under the same license as the Forminator package.
 msgid ""
 msgstr ""
-"Project-Id-Version: Forminator 1.49.1\n"
+"Project-Id-Version: Forminator 1.49.2\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/build\n"
-"POT-Creation-Date: 2025-12-12 18:42:41+00:00\n"
+"POT-Creation-Date: 2025-12-18 13:58:36+00:00\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -997,14 +997,14 @@ msgstr ""
 #: addons/pro/googlesheet/class-forminator-addon-googlesheet-quiz-hooks.php:145
 #: addons/pro/slack/class-forminator-addon-slack-quiz-hooks.php:220
 #: admin/views/quiz/entries/content-leads-none.php:180
-#: admin/views/quiz/entries/content-leads.php:233 library/class-export.php:565
+#: admin/views/quiz/entries/content-leads.php:233 library/class-export.php:567
 msgid "Correct"
 msgstr ""
 
 #: addons/pro/googlesheet/class-forminator-addon-googlesheet-quiz-hooks.php:145
 #: addons/pro/slack/class-forminator-addon-slack-quiz-hooks.php:220
 #: admin/views/quiz/entries/content-leads-none.php:182
-#: admin/views/quiz/entries/content-leads.php:235 library/class-export.php:565
+#: admin/views/quiz/entries/content-leads.php:235 library/class-export.php:567
 msgid "Incorrect"
 msgstr ""
 
@@ -2066,7 +2066,7 @@ msgstr ""
 
 #: addons/pro/slack/class-forminator-addon-slack-poll-hooks.php:204
 #: addons/pro/trello/class-forminator-addon-trello-poll-hooks.php:277
-#: library/class-export.php:616
+#: library/class-export.php:618
 msgid "Extra"
 msgstr ""
 
@@ -2803,7 +2803,7 @@ msgid "Publish"
 msgstr ""
 
 #: admin/abstracts/class-admin-module-edit-page.php:393 admin/locale.php:1638
-#: admin/views/common/dashboard/widget.php:155 library/class-export.php:1528
+#: admin/views/common/dashboard/widget.php:155 library/class-export.php:1530
 msgid "View Submissions"
 msgstr ""
 
@@ -2992,7 +2992,7 @@ msgid "Copy of %s"
 msgstr ""
 
 #: admin/abstracts/class-admin-module-edit-page.php:898
-#: library/class-export.php:156 library/helpers/helper-core.php:740
+#: library/class-export.php:158 library/helpers/helper-core.php:740
 msgid "forminator"
 msgstr ""
 
@@ -3377,7 +3377,7 @@ msgstr ""
 #: admin/classes/class-admin-ajax.php:454
 #: admin/classes/class-admin-ajax.php:483
 #: library/addon/admin/class-integration-admin-ajax.php:97
-#: library/class-export.php:184 library/helpers/helper-core.php:148
+#: library/class-export.php:186 library/helpers/helper-core.php:148
 #: library/helpers/helper-core.php:162
 #: library/modules/custom-forms/front/front-action.php:2927
 msgid "Invalid request, you are not allowed to do that action."
@@ -3661,7 +3661,7 @@ msgstr ""
 msgid "Current user cannot add recipient."
 msgstr ""
 
-#: admin/classes/class-admin-ajax.php:2811 library/class-export.php:222
+#: admin/classes/class-admin-ajax.php:2811 library/class-export.php:224
 msgid "Invalid email."
 msgstr ""
 
@@ -3682,8 +3682,8 @@ msgid "Fields"
 msgstr ""
 
 #: admin/classes/class-admin-l10n.php:66 admin/classes/class-admin-l10n.php:345
-#: admin/locale.php:308 library/class-export.php:466
-#: library/class-export.php:614 library/fields/date.php:86
+#: admin/locale.php:308 library/class-export.php:468
+#: library/class-export.php:616 library/fields/date.php:86
 msgid "Date"
 msgstr ""
 
@@ -6806,7 +6806,7 @@ msgid "Select option"
 msgstr ""
 
 #: admin/locale.php:292 admin/views/common/dashboard/widget.php:77
-#: admin/views/settings/dashboard/content.php:41 library/class-export.php:1149
+#: admin/views/settings/dashboard/content.php:41 library/class-export.php:1151
 #: library/helpers/helper-fields.php:448
 #: library/lib/action-scheduler/classes/ActionScheduler_AdminView.php:301
 #: library/lib/action-scheduler/classes/ActionScheduler_ListTable.php:97
@@ -7787,7 +7787,7 @@ msgstr ""
 msgid "Enter default value"
 msgstr ""
 
-#: admin/locale.php:515 library/class-export.php:1137
+#: admin/locale.php:515 library/class-export.php:1139
 #: library/fields/currency.php:83 library/fields/currency.php:104
 #: library/helpers/helper-fields.php:446
 #: library/modules/custom-forms/admin/admin-page-entries.php:473
@@ -8631,7 +8631,7 @@ msgstr ""
 msgid "Price"
 msgstr ""
 
-#: admin/locale.php:707 library/class-export.php:1141
+#: admin/locale.php:707 library/class-export.php:1143
 #: library/modules/custom-forms/admin/admin-page-entries.php:477
 msgid "Quantity"
 msgstr ""
@@ -9592,7 +9592,7 @@ msgstr ""
 msgid "Plan Name is required."
 msgstr ""
 
-#: admin/locale.php:934 library/class-export.php:1129
+#: admin/locale.php:934 library/class-export.php:1131
 #: library/modules/custom-forms/admin/admin-page-entries.php:465
 msgid "Payment type"
 msgstr ""
@@ -9609,7 +9609,7 @@ msgstr ""
 msgid "E.g., 20.00"
 msgstr ""
 
-#: admin/locale.php:938 library/class-export.php:1133
+#: admin/locale.php:938 library/class-export.php:1135
 #: library/helpers/helper-fields.php:445
 #: library/modules/custom-forms/admin/admin-page-entries.php:469
 #: library/modules/custom-forms/admin/admin-page-entries.php:518
@@ -13191,7 +13191,7 @@ msgstr ""
 
 #: admin/locale.php:1785 admin/views/quiz/entries/content-leads-none.php:205
 #: admin/views/quiz/entries/content-leads.php:196
-#: admin/views/quiz/entries/content-leads.php:258 library/class-export.php:467
+#: admin/views/quiz/entries/content-leads.php:258 library/class-export.php:469
 #: library/modules/polls/admin/admin-loader.php:197
 #: library/modules/quizzes/admin/admin-loader.php:699
 msgid "Question"
@@ -14156,8 +14156,8 @@ msgstr ""
 
 #: admin/locale.php:2006 admin/views/quiz/entries/content-leads-none.php:206
 #: admin/views/quiz/entries/content-leads.php:197
-#: admin/views/quiz/entries/content-leads.php:259 library/class-export.php:468
-#: library/class-export.php:615
+#: admin/views/quiz/entries/content-leads.php:259 library/class-export.php:470
+#: library/class-export.php:617
 #: library/modules/quizzes/admin/admin-loader.php:679
 msgid "Answer"
 msgstr ""
@@ -15875,7 +15875,7 @@ msgid "Your Forminator %1$s summary for %2$s"
 msgstr ""
 
 #: admin/views/common/reports/email-report.php:117
-#: library/class-export.php:1498
+#: library/class-export.php:1500
 #. translators: %s: Recipient name
 #. translators: %s is Blog name.
 msgid "Hi %s,"
@@ -18199,57 +18199,65 @@ msgstr ""
 msgid "Post Custom Data"
 msgstr ""
 
-#: library/class-export.php:198
+#: library/class-export.php:109
+msgid "You are not allowed to export submissions."
+msgstr ""
+
+#: library/class-export.php:115
+msgid "Invalid nonce."
+msgstr ""
+
+#: library/class-export.php:200
 #: library/modules/custom-forms/front/front-action.php:2967
 #: library/modules/custom-forms/user/class-forminator-cform-user-data.php:95
 msgid "Invalid form ID."
 msgstr ""
 
-#: library/class-export.php:209
+#: library/class-export.php:211
 msgid "Invalid form type."
 msgstr ""
 
-#: library/class-export.php:469
+#: library/class-export.php:471
 msgid "Result"
 msgstr ""
 
-#: library/class-export.php:765
+#: library/class-export.php:767
 #. Translators: 1. Rating value, 2. Maximum rating
 msgid " %1$d out of %2$d"
 msgstr ""
 
-#: library/class-export.php:951
+#: library/class-export.php:953
 msgid "Submission Time"
 msgstr ""
 
-#: library/class-export.php:1121 library/helpers/helper-fields.php:447
+#: library/class-export.php:1123 library/helpers/helper-fields.php:447
 #: library/modules/custom-forms/admin/admin-page-entries.php:456
 #: library/modules/custom-forms/admin/admin-page-entries.php:508
 msgid "Mode"
 msgstr ""
 
-#: library/class-export.php:1125
+#: library/class-export.php:1127
 #: library/modules/custom-forms/admin/admin-page-entries.php:461
 msgid "Product / Plan Name"
 msgstr ""
 
-#: library/class-export.php:1145 library/helpers/helper-fields.php:449
+#: library/class-export.php:1147 library/helpers/helper-fields.php:449
 #: library/modules/custom-forms/admin/admin-page-entries.php:481
 #: library/modules/custom-forms/admin/admin-page-entries.php:527
 msgid "Transaction ID"
 msgstr ""
 
-#: library/class-export.php:1153
+#: library/class-export.php:1155
 #: library/modules/custom-forms/admin/admin-page-entries.php:496
 msgid "Manage"
 msgstr ""
 
-#: library/class-export.php:1434
+#: library/class-export.php:1436
 #. translators: %s is form name.
 msgid "Submissions data for %s"
 msgstr ""
 
-#: library/class-export.php:1502
+#: library/class-export.php:1504
 #. translators: 1$s is total new submission(s), %2$s is total submissions.
 msgid ""
 "Your scheduled exports have arrived! Forminator has captured %1$s new "
@@ -18257,15 +18265,15 @@ msgid ""
 "scheduled export sent."
 msgstr ""
 
-#: library/class-export.php:1523
+#: library/class-export.php:1525
 msgid "New Submissions"
 msgstr ""
 
-#: library/class-export.php:1525
+#: library/class-export.php:1527
 msgid "Total Submissions"
 msgstr ""
 
-#: library/class-export.php:1533
+#: library/class-export.php:1535
 msgid "Cheers,"
 msgstr ""
 
