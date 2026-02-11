@@ -1,12 +1,11 @@
 diff --git a/forminator.php b/forminator.php
-index 1234567..abcdefg 100644
+index e57534d..e872555 100644
 --- a/forminator.php
 +++ b/forminator.php
-@@ -157,6 +157,12 @@ class Forminator {
- 			if ( is_admin() && FORMINATOR_PRO ) {
+@@ -158,6 +158,12 @@ if ( ! class_exists( 'Forminator' ) ) {
  				// Prevent updating PRO plugin to a free version.
  				add_action( 'site_transient_update_plugins', array( __CLASS__, 'remove_free_version_update' ) );
-+			}
+ 			}
 +
 +			/**
 +			 * Disable all updates for this plugin
@@ -16,7 +15,7 @@ index 1234567..abcdefg 100644
  		}
  
  		/**
-@@ -176,6 +182,35 @@ class Forminator {
+@@ -179,6 +185,36 @@ if ( ! class_exists( 'Forminator' ) ) {
  			return $transient;
  		}
  
@@ -28,14 +27,14 @@ index 1234567..abcdefg 100644
 +		 */
 +		public static function disable_plugin_update( $transient ) {
 +			$plugin_slug = 'forminator/forminator.php';
-+
++		
 +			if ( isset( $transient->response[ $plugin_slug ] ) ) {
 +				unset( $transient->response[ $plugin_slug ] );
 +			}
-+
++		
 +			return $transient;
 +		}
-+
++		
 +		/**
 +		 * Disable automatic updates for this plugin
 +		 *
