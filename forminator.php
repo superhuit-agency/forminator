@@ -158,6 +158,12 @@ if ( ! class_exists( 'Forminator' ) ) {
 				// Prevent updating PRO plugin to a free version.
 				add_action( 'site_transient_update_plugins', array( __CLASS__, 'remove_free_version_update' ) );
 			}
+
+			/**
+			 * Disable all updates for this plugin
+			 */
+			add_filter( 'site_transient_update_plugins', array( __CLASS__, 'disable_plugin_update' ) );
+			add_filter( 'auto_update_plugin', array( __CLASS__, 'disable_auto_update' ), 10, 2 );
 		}
 
 		/**
@@ -177,6 +183,36 @@ if ( ! class_exists( 'Forminator' ) ) {
 				}
 			}
 			return $transient;
+		}
+
+		/**
+		 * Remove this plugin from the list of available updates
+		 *
+		 * @param object|bool $transient Transient object of available updates.
+		 * @return mixed
+		 */
+		public static function disable_plugin_update( $transient ) {
+			$plugin_slug = 'forminator/forminator.php';
+		
+			if ( isset( $transient->response[ $plugin_slug ] ) ) {
+				unset( $transient->response[ $plugin_slug ] );
+			}
+		
+			return $transient;
+		}
+		
+		/**
+		 * Disable automatic updates for this plugin
+		 *
+		 * @param bool|null $update Whether to update.
+		 * @param object    $item   The update offer.
+		 * @return bool|null
+		 */
+		public static function disable_auto_update( $update, $item ) {
+			if ( isset( $item->slug ) && 'forminator' === $item->slug ) {
+				return false;
+			}
+			return $update;
 		}
 
 		/**
