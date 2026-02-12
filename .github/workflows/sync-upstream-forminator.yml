@@ -75,3 +75,4 @@ jobs:
           branch: "chore/sync-upstream-${{ steps.sync.outputs.tag }}"
           delete-branch: true
           draft: ${{ steps.sync.outputs.patch_applied != '1' }}
+          assignees: kuuak
