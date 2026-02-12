@@ -22,6 +22,7 @@ if ( $this->has_payments() && $count <= 100 ) {
 		'submissions'     => $live_payment_count,
 		'min_submissions' => 0,
 		'notice'          => /* Translators: 1. Opening <strong> tag, 2. closing <strong> tag. */ sprintf( esc_html__( "%1\$sCongratulations!%2\$s You have started collecting live payments on this form - that's awesome. We have spent countless hours developing this free plugin for you, and we would really appreciate it if you could drop us a rating on wp.org to help us spread the word and boost our motivation.", 'forminator' ), '<strong>', '</strong>' ),
+		'type'            => 'one_payment',
 	);
 } else {
 	$notice_args = array(

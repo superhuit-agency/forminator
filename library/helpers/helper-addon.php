@@ -1451,9 +1451,6 @@ function get_quiz_submitted_data( $quiz, $data, $quiz_entry_fields ) {
  * @return bool
  */
 function forminator_is_show_addons_documentation_link() {
-	if ( Forminator::is_wpmudev_member() ) {
-		return ! apply_filters( 'wpmudev_branding_hide_doc_link', false );
-	}
-
-	return true;
+	_deprecated_function( __FUNCTION__, '1.50', 'forminator_is_show_documentation_link' );
+	return forminator_is_show_documentation_link();
 }

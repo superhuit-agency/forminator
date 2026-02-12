@@ -3,7 +3,7 @@ Contributors: WPMUDEV
 Tags: contact form, custom form, forms, payment form, WordPress form plugin
 Requires at least: 6.4
 Tested up to: 6.9
-Stable tag: 1.49.1
+Stable tag: 1.49.2
 Requires PHP: 7.4
 License: GPL v3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
@@ -74,7 +74,7 @@ Forminator comes stacked with crowd favorite third-party integrations – email 
 - [Campaign Monitor](https://www.campaignmonitor.com/)
 - [ActiveCampaign](https://www.activecampaign.com/)
 - [Google Sheets](https://www.google.com/sheets/about/)
-- Webhooks ([Zapier](https://zapier.com/), [Make](https://www.make.com/), [Tray](https://tray.io/), etc)
+- Webhooks ([n8n](https://n8n.io/), ([Zapier](https://zapier.com/), [Make](https://www.make.com/), [Tray](https://tray.io/), etc)
 - [Trello](https://trello.com/)
 - [MailChimp](https://mailchimp.com/)
 - [AWeber](https://www.aweber.com/)
@@ -230,6 +230,55 @@ We take plugin security incredibly seriously; if you have a bug or vulnerability
 6. Publish Polls with Real-time Stats
 
 == Changelog ==
+
+= 1.50.1 ( 2026-01-15 ) =
+
+- Fix: Fatal error caused by 'FORMINATOR_ENCRYPTION_KEY' when leftover integration data exists in the database
+
+
+= 1.50.0 ( 2026-01-12 ) =
+
+- Enhancement: Improve Stripe Payments to support BLIK payment method
+- Enhancement: Add an "Email Image Options" setting to choose between image links or image previews in Email Notifications
+- Enhancement: Add Forminator plugin deactivation survey
+- Enhancement: Add Hub disconnect survey
+- Enhancement: Remove all documentation links when White Label is enabled
+- Enhancement: Improve compatibility with B2BKing plugin
+- Enhancement: Add notification when webhook connection fails
+- Enhancement: Add the 'forminator_custom_form_mail_exclude_html_fields' filter to exclude HTML fields from email notifications
+- Enhancement: Add the 'forminator_akismet_values' filter to modify data sent to Akismet
+- Enhancement: Add an admin notice prompting users to set FORMINATOR_ENCRYPTION_KEY for security integration API keys
+- Enhancement: Collapse the WordPress admin menu in the Form Builder
+- Enhancement: Add response data to the 'forminator:form:submit:success' JS event
+- Enhancement: Add character limit to Feature survey
+- Fix: An error occurs when pre-filling PayPal billing details using the Name field
+- Fix: The PayPal checkout button doesn't display for some languages
+- Fix: Submit button visibility condition can be bypassed by removing hidden class in browser
+- Fix: Users with permission to view the Add-ons page cannot install add-ons
+- Fix: Send the Select field "Other option" value to the Google Sheets integration
+- Fix: Line breaks don't work on the Submissions page for Post Content and Textarea fields
+- Fix: Weekly notifications don't work when scheduled for a time other than 12:00 AM
+- Fix: Filtering by ID doesn't work for quizzes without leads on the Submissions page
+- Fix: Form fields don't reset when submitting a draft
+- Fix: Select field checkboxes don't reset after submission
+- Fix: Date field's Start Date option doesn't work inside Group field
+- Fix: "Save as draft" link isn't enabled when adding or removing items from a Field Group
+- Fix: Special characters like "&" in Select options break submission limits
+- Fix: Select fields have a grey background even when the "Use Theme Colors" option is enabled
+- Fix: Required error messages don't display for the Signature field in paginated forms
+- Fix: Color picker is missing transparency setting in Appearance Presets editor
+- Fix: Field rows overflow in the Form Builder on small screens
+- Fix: Akismet Protection toggle issue
+- Fix: Stripe field amount issues caused by custom currency field formatting
+- Fix: Rich-text editor for Textarea field doesn't load in preview
+- Fix: Euro currency values are rounded in emails
+- Fix: The first section isn't selected in the Field Settings popup for some fields
+- Fix: Field labels and descriptions overlap when using the Material Design style
+- Fix: Button text and icons overlap in the Form Builder for RTL languages
+- Fix: Some Email notification conditions aren't displayed for Personality Quizzes
+- Fix: Name prefix is not translated on Submissions page
+- Fix: Calculation field causes Google PSI issue
+
 
 = 1.49.2 ( 2025-12-18 ) =
 

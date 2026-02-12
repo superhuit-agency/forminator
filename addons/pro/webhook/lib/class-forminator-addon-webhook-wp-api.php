@@ -193,6 +193,15 @@ class Forminator_Webhook_Wp_Api {
 
 		remove_filter( 'http_headers_useragent', array( $this, 'filter_user_agent' ) );
 
+		/**
+		 * Filterwebhook  request response
+		 *
+		 * @param array|WP_Error $res        original wp remote request response.
+		 * @param string         $url        full url with scheme.
+		 * @param array          $args      original arguments sent to wp remote request.
+		 */
+		$res = apply_filters( 'forminator_addon_webhook_response', $res, $url, $args );
+
 		if ( is_wp_error( $res ) || ! $res ) {
 			forminator_addon_maybe_log( __METHOD__, $res );
 			throw new Forminator_Integration_Exception(

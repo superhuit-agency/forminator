@@ -381,12 +381,15 @@ $new = true;
 									<span class="sui-settings-label"><?php esc_html_e( 'Turnstile API Keys', 'forminator' ); ?></span>
 									<span class="sui-description" style="margin-bottom: 10px;">
 										<?php
-										printf(
-											/* Translators: 1. Opening <a> tag, 2. closing <a> tag. */
-											esc_html__( 'Enter your Turnstile API keys below to enable Cloudflare Turnstile option in your form’s CAPTCHA field. See %1$sinstructions%2$s on how to get your API Keys.', 'forminator' ),
-											'<a href="https://wpmudev.com/docs/wpmu-dev-plugins/forminator/#cloudflare-turnstile-settings" target="_blank" rel="noreferrer">',
-											'</a>'
-										);
+										esc_html_e( 'Enter your Turnstile API keys below to enable Cloudflare Turnstile option in your form’s CAPTCHA field.', 'forminator' );
+										if ( forminator_is_show_documentation_link() ) {
+											printf(
+												/* Translators: 1. Opening <a> tag, 2. closing <a> tag. */
+												' ' . esc_html__( 'See %1$sinstructions%2$s on how to get your API Keys.', 'forminator' ),
+												'<a href="https://wpmudev.com/docs/wpmu-dev-plugins/forminator/#cloudflare-turnstile-settings" target="_blank" rel="noreferrer">',
+												'</a>'
+											);
+										}
 										?>
 									</span>
 

@@ -181,6 +181,8 @@ class Forminator_Hub_Connector {
 				} else {
 					$utm_campaign = 'forminator_template-page_cloud-templates_hub-connector';
 				}
+			} elseif ( 'forminator-settings' === $page ) {
+				$utm_campaign = 'forminator_settings_general_hub-connector_connect-site';
 			} elseif ( 'preset-template' === $feature ) {
 				$utm_campaign = 'forminator_form-builder_hub-connector_preset-templates_connector';
 			} elseif ( 'extension-pack' === $feature ) {
@@ -208,6 +210,7 @@ class Forminator_Hub_Connector {
 
 			$options = array(
 				'screens'    => array(
+					'forminator_page_forminator-settings',
 					'forminator_page_forminator-templates',
 					'forminator-pro_page_forminator-templates',
 					'forminator_page_forminator-addons',

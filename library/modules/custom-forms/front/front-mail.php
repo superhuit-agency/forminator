@@ -155,6 +155,31 @@ class Forminator_CForm_Front_Mail extends Forminator_Mail {
 			$data = apply_filters( 'forminator_custom_form_mail_data', $data, $custom_form, $entry );
 
 			/**
+			 * Exclude HTML fields from email filter
+			 *
+			 * @since 1.50.0
+			 *
+			 * @param bool $exclude_html - whether to exclude HTML fields or not
+			 * @param Forminator_Form_Model $custom_form - the form.
+			 * @param array                        $data        - the post data.
+			 * @param Forminator_Form_Entry_Model  $entry       - saved entry
+			 *
+			 * @return bool $exclude_html
+			 */
+			$exclude_html = apply_filters( 'forminator_custom_form_mail_exclude_html_fields', false, $custom_form, $data, $entry );
+
+			if ( $exclude_html ) {
+				$fields = $custom_form->fields;
+				if ( ! empty( $fields ) ) {
+					foreach ( $fields as $k => $v ) {
+						if ( false !== strpos( $v->slug, 'html-' ) ) {
+							unset( $custom_form->fields[ $k ] );
+						}
+					}
+				}
+			}
+
+			/**
 			 * Action called before mail is sent
 			 *
 			 * @param Forminator_CForm_Front_Mail - the current form

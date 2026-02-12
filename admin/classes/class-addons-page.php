@@ -80,6 +80,14 @@ class Forminator_Admin_Addons_Page {
 								);
 							}
 						}
+					} else {
+						wp_send_json_error(
+							array(
+								'error' => array(
+									'message' => esc_html__( 'Unfortunately, you do not have the required permissions to perform this action.', 'forminator' ),
+								),
+							)
+						);
 					}
 				}
 				$err = WPMUDEV_Dashboard::$upgrader->get_error();

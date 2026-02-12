@@ -23,9 +23,6 @@
 				/>
 			</div>
 		</div>
-		<?php
-		echo forminator_template( 'templates/more-actions' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-		?>
 	</div>
 	<!-- loading templates -->
 	<div class="sui-progress-block" id="cloud-templates-loading">

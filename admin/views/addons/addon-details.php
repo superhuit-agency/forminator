@@ -228,6 +228,7 @@ $addon_slug = Forminator_Admin_Addons_Page::get_addon_slug( $pid );
 
 			<div class="sui-box-footer sui-content-separated">
 
+				<?php if ( forminator_is_show_documentation_link() ) : ?>
 				<a
 					href="https://wpmudev.com/docs/wpmu-dev-plugins/forminator/?utm_source=forminator&utm_medium=plugin&utm_campaign=forminator_<?php echo esc_html( $addon_slug ); ?>-addon_docs#add-ons"
 					target="_blank"
@@ -235,15 +236,16 @@ $addon_slug = Forminator_Admin_Addons_Page::get_addon_slug( $pid );
 				>
 					<?php esc_html_e( 'Documentation', 'forminator' ); ?>
 				</a>
-
-				<button
-					class="sui-button addons-modal-close"
-					data-addon="<?php echo esc_attr( $res->pid ); ?>"
-					data-element="forminator-modal-addons-details"
-				>
-					<?php esc_html_e( 'Close', 'forminator' ); ?>
-				</button>
-
+				<?php endif; ?>
+				<div class="sui-actions-right">
+					<button
+						class="sui-button  addons-modal-close"
+						data-addon="<?php echo esc_attr( $res->pid ); ?>"
+						data-element="forminator-modal-addons-details"
+					>
+						<?php esc_html_e( 'Close', 'forminator' ); ?>
+					</button>
+				</div>
 			</div>
 
 		</div><!-- END .sui-box -->

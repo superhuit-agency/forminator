@@ -982,13 +982,37 @@ class Forminator_Custom_Form_Admin extends Forminator_Admin_Module {
 			wp_send_json_error( esc_html__( 'You are not allowed to perform this action.', 'forminator' ) );
 		}
 
-		$result = \WPMUDEV\Hub\Connector\API::get()->logout();
+		$message = Forminator_Core::sanitize_text_field( 'message' );
 
+		$result = \WPMUDEV\Hub\Connector\API::get()->logout();
 		if ( ! is_wp_error( $result ) ) {
+			if ( ! empty( $message ) ) {
+				$model_action = 'submit';
+			} else {
+				$model_action = 'skip';
+			}
+			$this->share_hub_deactivation_survey_to_mixpanel( $model_action, $message );
+
 			wp_send_json_success( esc_html__( 'Your site has been disconnected successfully!', 'forminator' ) );
 		} else {
 			wp_send_json_error( esc_html__( 'Unable to disconnect the site.', 'forminator' ) );
 		}
+	}
+
+	/**
+	 * Share hub deactivation survey to Mixpanel
+	 *
+	 * @param string $model_action Model action.
+	 * @param string $message Message.
+	 * @return void
+	 */
+	private function share_hub_deactivation_survey_to_mixpanel( $model_action, $message = '' ) {
+		if ( 'skip' === $model_action && ! Forminator_Core::is_tracking_active() ) {
+			return;
+		}
+		Forminator_Core::init_mixpanel( true );
+		// Share deactivation survey to Mixpanel.
+		do_action( 'forminator_share_hub_deactivation_survey_to_mixpanel', $model_action, $message );
 	}
 
 	/**

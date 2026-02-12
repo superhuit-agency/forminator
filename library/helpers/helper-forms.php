@@ -1101,3 +1101,16 @@ function forminator_get_schedule_time( $schedule ) {
 
 	return $time;
 }
+
+/**
+ * Replace line breaks
+ *
+ * @since 1.50
+ *
+ * @param string $value Value.
+ *
+ * @return string
+ */
+function forminator_replace_linebreaks( $value ) {
+	return wpautop( $value );
+}

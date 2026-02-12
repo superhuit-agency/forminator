@@ -93,6 +93,11 @@
 					return;
 				}
 
+				// If Blik payment method, create PaymentIntent and confirm on client side
+				if ( self._stripeData['paymentMethodType'] === 'blik' ) {
+					self.updateAmount();
+				} else {
+
 				self._stripe.createPaymentMethod( { elements: self._elements, params: { billing_details: this.billingDetails } } ).then(function (result) {
 					if (result.error) {
 						let resultError = result.error.message || window.ForminatorFront.cform.payment_failed;
@@ -109,6 +114,7 @@
 
 					self.updateAmount();
 				});
+				}
 			});
 
 			this.$el.on("forminator:form:submit:stripe:3dsecurity", function(e, secret, subscription) {
@@ -194,15 +200,14 @@
 				this._stripe.retrievePaymentIntent(
 					secret
 				).then(function(result) {
-					if ( result.paymentIntent.status === 'requires_action' || result.paymentIntent.status === 'requires_confirmation' || result.paymentIntent.status === 'requires_source_action' ) {
+					if ( ['requires_action', 'requires_confirmation', 'requires_source_action'].includes( result.paymentIntent.status )
+						||  self.getStripeData('paymentMethodType') === 'blik'
+					) {
 						self._stripe
 							.confirmPayment({
 								clientSecret: secret,
 								elements: self._elements,
 								redirect: 'if_required',
-							  // confirmParams: {
-								// return_url: 'https://stripe.com', // Optional
-							  // },
 							} )
 							.then( function ( result ) {
 								if ( result.error ) {
@@ -232,7 +237,14 @@
 			}
 			var formData = new FormData( this.$el[0] );
 			var self = this;
-			var updateFormData = formData;
+			var updateFormData = new FormData();
+
+			// Remove action from formData.
+			formData.forEach(function (value, key) {
+				if (key !== 'action') {
+					updateFormData.append(key, value);
+				}
+			});
 
 			//Method set() doesn't work in IE11
 			updateFormData.append( 'action', 'forminator_update_payment_amount' );
@@ -623,6 +635,10 @@
 			var self = this;
 			this._paymentElement.on('ready', function(event) {
 				self.updateBillingDetails();
+			});
+			this._paymentElement.on('change', function(event) {
+				let isBlik = event.value.type === 'blik';
+				self._stripeData['paymentMethodType'] = isBlik ? 'blik' : '';
 			});
 		},
 

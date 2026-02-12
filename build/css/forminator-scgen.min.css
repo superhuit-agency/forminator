@@ -3531,6 +3531,20 @@
   margin-right: 0;
 }
 
+.sui-forminator-scgen.rtl .sui-wrap .sui-button [class*=sui-icon-]:not(.sui-loading),
+.sui-forminator-scgen.rtl .sui-wrap a.sui-button [class*=sui-icon-]:not(.sui-loading),
+.sui-forminator-scgen.rtl .sui-wrap button.sui-button [class*=sui-icon-]:not(.sui-loading) {
+  margin-left: 0;
+  margin-right: -7px;
+}
+
+.sui-forminator-scgen.rtl .sui-wrap .sui-button.sui-button-icon-right [class*=sui-icon-]:not(.sui-loading),
+.sui-forminator-scgen.rtl .sui-wrap a.sui-button.sui-button-icon-right [class*=sui-icon-]:not(.sui-loading),
+.sui-forminator-scgen.rtl .sui-wrap button.sui-button.sui-button-icon-right [class*=sui-icon-]:not(.sui-loading) {
+  margin-right: 0;
+  margin-left: -7px;
+}
+
 .sui-forminator-scgen .sui-wrap * {
   box-sizing: border-box;
 }
@@ -4703,6 +4717,11 @@ fieldset[disabled] .sui-forminator-scgen .sui-wrap .sui-multi-checkbox {
   background-repeat: no-repeat;
   background-position: center right 10px;
   line-height: 1;
+}
+
+.sui-forminator-scgen .sui-wrap.sui-color-accessible .sui-field-suffix,
+.sui-forminator-scgen .sui-wrap.sui-color-accessible .sui-field-prefix {
+  color: #000;
 }
 
 .sui-forminator-scgen .sui-wrap .sui-tabs:not(.sui-side-tabs)>[data-tabs],

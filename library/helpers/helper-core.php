@@ -325,6 +325,10 @@ function forminator_common_admin_enqueue_scripts( $is_new_page = false ) {
 		forminator_print_front_styles();
 		forminator_print_front_scripts();
 	}
+
+	if ( 'forminator-settings' === filter_input( INPUT_GET, 'page' ) ) {
+		forminator_enqueue_color_picker_alpha();
+	}
 }
 
 /**

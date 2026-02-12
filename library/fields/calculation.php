@@ -182,6 +182,7 @@ class Forminator_Calculation extends Forminator_Field {
 			'disabled'           => 'disabled', // mark as disabled so this value won't send to backend later.
 			'data-decimals'      => $precision,
 			'data-inputmask'     => "'groupSeparator': '" . $separators['separator'] . "', 'radixPoint': '" . $point . "', 'digits': '" . $precision . "'",
+			'readonly'           => 'readonly',
 		);
 
 		if ( $hidden_behavior && 'zero' === $hidden_behavior ) {

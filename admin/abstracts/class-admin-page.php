@@ -391,6 +391,7 @@ abstract class Forminator_Admin_Page {
 	 * Show modal when hub connected successfully
 	 */
 	public static function hub_connected_successfully_modal() {
+		$page    = filter_input( INPUT_GET, 'page' );
 		$feature = filter_input( INPUT_GET, 'feature' );
 		?>
 		<div class="sui-modal sui-modal-md">
@@ -410,19 +411,45 @@ abstract class Forminator_Admin_Page {
 							<?php esc_html_e( 'Site connected successfully!', 'forminator' ); ?>
 						</h3>
 						<p id="forminator-hub-connected-successfully-modal-description" class="sui-description">
-							<b><?php esc_html_e( 'Congratulations!', 'forminator' ); ?></b>
 							<?php
-							if ( 'preset-template' === $feature ) {
-								esc_html_e( 'Your site is now connected to the Hub, and preset templates are unlocked. Start building forms faster with any of our ready-made templates.', 'forminator' );
-							} elseif ( 'extension-pack' === $feature ) {
-								esc_html_e( 'Your site is now connected to the Hub, and the following features are now unlocked.', 'forminator' );
+							if ( 'forminator-settings' === $page ) {
+								esc_html_e( 'Your site is now connected to your WPMU DEV account, unlocking powerful tools to help you work faster and manage forms across sites, including:', 'forminator' );
 							} else {
-								esc_html_e( 'Your site is connected to the Hub. You can now save your forms to the Hub cloud.', 'forminator' );
+								?>
+								<b><?php esc_html_e( 'Congratulations!', 'forminator' ); ?></b>
+								<?php
+								if ( 'preset-template' === $feature ) {
+									esc_html_e( 'Your site is now connected to the Hub, and preset templates are unlocked. Start building forms faster with any of our ready-made templates.', 'forminator' );
+								} elseif ( 'extension-pack' === $feature ) {
+									esc_html_e( 'Your site is now connected to the Hub, and the following features are now unlocked.', 'forminator' );
+								} else {
+									esc_html_e( 'Your site is connected to the Hub. You can now save your forms to the Hub cloud.', 'forminator' );
+								}
 							}
 							?>
 						</p>
 					</div>
-					<?php if ( 'extension-pack' === $feature ) { ?>
+					<?php
+					if ( 'forminator-settings' === $page ) {
+						?>
+						<div class="sui-box-body sui-flatten">
+							<div class="sui-notice">
+								<div class="sui-notice-content">
+									<div class="sui-notice-message">
+										<ul>
+											<li class="sui-icon-check-tick"><?php esc_html_e( 'Save form templates to the cloud for easy reuse', 'forminator' ); ?></li>
+											<li class="sui-icon-check-tick"><?php esc_html_e( 'Access your cloud templates from any connected site', 'forminator' ); ?></li>
+											<li class="sui-icon-check-tick"><?php esc_html_e( 'Discover additional ready-made form templates', 'forminator' ); ?></li>
+											<li class="sui-icon-check-tick"><?php esc_html_e( 'Manage your site using the Hub’s site management tools', 'forminator' ); ?></li>
+											<li class="sui-icon-check-tick"><?php printf( /* translators: 1: Open Italic tag, 2: Close Italic tag */ esc_html__( 'Enable add-ons via the Hub %1$s(coming soon)%2$s', 'forminator' ), '<i>', '</i>' ); ?></li>
+										</ul>
+									</div>
+								</div>
+							</div>
+						</div>
+						<?php
+					} elseif ( 'extension-pack' === $feature ) {
+						?>
 						<div class="sui-box-body">
 							<div class="sui-box-body-item forminator-hub-modal-item">
 								<div class="forminator-hub-modal-box">
@@ -705,10 +732,11 @@ abstract class Forminator_Admin_Page {
 						<?php
 						$stripe_link = 'https://wpmudev.com/docs/wpmu-dev-plugins/forminator/#stripe-field';
 						printf(
-							/* Translators: 1. Opening <a> tag with link 2. closing <a> tag. */
-							esc_html__( 'You are using the Stripe simple card payment element, which is being deprecated by Stripe. %1$sLearn more%2$s. To ensure seamless transactions, update the Stripe field in the form(s) below to the new Stripe payment element.', 'forminator' ),
-							'<a href="' . esc_url( $stripe_link ) . '" target="_blank">',
-							'</a>'
+							/* Translators: 1. 'Learn more' link */
+							esc_html__( 'You are using the Stripe simple card payment element, which is being deprecated by Stripe. %1$sTo ensure seamless transactions, update the Stripe field in the form(s) below to the new Stripe payment element.', 'forminator' ),
+							forminator_is_show_documentation_link() ?
+								'<a href="' . esc_url( $stripe_link ) . '" target="_blank">' . esc_html__( 'Learn more.', 'forminator' ) . '</a> '
+								: ''
 						);
 						?>
 					</p>

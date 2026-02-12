@@ -98,9 +98,7 @@ class Forminator_Reports {
 					$next_sent = date_i18n( 'Y-m-d', $next_sent ) . ' ' . $report_schedule['time'];
 					break;
 				case 'weekly':
-					$day       = isset( $report_schedule['weekDay'] ) ? $report_schedule['weekDay'] : 'monday';
-					$next_sent = strtotime( 'next ' . $day, $last_sent );
-					$next_sent = date_i18n( 'Y-m-d', $next_sent ) . ' ' . $report_schedule['weekTime'];
+					$next_sent = self::get_weekly_report_date( $last_sent, $report_schedule );
 					break;
 				case 'monthly':
 					$next_sent = $this->get_monthly_report_date( $last_sent, $report_schedule );
@@ -132,6 +130,27 @@ class Forminator_Reports {
 		if ( $last_sent >= $next_sent ) {
 			// If not - next month.
 			$next_sent = strtotime( '+1 month', $next_sent );
+		}
+
+		return date_i18n( 'Y-m-d H:i:s', $next_sent );
+	}
+
+	/**
+	 * Get weekly report date
+	 *
+	 * @param string $last_sent Last sent date.
+	 * @param array  $settings Settings.
+	 *
+	 * @return false|string
+	 */
+	private static function get_weekly_report_date( $last_sent, $settings ) {
+		$week_day  = isset( $settings['weekDay'] ) ? $settings['weekDay'] : 'monday';
+		$week_time = isset( $settings['weekTime'] ) ? date_i18n( 'H:i', strtotime( $settings['weekTime'] ) ) : '00:00';
+		$next_sent = strtotime( "this {$week_day} {$week_time}", $last_sent );
+
+		if ( $last_sent >= $next_sent ) {
+			// If not - next week.
+			$next_sent = strtotime( '+1 week', $next_sent );
 		}
 
 		return date_i18n( 'Y-m-d H:i:s', $next_sent );

@@ -1824,6 +1824,18 @@ abstract class Forminator_Base_Form_Model {
 			}
 		}
 
+		// Disable submit if submit button is hidden by conditions.
+		if ( $can_show['can_submit'] && 'form' === static::$module_slug && true === Forminator_Field::is_hidden( $form_settings['submitData'] ) ) {
+			$invalid_form_message = esc_html__( 'Error: Your form is not valid, please fix the errors!', 'forminator' );
+			if ( ! empty( $form_settings['submitData']['custom-invalid-form-message'] ) ) {
+				$invalid_form_message = $form_settings['submitData']['custom-invalid-form-message'];
+			}
+			$can_show = array(
+				'can_submit' => false,
+				'error'      => $invalid_form_message,
+			);
+		}
+
 		return apply_filters( 'forminator_cform_' . static::$module_slug . '_is_submittable', $can_show, $this->id, $form_settings );
 	}
 

@@ -43,7 +43,7 @@ foreach ( $template_vars as $key => $val ) {
 	<?php else : ?>
 		<p id="forminator-integration-popup__description" class="sui-description"><?php esc_html_e( 'Set up your Google Sheets oAuth 2.0 client by entering your credentials below.', 'forminator' ); ?></p>
 		<p class="sui-description">
-			<?php if ( forminator_is_show_addons_documentation_link() ) { ?>
+			<?php if ( forminator_is_show_documentation_link() ) { ?>
 				<?php
 				printf(
 				/* Translators: 1. Opening <a> tag with link to generate credential, 2. closing <a> tag. */

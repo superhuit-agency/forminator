@@ -1300,6 +1300,36 @@ abstract class Forminator_Integration implements Forminator_Integration_Interfac
 	}
 
 	/**
+	 * Remove unused settings
+	 *
+	 * @since 1.50.1
+	 *
+	 * @param mixed $settings All settings.
+	 * @return mixed
+	 */
+	private function remove_unused_settings( $settings ) {
+		if ( ! is_array( $settings ) || empty( $settings ) || empty( $this->_sensitive_keys ) ) {
+			return $settings;
+		}
+		foreach ( $settings as $key => $setting ) {
+			if ( is_array( $setting ) ) {
+				foreach ( $this->_sensitive_keys as $sensitive_key ) {
+					// Ignore Campaign Monitor client_id as this is optional field.
+					if ( 'campaignmonitor' === $this->get_slug() && 'client_id' === $sensitive_key ) {
+						continue;
+					}
+					if ( empty( $setting[ $sensitive_key ] ) ) {
+						unset( $settings[ $key ] );
+						update_option( $this->get_settings_options_name(), $settings );
+						break; // No need to check other sensitive keys once the setting is removed.
+					}
+				}
+			}
+		}
+		return $settings;
+	}
+
+	/**
 	 * Encrypt sensitive data if it isn't encrypted for backward compatibility.
 	 *
 	 * @since 1.47
@@ -1314,13 +1344,16 @@ abstract class Forminator_Integration implements Forminator_Integration_Interfac
 		foreach ( $settings as $key => $setting ) {
 			if ( is_array( $setting ) ) {
 				foreach ( $this->_sensitive_keys as $sensitive_key ) {
+					if ( empty( $setting[ $sensitive_key ] ) ) {
+						continue;
+					}
 					$encrypted_key_name = $sensitive_key . '_encrypted';
 					if ( ! empty( $setting['is_salty'] ) && defined( 'FORMINATOR_ENCRYPTION_KEY' ) ) {
 						// Re-encrypt settings after setting FORMINATOR_ENCRYPTION_KEY constant.
 						$settings[ $key ][ $sensitive_key ] = Forminator_Encryption::decrypt( $setting[ $encrypted_key_name ], true );
 						$settings[ $key ]                   = $this->encrypt_sensitive_data( $settings[ $key ] );
 						$resave_option                      = true;
-					} elseif ( ! empty( $setting[ $sensitive_key ] ) && empty( $setting[ $encrypted_key_name ] ) ) {
+					} elseif ( empty( $setting[ $encrypted_key_name ] ) ) {
 						// Re-save the setting to encrypt sensitive data.
 						$settings[ $key ] = $this->encrypt_sensitive_data( $setting );
 						$resave_option    = true;
@@ -1432,6 +1465,9 @@ abstract class Forminator_Integration implements Forminator_Integration_Interfac
 				}
 			}
 		}
+
+		// Remove unused settings.
+		$all_values = $this->remove_unused_settings( $all_values );
 
 		// Backward compatibility encrypt data if not encrypted.
 		$all_values = $this->may_be_encrypt_sensitive_data( $all_values );

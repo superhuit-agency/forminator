@@ -110,6 +110,9 @@ function forminator_submissions_content_details( $detail_item, $inside_group = f
 											echo '</td>';
 									} else {
 										echo '<td style="padding-top: 5px; padding-bottom: 5px;">';
+										if ( strpos( $sub_entry['key'], 'textarea' ) !== false ) {
+											$sub_entry['value'] = forminator_replace_linebreaks( $sub_entry['value'] );
+										}
 										echo wp_kses_post( $sub_entry['value'] );
 										if ( 1 !== $sub_key && 2 < $end && 'group' === $detail_item['type'] ) {
 											echo '<span class="sui-accordion-open-indicator fui-mobile-only" aria-hidden="true"><i class="sui-icon-chevron-down"></i></span>';
@@ -205,7 +208,7 @@ function forminator_submissions_content_details( $detail_item, $inside_group = f
 
 					<?php if ( 'textarea' === $detail_item['type'] && ( isset( $detail_item['rich'] ) && 'true' === $detail_item['rich'] ) ) { ?>
 
-						<div class="fui-rich-textarea"><?php echo wp_kses_post( $detail_item['value'] ); ?></div>
+						<div class="fui-rich-textarea"><?php echo wp_kses_post( forminator_replace_linebreaks( $detail_item['value'] ) ); ?></div>
 
 						<?php
 					} elseif ( 'number' === $detail_item['type'] || 'currency' === $detail_item['type'] || ( 'calculation' === $detail_item['type'] && is_numeric( $detail_item['value'] ) ) ) {
@@ -215,6 +218,10 @@ function forminator_submissions_content_details( $detail_item, $inside_group = f
 						?>
 
 						<span class="sui-description" data-inputmask="'alias': 'decimal','rightAlign': false, 'digitsOptional': false, 'groupSeparator': '<?php echo esc_attr( $separator ); ?>', 'radixPoint': '<?php echo esc_attr( $point ); ?>', 'digits': '<?php echo esc_attr( $precision ); ?>'"><?php echo wp_kses_post( $detail_item['value'] ); ?></span>
+
+					<?php } elseif ( 'textarea' === $detail_item['type'] ) { ?>
+
+						<span class="sui-description"><?php echo wp_kses_post( forminator_replace_linebreaks( $detail_item['value'] ) ); ?></span>
 
 					<?php } else { ?>
 
