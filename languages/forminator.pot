@@ -2,9 +2,9 @@
 # This file is distributed under the same license as the Forminator package.
 msgid ""
 msgstr ""
-"Project-Id-Version: Forminator 1.50.1\n"
+"Project-Id-Version: Forminator 1.50.3\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/build\n"
-"POT-Creation-Date: 2026-01-15 12:40:17+00:00\n"
+"POT-Creation-Date: 2026-02-10 15:21:50+00:00\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -1327,35 +1327,35 @@ msgstr ""
 msgid "We are waiting for authorization from Google..."
 msgstr ""
 
-#: addons/pro/gutenberg/library/blocks/class-forminator-gfblock-forms.php:164
+#: addons/pro/gutenberg/library/blocks/class-forminator-gfblock-forms.php:166
 msgid "Select a form"
 msgstr ""
 
-#: addons/pro/gutenberg/library/blocks/class-forminator-gfblock-forms.php:193
+#: addons/pro/gutenberg/library/blocks/class-forminator-gfblock-forms.php:195
 #: admin/pages/entries-page.php:146
 msgid "Choose Form"
 msgstr ""
 
-#: addons/pro/gutenberg/library/blocks/class-forminator-gfblock-forms.php:194
+#: addons/pro/gutenberg/library/blocks/class-forminator-gfblock-forms.php:196
 msgid "Customize form"
 msgstr ""
 
-#: addons/pro/gutenberg/library/blocks/class-forminator-gfblock-forms.php:195
+#: addons/pro/gutenberg/library/blocks/class-forminator-gfblock-forms.php:197
 #: addons/pro/gutenberg/library/blocks/class-forminator-gfblock-polls.php:159
 #: addons/pro/gutenberg/library/blocks/class-forminator-gfblock-quizzes.php:188
 msgid "Rendering..."
 msgstr ""
 
-#: addons/pro/gutenberg/library/blocks/class-forminator-gfblock-forms.php:196
+#: addons/pro/gutenberg/library/blocks/class-forminator-gfblock-forms.php:198
 #: admin/locale.php:2096 library/render/class-widget.php:142
 msgid "Form"
 msgstr ""
 
-#: addons/pro/gutenberg/library/blocks/class-forminator-gfblock-forms.php:197
+#: addons/pro/gutenberg/library/blocks/class-forminator-gfblock-forms.php:199
 msgid "Embed and display your custom Forminator forms in this block"
 msgstr ""
 
-#: addons/pro/gutenberg/library/blocks/class-forminator-gfblock-forms.php:199
+#: addons/pro/gutenberg/library/blocks/class-forminator-gfblock-forms.php:201
 #: addons/pro/gutenberg/library/blocks/class-forminator-gfblock-polls.php:163
 #: addons/pro/gutenberg/library/blocks/class-forminator-gfblock-quizzes.php:192
 #: admin/abstracts/class-admin-module-edit-page.php:356
@@ -1420,7 +1420,7 @@ msgstr ""
 msgid "Embed and display your Forminator quiz in this block"
 msgstr ""
 
-#: addons/pro/gutenberg/library/class-forminator-gfblock-abstract.php:99
+#: addons/pro/gutenberg/library/class-forminator-gfblock-abstract.php:126
 msgid "Module ID"
 msgstr ""
 
@@ -25961,21 +25961,21 @@ msgstr ""
 msgid "Module ID not found!"
 msgstr ""
 
-#: library/render/class-render-form.php:1884
+#: library/render/class-render-form.php:1893
 msgid ""
 "Can't find the draft associated with the draft ID in the URL. This draft "
 "was either submitted or has expired."
 msgstr ""
 
-#: library/render/class-render-form.php:1950
+#: library/render/class-render-form.php:1959
 msgid "Edit quiz"
 msgstr ""
 
-#: library/render/class-render-form.php:1954
+#: library/render/class-render-form.php:1963
 msgid "Edit poll"
 msgstr ""
 
-#: library/render/class-render-form.php:1958
+#: library/render/class-render-form.php:1967
 msgid "Edit form"
 msgstr ""
 

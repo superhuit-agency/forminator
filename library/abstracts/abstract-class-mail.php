@@ -389,9 +389,8 @@ abstract class Forminator_Mail {
 		 * Filter email body that will be sent by Forminator Mailer
 		 *
 		 * @param string $message
-		 * @param string $original_message
 		 */
-		$message = apply_filters( 'forminator_email_message', $message, $this->message );
+		$message = apply_filters( 'forminator_email_message', $message );
 
 		$this->message = $message;
 	}

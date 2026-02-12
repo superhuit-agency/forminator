@@ -59,6 +59,11 @@ class Forminator_Assets_Enqueue_Form extends Forminator_Assets_Enqueue {
 			$this->load_phone_scripts();
 		}
 
+		// FIELD: HTML.
+		if ( $render_obj->has_field_type( 'html' ) ) {
+			self::load_dompurify_scripts();
+		}
+
 		// FIELD: Date picker.
 		if ( $render_obj->has_field_type( 'date' ) ) {
 			$this->load_date_scripts();
@@ -294,6 +299,18 @@ class Forminator_Assets_Enqueue_Form extends Forminator_Assets_Enqueue {
 
 		Forminator_Assets_Enqueue::fui_enqueue_style( 'intlTelInput-forminator-css', $style_src, array(), $style_version ); // intlTelInput.
 		wp_enqueue_script( 'forminator-intlTelInput', $script_src, array( 'jquery' ), $script_version, false ); // intlTelInput.
+	}
+
+	/**
+	 * Load DOMPurify script for HTML field
+	 *
+	 * @return void
+	 */
+	public static function load_dompurify_scripts() {
+		$script_src     = forminator_plugin_url() . 'assets/js/library/dompurify.min.js';
+		$script_version = '3.3.1';
+
+		wp_enqueue_script( 'forminator-dompurify', $script_src, array(), $script_version, false );
 	}
 
 	/**

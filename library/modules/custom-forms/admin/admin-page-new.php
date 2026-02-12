@@ -92,5 +92,7 @@ class Forminator_CForm_New_Page extends Forminator_Admin_Page {
 			FORMINATOR_VERSION,
 			true
 		); // inputmask binding.
+
+		Forminator_Assets_Enqueue_Form::load_dompurify_scripts();
 	}
 }

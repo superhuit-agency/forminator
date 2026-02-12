@@ -132,8 +132,37 @@
 		replace: function ( field ) {
 			var $input = field.$input;
 			var res = this.maybeReplaceValue(field.value);
-
+			if ( typeof window.DOMPurify !== 'undefined' ) {
+				let config = {};
+				// Allow iframe tags and attributes if the original value contains iframes.
+				if( this.hasIframes(field.value) ) {
+					config = {
+						ADD_TAGS: ['iframe'],
+						ADD_ATTR: [
+							'align',
+							'width',
+							'height',
+							'frameborder',
+							'name',
+							'src',
+							'id',
+							'class',
+							'style',
+							'scrolling',
+							'marginwidth',
+							'marginheight',
+							'allowfullscreen',
+						]
+					};
+				}
+				res = window.DOMPurify.sanitize( res, config );
+			}
 			$input.html(res);
+		},
+
+		hasIframes: function ( html ) {
+			const $temp = $('<div>').html(html);
+			return $temp.find('iframe').length > 0;
 		},
 
 		maybeReplaceValue: function (value) {

@@ -1424,6 +1424,11 @@ abstract class Forminator_Render_Form {
 		$is_preview   = filter_input( INPUT_POST, 'is_preview', FILTER_VALIDATE_BOOLEAN );
 		$live_preview = filter_input( INPUT_POST, 'instant_preview', FILTER_VALIDATE_BOOLEAN );
 
+		// For preview, nonce verification is required to ensure the request is legitimate.
+		if ( $is_preview && ! wp_verify_nonce( $nonce, 'forminator_load_module' ) ) {
+			wp_send_json_error( new WP_Error( 'invalid_code' ) );
+		}
+
 		if ( $verify_nonce && ! $is_preview && ! wp_verify_nonce( $nonce, 'forminator_load_module' ) ) {
 			wp_send_json_error( new WP_Error( 'invalid_code' ) );
 		}
@@ -1815,6 +1820,10 @@ abstract class Forminator_Render_Form {
 	 * @return string
 	 */
 	protected function nonce_field( $action, $name, $referer_url = '' ) {
+		// Don't generate nonce field when it's preview, as preview is only for admin and it doesn't have real form action.
+		if ( $this->is_preview ) {
+			return '';
+		}
 		if ( $referer_url ) {
 			$referer = $referer_url;
 		} elseif ( ! empty( $this->_wp_http_referer ) ) {

@@ -148,6 +148,8 @@ class Forminator_GFBlock_Forms extends Forminator_GFBlock_Abstract {
 		wp_enqueue_script( 'forminator-intlTelInput', $script_src, array( 'jquery' ), $script_version, false ); // intlTelInput.
 
 		wp_localize_script( 'forminator-front-scripts', 'ForminatorFront', forminator_localize_data() );
+
+		Forminator_Assets_Enqueue_Form::load_dompurify_scripts();
 	}
 
 	/**
