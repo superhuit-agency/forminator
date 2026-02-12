@@ -17,9 +17,9 @@ the modified code is not overriden.
 
 ## Updating from upstream (automated)
 
-This fork includes an automation pipeline that imports the latest **WordPress.org SVN tag** for Forminator and then re-applies this fork's minimal patch.
+This fork includes an automation pipeline that imports the latest **WordPress.org SVN tag** for Forminator and then re-applies this fork's minimal patch files.
 
-- **Patch file**: `patches/custom-changes.patch`
+- **Patch files**: `patches/*.patch`
 - **Sync script**: `tools/sync-wporg-svn.sh`
 - **CI workflow**: `.github/workflows/sync-upstream-forminator.yml`
 
@@ -32,8 +32,8 @@ GitHub Actions runs the sync workflow:
 
 If upstream changed, CI will open a PR.
 
-- If the patch applies (or is already present upstream), the PR is a normal PR.
-- If the patch cannot be applied and the required modifications are missing, CI will still open a **draft/WIP PR** clearly indicating that the patch was **not** applied and must be fixed manually before merging.
+- If all patches apply (or are already present upstream), the PR is a normal PR.
+- If one or more patches cannot be applied, CI will still open a **draft/WIP PR** clearly indicating that the patches were **not** applied and must be fixed manually before merging.
 
 ### Running locally
 
@@ -46,8 +46,8 @@ Run:
 
 ### If the patch stops applying
 
-Upstream can occasionally refactor the relevant code and the patch may fail. When that happens:
+Upstream can occasionally refactor the relevant code and one or more patches may fail. When that happens:
 
 1. Update the affected code manually to restore the fork behavior described above.
-2. Update `patches/custom-changes.patch` to match the new upstream context.
+2. Update `patches/*.patch` to match the new upstream context run `git format-patch -2 HEAD -o patches` where `-2` is the number of commits to generate a patch file from.
 3. Re-run the sync to confirm the workflow verification passes.

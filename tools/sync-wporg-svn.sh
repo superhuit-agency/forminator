@@ -6,7 +6,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 SVN_BASE_URL="${FORMINATOR_SVN_BASE_URL:-https://plugins.svn.wordpress.org/forminator}"
 SVN_TAGS_URL="${SVN_BASE_URL%/}/tags"
-PATCH_FILE="${REPO_ROOT}/patches/custom-changes.patch"
+PATCHES_DIR="${REPO_ROOT}/patches"
 
 log() {
   printf '%s\n' "$*" >&2
@@ -37,14 +37,6 @@ if [[ "${QUIET}" == "1" ]]; then
   svn_export_flags+=(--quiet)
   rsync_quiet_flags+=(--quiet)
 fi
-
-verify_fork_patch() {
-  grep -Fq "apply_filters( 'forminator_email_message', \$message, \$this->message );" \
-    "${REPO_ROOT}/library/abstracts/abstract-class-mail.php"
-
-  grep -Fq "foreach ( \$custom_form->notifications as \$notification )" \
-    "${REPO_ROOT}/library/modules/custom-forms/front/front-mail.php"
-}
 
 pick_latest_tag() {
   # List tags and pick the latest semver-like folder (e.g. 1.49.1/).
@@ -90,49 +82,62 @@ rsync -a --delete "${rsync_quiet_flags[@]}" \
   --exclude 'README.md' \
   "${TMP_DIR}/upstream/" "${REPO_ROOT}/"
 
-if [[ ! -f "${PATCH_FILE}" ]]; then
-  log "Patch file missing: ${PATCH_FILE}"
-  exit 1
+# --- Apply all patches from patches/ in sorted order ---
+patch_files=()
+for f in "${PATCHES_DIR}"/*.patch; do
+  [[ -f "$f" ]] && patch_files+=("$f")
+done
+
+if [[ ${#patch_files[@]} -eq 0 ]]; then
+  log "No patch files found in ${PATCHES_DIR}/"
+  out "FORMINATOR_PATCH_APPLIED=1"
+  out "FORMINATOR_PATCH_NOTE=No patches to apply."
+  log "OK. Upstream sync completed for tag ${SVN_TAG}. No patches to apply."
+  exit 0
 fi
 
-log "Re-applying fork patch: ${PATCH_FILE}"
-PATCH_APPLIED="0"
-PATCH_NOTE=""
+ALL_APPLIED="1"
+PATCH_NOTES=()
 
-if git -C "${REPO_ROOT}" apply --check "${PATCH_FILE}"; then
-  git -C "${REPO_ROOT}" apply --3way "${PATCH_FILE}"
-  PATCH_APPLIED="1"
-  PATCH_NOTE="Patch applied successfully."
-else
-  # Patch may already be present (e.g. if upstream incorporated the change).
-  if verify_fork_patch; then
-    PATCH_APPLIED="1"
-    PATCH_NOTE="Patch appears already applied; skipping."
+for patch_file in "${patch_files[@]}"; do
+  patch_name="$(basename "${patch_file}")"
+  log "Applying patch: ${patch_name}"
+
+  if git -C "${REPO_ROOT}" apply --check "${patch_file}" 2>/dev/null; then
+    git -C "${REPO_ROOT}" apply --3way "${patch_file}"
+    PATCH_NOTES+=("${patch_name}: applied successfully.")
+    log "  -> applied successfully."
   else
-    PATCH_APPLIED="0"
-    PATCH_NOTE="Patch did not apply and required fork modifications are not present. Manual action required before merging."
-    log "${PATCH_NOTE}"
-    # Do NOT fail: CI should still open a WIP/draft PR so it can be fixed manually.
+    # Patch may already be present (e.g. if upstream incorporated the change).
+    if git -C "${REPO_ROOT}" apply --check --reverse "${patch_file}" 2>/dev/null; then
+      PATCH_NOTES+=("${patch_name}: already applied; skipped.")
+      log "  -> already applied; skipped."
+    else
+      ALL_APPLIED="0"
+      PATCH_NOTES+=("${patch_name}: FAILED to apply. Manual action required.")
+      log "  -> FAILED to apply. Manual action required."
+      # Do NOT fail: CI should still open a WIP/draft PR so it can be fixed manually.
+    fi
   fi
-fi
+done
 
-log "Verifying required fork modifications are present..."
-if verify_fork_patch; then
-  PATCH_APPLIED="1"
-else
-  PATCH_APPLIED="0"
-  if [[ -z "${PATCH_NOTE}" ]]; then
-    PATCH_NOTE="Required fork modifications are missing. Manual action required before merging."
+# Join notes into a single line separated by " | "
+JOINED_NOTES=""
+for note in "${PATCH_NOTES[@]}"; do
+  if [[ -n "${JOINED_NOTES}" ]]; then
+    JOINED_NOTES="${JOINED_NOTES} | ${note}"
+  else
+    JOINED_NOTES="${note}"
   fi
-fi
+done
 
-out "FORMINATOR_PATCH_APPLIED=${PATCH_APPLIED}"
-out "FORMINATOR_PATCH_NOTE=${PATCH_NOTE}"
+out "FORMINATOR_PATCH_APPLIED=${ALL_APPLIED}"
+out "FORMINATOR_PATCH_NOTE=${JOINED_NOTES}"
 
-if [[ "${PATCH_APPLIED}" == "1" ]]; then
-  log "OK. Upstream sync completed for tag ${SVN_TAG}. Patch is applied."
+if [[ "${ALL_APPLIED}" == "1" ]]; then
+  log "OK. Upstream sync completed for tag ${SVN_TAG}. All patches applied."
 else
-  log "WARNING. Upstream sync completed for tag ${SVN_TAG} but patch is NOT applied."
-  log "WARNING. ${PATCH_NOTE}"
+  log "WARNING. Upstream sync completed for tag ${SVN_TAG} but one or more patches did NOT apply."
+  log "WARNING. ${JOINED_NOTES}"
 fi
 

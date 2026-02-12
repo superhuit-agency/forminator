@@ -1,0 +1,70 @@
+From 189607884105dc84e20abc5ee2582f8004362b88 Mon Sep 17 00:00:00 2001
+From: Felipe Paul Martins <felipe@superhuit.ch>
+Date: Thu, 12 Feb 2026 15:53:25 +0100
+Subject: [PATCH 1/2] =?UTF-8?q?chore:=20=F0=9F=92=A5=20re-apply=20patch:?=
+ =?UTF-8?q?=20disable=20plugin=20update?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ forminator.php | 36 ++++++++++++++++++++++++++++++++++++
+ 1 file changed, 36 insertions(+)
+
+diff --git a/forminator.php b/forminator.php
+index 55e894d..c02f423 100644
+--- a/forminator.php
++++ b/forminator.php
+@@ -158,6 +158,12 @@ if ( ! class_exists( 'Forminator' ) ) {
+ 				// Prevent updating PRO plugin to a free version.
+ 				add_action( 'site_transient_update_plugins', array( __CLASS__, 'remove_free_version_update' ) );
+ 			}
++
++			/**
++			 * Disable all updates for this plugin
++			 */
++			add_filter( 'site_transient_update_plugins', array( __CLASS__, 'disable_plugin_update' ) );
++			add_filter( 'auto_update_plugin', array( __CLASS__, 'disable_auto_update' ), 10, 2 );
+ 		}
+ 
+ 		/**
+@@ -179,6 +185,36 @@ if ( ! class_exists( 'Forminator' ) ) {
+ 			return $transient;
+ 		}
+ 
++		/**
++		 * Remove this plugin from the list of available updates
++		 *
++		 * @param object|bool $transient Transient object of available updates.
++		 * @return mixed
++		 */
++		public static function disable_plugin_update( $transient ) {
++			$plugin_slug = 'forminator/forminator.php';
++		
++			if ( isset( $transient->response[ $plugin_slug ] ) ) {
++				unset( $transient->response[ $plugin_slug ] );
++			}
++		
++			return $transient;
++		}
++		
++		/**
++		 * Disable automatic updates for this plugin
++		 *
++		 * @param bool|null $update Whether to update.
++		 * @param object    $item   The update offer.
++		 * @return bool|null
++		 */
++		public static function disable_auto_update( $update, $item ) {
++			if ( isset( $item->slug ) && 'forminator' === $item->slug ) {
++				return false;
++			}
++			return $update;
++		}
++
+ 		/**
+ 		 * Add manage_forminator custom capability
+ 		 *
+-- 
+2.52.0
+
