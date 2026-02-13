@@ -346,7 +346,7 @@
 
 			var url = wpApiSettings.root + 'forminator/v1/preview/forms/?module_id=' + moduleId;
 
-			window.fetch( url )
+			window.fetch( url, { headers: { 'X-WP-Nonce': wpApiSettings.nonce } } )
 				.then( function( response ) {
 					return response.json();
 				} )
@@ -464,7 +464,7 @@
 
 			var url = wpApiSettings.root + 'forminator/v1/preview/polls/?module_id=' + moduleId;
 
-			window.fetch( url )
+			window.fetch( url, { headers: { 'X-WP-Nonce': wpApiSettings.nonce } } )
 				.then( function( response ) {
 					return response.json();
 				} )
@@ -587,7 +587,7 @@
 
 			var url = wpApiSettings.root + 'forminator/v1/preview/quizzes/?module_id=' + moduleId;
 
-			window.fetch( url )
+			window.fetch( url, { headers: { 'X-WP-Nonce': wpApiSettings.nonce } } )
 				.then( function( response ) {
 					return response.json();
 				} )
