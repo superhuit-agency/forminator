@@ -14,6 +14,7 @@ the modified code is not overriden.
 2. Add `$original_message param` in `forminator_email_message` filter in `library/abstracts/abstract-class-mail.php:394` see 94d193c79a5ffa9874a44269546b5e83b6b94d73
 3. Add `composer.json`
 4. Disable WordPress plugin updates in `forminator.php` - adds `disable_plugin_update()` and `disable_auto_update()` methods to prevent plugin from being updated via WordPress admin, see c30f6bad9dd31a9cba67e3a3074d03890c411b77
+5. Replace Gutenberg blocks (forms, polls, quizzes) from Block API v1 to v3 — adds `addons/pro/gutenberg/js/blocks-v3.js` and `addons/pro/gutenberg/class-forminator-gfblock-v3.php`, loaded from `gutenberg.php`. Dequeues the original minified v1 scripts, transfers their localized data, and registers v3 replacements with `useBlockProps()` for iframe editor compatibility (required from WordPress 7.0+)
 
 ## Updating from upstream (automated)
 

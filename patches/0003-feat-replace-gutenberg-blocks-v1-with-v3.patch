@@ -1,0 +1,1006 @@
+diff --git a/addons/pro/gutenberg/class-forminator-gfblock-v3.php b/addons/pro/gutenberg/class-forminator-gfblock-v3.php
+new file mode 100644
+index 0000000..e4a809c
+--- /dev/null
++++ b/addons/pro/gutenberg/class-forminator-gfblock-v3.php
+@@ -0,0 +1,87 @@
++<?php
++/**
++ * Forminator Gutenberg Blocks – Block API v3 Override.
++ *
++ * Prevents the original v1 Forminator block scripts from executing on the
++ * client and replaces them with Block API v3 equivalents that use
++ * useBlockProps() for iframe editor compatibility (WP 6.3+, required 7.0+).
++ *
++ * Strategy:
++ *   1. The original block classes (priority 10) enqueue their scripts and
++ *      localize data (frmnt_form_data, frmnt_poll_data, frmnt_quiz_data).
++ *   2. At priority 20 we transfer that localized data to our v3 script,
++ *      then dequeue & deregister the originals so their v1
++ *      registerBlockType() calls never run.
++ *   3. The v3 script registers all three blocks with apiVersion 3.
++ *
++ * The server-side registrations (REST API, render callbacks, styles) remain
++ * untouched — only the client-side block definitions are replaced.
++ *
++ * @package Forminator
++ * @see     https://developer.wordpress.org/block-editor/reference-guides/block-api/block-api-versions/
++ */
++
++if ( ! defined( 'ABSPATH' ) ) {
++	die();
++}
++
++/**
++ * Replace original v1 block scripts with the v3 override.
++ *
++ * Hooked at priority 20 on enqueue_block_editor_assets so that the
++ * original block classes have already enqueued + localised at priority 10.
++ */
++function forminator_enqueue_blocks_v3() {
++	$script_path = plugin_dir_path( __FILE__ ) . 'js/blocks-v3.js';
++
++	if ( ! file_exists( $script_path ) ) {
++		return;
++	}
++
++	// Enqueue the v3 script — only core WP dependencies are needed.
++	wp_enqueue_script(
++		'forminator-blocks-v3',
++		forminator_gutenberg()->get_plugin_url() . 'js/blocks-v3.js',
++		array(
++			'wp-blocks',
++			'wp-i18n',
++			'wp-element',
++			'wp-block-editor',
++			'wp-components',
++		),
++		filemtime( $script_path ),
++		false
++	);
++
++	// The original block classes localised data on their own script handles
++	// (e.g. wp_localize_script( 'forminator-block-forms', 'frmnt_form_data', … )).
++	// We move that inline data to the v3 handle, then remove the originals
++	// so the v1 registerBlockType() calls never execute.
++	$original_handles = array(
++		'forminator-block-forms',
++		'forminator-block-polls',
++		'forminator-block-quizzes',
++	);
++
++	$scripts = wp_scripts();
++
++	foreach ( $original_handles as $handle ) {
++		if ( ! wp_script_is( $handle, 'registered' ) && ! wp_script_is( $handle, 'enqueued' ) ) {
++			continue;
++		}
++
++		// Grab the inline data set by wp_localize_script
++		// (e.g. "var frmnt_form_data = {…};").
++		$inline_data = $scripts->get_data( $handle, 'data' );
++
++		if ( $inline_data ) {
++			wp_add_inline_script( 'forminator-blocks-v3', $inline_data, 'before' );
++		}
++
++		// Remove the original script so its v1 code never runs.
++		wp_dequeue_script( $handle );
++		wp_deregister_script( $handle );
++	}
++}
++
++add_action( 'enqueue_block_editor_assets', 'forminator_enqueue_blocks_v3', 20 );
+diff --git a/addons/pro/gutenberg/gutenberg.php b/addons/pro/gutenberg/gutenberg.php
+index 4443d3d..06ab861 100644
+--- a/addons/pro/gutenberg/gutenberg.php
++++ b/addons/pro/gutenberg/gutenberg.php
+@@ -88,5 +88,8 @@ class Forminator_Gutenberg {
+ 	}
+ }
+ 
++// Load Block API v3 overrides (iframe editor compatibility).
++require_once __DIR__ . '/class-forminator-gfblock-v3.php';
++
+ // Load Gutenberb functions.
+ require_once __DIR__ . '/functions.php';
+diff --git a/addons/pro/gutenberg/js/blocks-v3.js b/addons/pro/gutenberg/js/blocks-v3.js
+new file mode 100644
+index 0000000..ecc7b51
+--- /dev/null
++++ b/addons/pro/gutenberg/js/blocks-v3.js
+@@ -0,0 +1,894 @@
++/**
++ * Forminator Gutenberg Blocks – Block API Version 3
++ *
++ * Registers the Forminator Gutenberg blocks using Block API v3 with
++ * useBlockProps() to enable iframe editor compatibility (WP 6.3+,
++ * required in WP 7.0+).
++ *
++ * The original v1 block scripts are dequeued by the PHP loader
++ * (class-forminator-gfblock-v3.php) before this script runs, so the
++ * block names are available for a clean registration — no
++ * unregisterBlockType() needed.
++ *
++ * Blocks handled:
++ *   - forminator/forms
++ *   - forminator/polls
++ *   - forminator/quizzes
++ *
++ * @see https://developer.wordpress.org/block-editor/reference-guides/block-api/block-api-versions/
++ *
++ * @package Forminator
++ */
++( function() {
++	'use strict';
++
++	// =====================================================================
++	// WordPress Dependencies
++	// =====================================================================
++
++	var el       = wp.element.createElement;
++	var Fragment = wp.element.Fragment;
++	var useState  = wp.element.useState;
++	var useEffect = wp.element.useEffect;
++	var RawHTML   = wp.element.RawHTML;
++
++	var registerBlockType = wp.blocks.registerBlockType;
++
++	var useBlockProps         = wp.blockEditor.useBlockProps;
++	var InspectorControls     = wp.blockEditor.InspectorControls;
++	var BlockControls         = wp.blockEditor.BlockControls;
++	var BlockAlignmentToolbar = wp.blockEditor.BlockAlignmentToolbar;
++
++	var SelectControl = wp.components.SelectControl;
++	var Spinner       = wp.components.Spinner;
++	var Placeholder   = wp.components.Placeholder;
++	var Toolbar       = wp.components.Toolbar;
++	var Button        = wp.components.Button;
++
++	// =====================================================================
++	// Shared Constants & Helpers
++	// =====================================================================
++
++	/**
++	 * Forminator clipboard / form icon – shared SVG path data.
++	 */
++	var ICON_SVG_PATH =
++		'M14.6634 3.79874H18.6111C19.1121 3.79874 19.5925 3.99053 19.9468 ' +
++		'4.33187C20.301 4.67321 20.5 5.13614 20.5 5.61887V20.1799C20.5 ' +
++		'20.6626 20.301 21.1255 19.9468 21.4669C19.5925 21.8082 19.1121 22 ' +
++		'18.6111 22H5.38889C4.88792 22 4.4075 21.8082 4.05327 21.4669C3.69904 ' +
++		'21.1255 3.5 20.6626 3.5 20.1799V5.61887C3.5 5.13614 3.69904 4.67321 ' +
++		'4.05327 4.33187C4.4075 3.99053 4.88792 3.79874 5.38889 ' +
++		'3.79874H9.33666C9.53518 3.27168 9.89729 2.81628 10.3738 ' +
++		'2.49447C10.8503 2.17265 11.4181 2 12 2C12.5819 2 13.1497 2.17265 ' +
++		'13.6262 2.49447C14.1027 2.81628 14.4648 3.27168 14.6634 ' +
++		'3.79874ZM12.5247 3.9521C12.3693 3.8521 12.1868 3.79874 12 ' +
++		'3.79874C11.7495 3.79874 11.5093 3.89464 11.3322 4.0653C11.1551 ' +
++		'4.23597 11.0556 4.46744 11.0556 4.7088C11.0556 4.8888 11.1109 ' +
++		'5.06472 11.2147 5.21438C11.3185 5.36404 11.466 5.48072 11.6386 ' +
++		'5.5496C11.8111 5.61848 12.0011 5.63648 12.1842 5.60137C12.3674 ' +
++		'5.56625 12.5357 5.47958 12.6678 5.3523C12.7998 5.22503 12.8898 ' +
++		'5.06286 12.9263 4.88633C12.9627 4.70979 12.944 4.52682 12.8725 ' +
++		'4.36053C12.8011 4.19424 12.68 4.0521 12.5247 3.9521ZM5.38889 ' +
++		'5.61887V20.1799H18.6111V5.61887H15.7778V7.43899H8.22222V5.61887H5.38889Z' +
++		'M8.2222 12.8987H15.7777C16.0283 12.8987 16.2685 12.9946 16.4456 ' +
++		'13.1653C16.6227 13.3359 16.7222 13.5674 16.7222 13.8087C16.7222 ' +
++		'14.0501 16.6227 14.2816 16.4456 14.4522C16.2685 14.6229 16.0283 ' +
++		'14.7188 15.7777 14.7188H8.2222C7.97171 14.7188 7.7315 14.6229 ' +
++		'7.55439 14.4522C7.37727 14.2816 7.27775 14.0501 7.27775 ' +
++		'13.8087C7.27775 13.5674 7.37727 13.3359 7.55439 13.1653C7.7315 ' +
++		'12.9946 7.97171 12.8987 8.2222 12.8987ZM15.7777 10.1685H8.2222C7.97171 ' +
++		'10.1685 7.7315 10.2644 7.55439 10.4351C7.37727 10.6057 7.27775 ' +
++		'10.8372 7.27775 11.0786C7.27775 11.3199 7.37727 11.5514 7.55439 ' +
++		'11.722C7.7315 11.8927 7.97171 11.9886 8.2222 11.9886H15.7777C16.0283 ' +
++		'11.9886 16.2685 11.8927 16.4456 11.722C16.6227 11.5514 16.7222 ' +
++		'11.3199 16.7222 11.0786C16.7222 10.8372 16.6227 10.6057 16.4456 ' +
++		'10.4351C16.2685 10.2644 16.0283 10.1685 15.7777 10.1685ZM12 ' +
++		'15.6289H15.7778C16.0283 15.6289 16.2685 15.7248 16.4456 ' +
++		'15.8954C16.6227 16.0661 16.7222 16.2976 16.7222 16.5389C16.7222 ' +
++		'16.7803 16.6227 17.0118 16.4456 17.1824C16.2685 17.3531 16.0283 ' +
++		'17.449 15.7778 17.449H12C11.7495 17.449 11.5093 17.3531 11.3322 ' +
++		'17.1824C11.1551 17.0118 11.0556 16.7803 11.0556 16.5389C11.0556 ' +
++		'16.2976 11.1551 16.0661 11.3322 15.8954C11.5093 15.7248 11.7495 ' +
++		'15.6289 12 15.6289Z';
++
++	/**
++	 * Block icon component – clipboard / form SVG.
++	 *
++	 * @return {Element} SVG element.
++	 */
++	function forminatorIcon() {
++		return el(
++			'svg',
++			{
++				width: '24',
++				height: '24',
++				viewBox: '0 0 24 24',
++				fill: 'none',
++				xmlns: 'http://www.w3.org/2000/svg',
++			},
++			el( 'path', {
++				fillRule: 'evenodd',
++				clipRule: 'evenodd',
++				d: ICON_SVG_PATH,
++				fill: '#1A1A1A',
++			} )
++		);
++	}
++
++	/**
++	 * Execute inline scripts from preview markup.
++	 *
++	 * Looks for the rendered form element in the current document first,
++	 * then falls back to looking inside an iframe (Gutenberg iframe editor).
++	 *
++	 * @param {string} formSelector CSS selector prefix (without module ID).
++	 * @param {string} moduleId     The module ID to append to the selector.
++	 */
++	function executePreviewScripts( formSelector, moduleId ) {
++		setTimeout( function() {
++			var $ = window.jQuery;
++			if ( ! $ ) {
++				return;
++			}
++
++			var target = $( formSelector + moduleId );
++
++			if ( target.length === 0 ) {
++				// Try inside an iframe (editor may be iframed in v3).
++				target = $( 'iframe' ).contents().find( formSelector + moduleId );
++				if ( target.length ) {
++					var iframeWin = $( 'iframe' )[0].contentWindow;
++					target.parent().find( 'script' ).each( function() {
++						iframeWin.eval( $( this ).text() );
++					} );
++				}
++			} else {
++				target.parent().find( 'script' ).each( function() {
++					/* jshint -W061 */
++					eval( $( this ).text() );
++				} );
++			}
++		}, 10 );
++	}
++
++	/**
++	 * Render the placeholder state – icon, label, and module dropdown.
++	 *
++	 * @param {string}   placeholderClass CSS class for the placeholder wrapper.
++	 * @param {string}   label            Text label above the dropdown.
++	 * @param {string}   moduleId         Currently selected module ID.
++	 * @param {Array}    options          Array of { value, label } for <select>.
++	 * @param {Function} onSelect         Callback when a module is selected.
++	 * @return {Element} Placeholder element.
++	 */
++	function renderPlaceholder( placeholderClass, label, moduleId, options, onSelect ) {
++		return el(
++			Placeholder,
++			{ className: 'wp-block-embed' },
++			el(
++				'div',
++				{
++					className: placeholderClass,
++					style: { margin: '0 auto 20px', lineHeight: '21px' },
++				},
++				el(
++					'svg',
++					{
++						width: '24',
++						height: '24',
++						viewBox: '0 0 24 24',
++						fill: 'none',
++						xmlns: 'http://www.w3.org/2000/svg',
++						style: { verticalAlign: 'middle' },
++					},
++					el( 'path', {
++						fillRule: 'evenodd',
++						clipRule: 'evenodd',
++						d: ICON_SVG_PATH,
++						fill: '#1A1A1A',
++					} )
++				),
++				el(
++					'strong',
++					{
++						style: {
++							verticalAlign: 'middle',
++							marginLeft: 10,
++							color: '#444444',
++							fontSize: 13,
++							letterSpacing: '-0.25px',
++						},
++					},
++					label
++				)
++			),
++			el(
++				'form',
++				null,
++				el(
++					'select',
++					{
++						value: moduleId || '',
++						onChange: function( e ) {
++							onSelect( e.target.value );
++						},
++						style: { margin: '0 auto' },
++					},
++					options.map( function( opt ) {
++						return el( 'option', { key: opt.value, value: opt.value }, opt.label );
++					} )
++				)
++			)
++		);
++	}
++
++	/**
++	 * Render shared block controls – InspectorControls and BlockControls.
++	 *
++	 * @param {Object} args
++	 * @param {boolean}  args.isSelected      Whether the block is selected.
++	 * @param {string}   args.sidebarLabel    Label for the sidebar SelectControl.
++	 * @param {string}   args.moduleId        Currently selected module ID.
++	 * @param {Array}    args.options          Module options array.
++	 * @param {string}   args.alignment       Current alignment value.
++	 * @param {Function} args.onUpdateId       Called with the new module ID.
++	 * @param {Function} args.onUpdateAlign    Called with the new alignment.
++	 * @param {string}   args.customizeLabel  Toolbar "customise" button label.
++	 * @param {Function} args.onOpenSettings  Called when the customise button is pressed.
++	 * @return {Element} Fragment with controls.
++	 */
++	function renderControls( args ) {
++		return el(
++			Fragment,
++			null,
++			args.isSelected
++				? el(
++					InspectorControls,
++					null,
++					el( SelectControl, {
++						label: args.sidebarLabel,
++						value: args.moduleId || '',
++						options: args.options,
++						onChange: args.onUpdateId,
++					} )
++				)
++				: null,
++			el(
++				BlockControls,
++				null,
++				el( BlockAlignmentToolbar, {
++					value: args.alignment,
++					onChange: args.onUpdateAlign,
++				} ),
++				args.moduleId
++					? el(
++						Toolbar,
++						null,
++						el( Button, {
++							className: 'components-toolbar__control',
++							label: args.customizeLabel,
++							icon: 'edit',
++							onClick: args.onOpenSettings,
++						} )
++					)
++					: null
++			)
++		);
++	}
++
++	// =====================================================================
++	// Shared Block Configuration
++	// =====================================================================
++
++	var BLOCK_ATTRIBUTES = {
++		module_id: { type: 'string' },
++		alignment: { type: 'string', default: 'none' },
++		previewURL: { type: 'string', default: '' },
++	};
++
++	var BLOCK_SUPPORTS = {
++		customClassName: false,
++		className: false,
++		html: false,
++	};
++
++	// =====================================================================
++	// FORMS Block – Edit Component
++	// =====================================================================
++
++	/**
++	 * Edit component for the forminator/forms block.
++	 *
++	 * Converted from the original class component to a function component
++	 * so that the useBlockProps() hook can be used (required for API v3).
++	 *
++	 * @param {Object} props Block editor props.
++	 * @return {Element}
++	 */
++	function FormsBlockEdit( props ) {
++		var blockProps    = useBlockProps();
++		var attributes    = props.attributes;
++		var setAttributes = props.setAttributes;
++		var isSelected    = props.isSelected;
++
++		var moduleId   = attributes.module_id;
++		var alignment  = attributes.alignment;
++		var previewURL = attributes.previewURL;
++
++		var loadingState = useState( false );
++		var loading      = loadingState[0];
++		var setLoading   = loadingState[1];
++
++		var markupState = useState( '' );
++		var markup      = markupState[0];
++		var setMarkup   = markupState[1];
++
++		var formData    = typeof frmnt_form_data !== 'undefined' ? frmnt_form_data : {};
++		var formOptions = formData.forms || [];
++		var l10n        = formData.l10n || {};
++
++		// Auto-select the only available form (replicates original behaviour).
++		useEffect( function() {
++			if ( typeof moduleId === 'undefined' && formOptions.length === 2 ) {
++				setAttributes( { module_id: '' + formOptions[1].value } );
++			}
++		}, [] ); // eslint-disable-line react-hooks/exhaustive-deps
++
++		// Fetch preview when the selected module changes.
++		useEffect( function() {
++			if ( ! moduleId ) {
++				setMarkup( '' );
++				return;
++			}
++
++			setLoading( true );
++
++			var url = wpApiSettings.root + 'forminator/v1/preview/forms/?module_id=' + moduleId;
++
++			window.fetch( url, { headers: { 'X-WP-Nonce': wpApiSettings.nonce } } )
++				.then( function( response ) {
++					return response.json();
++				} )
++				.then( function( data ) {
++					if ( data.success ) {
++						setMarkup( data.data.markup );
++					}
++					executePreviewScripts( 'form.forminator-custom-form-', moduleId );
++					if ( window.jQuery ) {
++						jQuery( document ).trigger( 'forminator.gutenberg.form.loaded', moduleId );
++					}
++					setLoading( false );
++				} )
++				.catch( function() {
++					setLoading( false );
++				} );
++		}, [ moduleId ] ); // eslint-disable-line react-hooks/exhaustive-deps
++
++		function updateId( value ) {
++			setAttributes( { module_id: value } );
++		}
++
++		function updateAlignment( value ) {
++			setAttributes( { alignment: value } );
++		}
++
++		function openSettings() {
++			window.location.href = formData.admin_url + '?page=forminator-cform-wizard&id=' + moduleId;
++		}
++
++		// Controls.
++		var controls = renderControls( {
++			isSelected: isSelected,
++			sidebarLabel: l10n.choose_form,
++			moduleId: moduleId,
++			options: formOptions,
++			alignment: alignment,
++			onUpdateId: updateId,
++			onUpdateAlign: updateAlignment,
++			customizeLabel: l10n.customize_form,
++			onOpenSettings: openSettings,
++		} );
++
++		// Content – preview image / loading / markup / placeholder.
++		var content;
++
++		if ( previewURL ) {
++			content = el( 'img', {
++				src: previewURL,
++				alt: l10n.preview_alt || '',
++				style: { width: '100%' },
++			} );
++		} else if ( loading ) {
++			content = el(
++				'div',
++				{ className: 'wp-block-embed is-loading' },
++				el( Spinner, null ),
++				el( 'span', null, l10n.rendering )
++			);
++		} else if ( markup ) {
++			content = el( RawHTML, null, markup );
++		} else {
++			content = renderPlaceholder(
++				'forminator-forms--placeholder',
++				l10n.choose_form,
++				moduleId,
++				formOptions,
++				updateId
++			);
++		}
++
++		return el( 'div', blockProps, controls, content );
++	}
++
++	// =====================================================================
++	// POLLS Block – Edit Component
++	// =====================================================================
++
++	/**
++	 * Edit component for the forminator/polls block.
++	 *
++	 * @param {Object} props Block editor props.
++	 * @return {Element}
++	 */
++	function PollsBlockEdit( props ) {
++		var blockProps    = useBlockProps();
++		var attributes    = props.attributes;
++		var setAttributes = props.setAttributes;
++		var isSelected    = props.isSelected;
++
++		var moduleId   = attributes.module_id;
++		var alignment  = attributes.alignment;
++		var previewURL = attributes.previewURL;
++
++		var loadingState = useState( false );
++		var loading      = loadingState[0];
++		var setLoading   = loadingState[1];
++
++		var markupState = useState( '' );
++		var markup      = markupState[0];
++		var setMarkup   = markupState[1];
++
++		var pollData    = typeof frmnt_poll_data !== 'undefined' ? frmnt_poll_data : {};
++		var formOptions = pollData.forms || [];
++		var l10n        = pollData.l10n || {};
++
++		// Fetch preview when the selected module changes.
++		useEffect( function() {
++			if ( ! moduleId ) {
++				setMarkup( '' );
++				return;
++			}
++
++			setLoading( true );
++
++			var url = wpApiSettings.root + 'forminator/v1/preview/polls/?module_id=' + moduleId;
++
++			window.fetch( url, { headers: { 'X-WP-Nonce': wpApiSettings.nonce } } )
++				.then( function( response ) {
++					return response.json();
++				} )
++				.then( function( data ) {
++					if ( data.success ) {
++						setMarkup( data.data.markup );
++					}
++					executePreviewScripts( 'form.forminator-poll-', moduleId );
++					setLoading( false );
++				} )
++				.catch( function() {
++					setLoading( false );
++				} );
++		}, [ moduleId ] ); // eslint-disable-line react-hooks/exhaustive-deps
++
++		function updateId( value ) {
++			setAttributes( { module_id: value } );
++		}
++
++		function updateAlignment( value ) {
++			setAttributes( { alignment: value } );
++		}
++
++		function openSettings() {
++			window.location.href = pollData.admin_url + '?page=forminator-poll-wizard&id=' + moduleId;
++		}
++
++		// Controls.
++		var controls = renderControls( {
++			isSelected: isSelected,
++			sidebarLabel: l10n.choose_poll,
++			moduleId: moduleId,
++			options: formOptions,
++			alignment: alignment,
++			onUpdateId: updateId,
++			onUpdateAlign: updateAlignment,
++			customizeLabel: l10n.customize_poll,
++			onOpenSettings: openSettings,
++		} );
++
++		// Content.
++		var content;
++
++		if ( previewURL ) {
++			content = el( 'img', {
++				src: previewURL,
++				alt: l10n.preview_alt || '',
++				style: { width: '100%' },
++			} );
++		} else if ( loading ) {
++			content = el(
++				'div',
++				{ className: 'wp-block-embed is-loading' },
++				el( Spinner, null ),
++				el( 'span', null, l10n.rendering )
++			);
++		} else if ( markup ) {
++			content = el( RawHTML, null, markup );
++		} else {
++			content = renderPlaceholder(
++				'forminator-polls--placeholder',
++				l10n.choose_poll,
++				moduleId,
++				formOptions,
++				updateId
++			);
++		}
++
++		return el( 'div', blockProps, controls, content );
++	}
++
++	// =====================================================================
++	// QUIZZES Block – Edit Component
++	// =====================================================================
++
++	/**
++	 * Edit component for the forminator/quizzes block.
++	 *
++	 * Has an additional `type` state (knowledge | nowrong) returned by the
++	 * REST preview endpoint, used to determine the correct admin wizard page.
++	 *
++	 * @param {Object} props Block editor props.
++	 * @return {Element}
++	 */
++	function QuizzesBlockEdit( props ) {
++		var blockProps    = useBlockProps();
++		var attributes    = props.attributes;
++		var setAttributes = props.setAttributes;
++		var isSelected    = props.isSelected;
++
++		var moduleId   = attributes.module_id;
++		var alignment  = attributes.alignment;
++		var previewURL = attributes.previewURL;
++
++		var loadingState = useState( false );
++		var loading      = loadingState[0];
++		var setLoading   = loadingState[1];
++
++		var markupState = useState( '' );
++		var markup      = markupState[0];
++		var setMarkup   = markupState[1];
++
++		var typeState   = useState( '' );
++		var quizType    = typeState[0];
++		var setQuizType = typeState[1];
++
++		var quizData    = typeof frmnt_quiz_data !== 'undefined' ? frmnt_quiz_data : {};
++		var formOptions = quizData.forms || [];
++		var l10n        = quizData.l10n || {};
++
++		// Fetch preview when the selected module changes.
++		useEffect( function() {
++			if ( ! moduleId ) {
++				setMarkup( '' );
++				setQuizType( '' );
++				return;
++			}
++
++			setLoading( true );
++
++			var url = wpApiSettings.root + 'forminator/v1/preview/quizzes/?module_id=' + moduleId;
++
++			window.fetch( url, { headers: { 'X-WP-Nonce': wpApiSettings.nonce } } )
++				.then( function( response ) {
++					return response.json();
++				} )
++				.then( function( data ) {
++					if ( data.success ) {
++						setMarkup( data.data.markup );
++						if ( data.data.type ) {
++							setQuizType( data.data.type );
++						}
++					}
++					executePreviewScripts( 'form.forminator-quiz-', moduleId );
++					setLoading( false );
++				} )
++				.catch( function() {
++					setLoading( false );
++				} );
++		}, [ moduleId ] ); // eslint-disable-line react-hooks/exhaustive-deps
++
++		function updateId( value ) {
++			setAttributes( { module_id: value } );
++		}
++
++		function updateAlignment( value ) {
++			setAttributes( { alignment: value } );
++		}
++
++		function openSettings() {
++			var url = '';
++			if ( quizType === 'knowledge' ) {
++				url = quizData.admin_url + '?page=forminator-knowledge-wizard&id=' + moduleId;
++			} else if ( quizType === 'nowrong' ) {
++				url = quizData.admin_url + '?page=forminator-nowrong-wizard&id=' + moduleId;
++			}
++			if ( url ) {
++				window.location.href = url;
++			}
++		}
++
++		// Controls.
++		var controls = renderControls( {
++			isSelected: isSelected,
++			sidebarLabel: l10n.choose_quiz,
++			moduleId: moduleId,
++			options: formOptions,
++			alignment: alignment,
++			onUpdateId: updateId,
++			onUpdateAlign: updateAlignment,
++			customizeLabel: l10n.customize_quiz,
++			onOpenSettings: openSettings,
++		} );
++
++		// Content.
++		var content;
++
++		if ( previewURL ) {
++			content = el( 'img', {
++				src: previewURL,
++				alt: l10n.preview_alt || '',
++				style: { width: '100%' },
++			} );
++		} else if ( loading ) {
++			content = el(
++				'div',
++				{ className: 'wp-block-embed is-loading' },
++				el( Spinner, null ),
++				el( 'span', null, l10n.rendering )
++			);
++		} else if ( markup ) {
++			content = el( RawHTML, null, markup );
++		} else {
++			content = renderPlaceholder(
++				'forminator-quizzes--placeholder',
++				l10n.choose_quiz,
++				moduleId,
++				formOptions,
++				updateId
++			);
++		}
++
++		return el( 'div', blockProps, controls, content );
++	}
++
++	// =====================================================================
++	// Save Functions (v3 – with useBlockProps.save())
++	// =====================================================================
++
++	function formsSave( props ) {
++		var moduleId = props.attributes.module_id;
++		if ( ! moduleId ) {
++			return null;
++		}
++		return el(
++			'div',
++			useBlockProps.save( { className: 'forminator-guttenberg' } ),
++			'[forminator_form id="', moduleId, '"]'
++		);
++	}
++
++	function pollsSave( props ) {
++		var moduleId = props.attributes.module_id;
++		if ( ! moduleId ) {
++			return null;
++		}
++		return el(
++			'div',
++			useBlockProps.save( { className: 'forminator-guttenberg' } ),
++			'[forminator_poll id="', moduleId, '"]'
++		);
++	}
++
++	function quizzesSave( props ) {
++		var moduleId = props.attributes.module_id;
++		if ( ! moduleId ) {
++			return null;
++		}
++		return el(
++			'div',
++			useBlockProps.save( { className: 'forminator-guttenberg' } ),
++			'[forminator_quiz id="', moduleId, '"]'
++		);
++	}
++
++	// =====================================================================
++	// Deprecated Save Functions (v1 originals – for backward compatibility)
++	//
++	// These match the serialised output of the original v1 blocks so that
++	// previously saved content validates without requiring a migration.
++	// =====================================================================
++
++	function deprecatedFormsSave( props ) {
++		var moduleId = props.attributes.module_id;
++		if ( ! moduleId ) {
++			return null;
++		}
++		// Original used { class: … } (not className) – kept intentionally.
++		return el(
++			'div', { class: 'forminator-guttenberg' },
++			'[forminator_form id="', moduleId, '"]'
++		);
++	}
++
++	function deprecatedPollsSave( props ) {
++		var moduleId = props.attributes.module_id;
++		if ( ! moduleId ) {
++			return null;
++		}
++		return el(
++			'div', { class: 'forminator-guttenberg' },
++			'[forminator_poll id="', moduleId, '"]'
++		);
++	}
++
++	function deprecatedQuizzesSave( props ) {
++		var moduleId = props.attributes.module_id;
++		if ( ! moduleId ) {
++			return null;
++		}
++		return el(
++			'div', { class: 'forminator-guttenberg' },
++			'[forminator_quiz id="', moduleId, '"]'
++		);
++	}
++
++	// =====================================================================
++	// Registration
++	//
++	// The original v1 block scripts have been dequeued by the PHP loader
++	// (class-forminator-gfblock-v3.php) so no unregisterBlockType() is
++	// needed — we simply register the v3 versions directly.
++	// =====================================================================
++
++	// -----------------------------------------------------------------
++	// forminator/forms
++	// -----------------------------------------------------------------
++	if ( typeof frmnt_form_data !== 'undefined' ) {
++		registerBlockType( 'forminator/forms', {
++			apiVersion: 3,
++			title: frmnt_form_data.l10n.form,
++			description: frmnt_form_data.l10n.form_description,
++			icon: forminatorIcon,
++			example: {
++				attributes: {
++					previewURL: frmnt_form_data.l10n.preview_image,
++				},
++			},
++			category: 'embed',
++			attributes: BLOCK_ATTRIBUTES,
++			supports: BLOCK_SUPPORTS,
++			transforms: {
++				from: [
++					{
++						type: 'shortcode',
++						tag: 'forminator_form',
++						attributes: {
++							module_id: {
++								type: 'string',
++								shortcode: function( attrs ) {
++									return attrs.named.id;
++								},
++							},
++						},
++					},
++				],
++			},
++			deprecated: [
++				{
++					attributes: BLOCK_ATTRIBUTES,
++					save: deprecatedFormsSave,
++				},
++			],
++			edit: FormsBlockEdit,
++			save: formsSave,
++		} );
++	}
++
++	// -----------------------------------------------------------------
++	// forminator/polls
++	// -----------------------------------------------------------------
++	if ( typeof frmnt_poll_data !== 'undefined' ) {
++		registerBlockType( 'forminator/polls', {
++			apiVersion: 3,
++			title: frmnt_poll_data.l10n.poll,
++			description: frmnt_poll_data.l10n.poll_description,
++			icon: forminatorIcon,
++			example: {
++				attributes: {
++					previewURL: frmnt_poll_data.l10n.preview_image,
++				},
++			},
++			category: 'embed',
++			attributes: BLOCK_ATTRIBUTES,
++			supports: BLOCK_SUPPORTS,
++			transforms: {
++				from: [
++					{
++						type: 'shortcode',
++						tag: [ 'forminator_poll' ],
++						attributes: {
++							module_id: {
++								type: 'string',
++								shortcode: function( attrs ) {
++									return attrs.named.id;
++								},
++							},
++						},
++					},
++				],
++			},
++			deprecated: [
++				{
++					attributes: BLOCK_ATTRIBUTES,
++					save: deprecatedPollsSave,
++				},
++			],
++			edit: PollsBlockEdit,
++			save: pollsSave,
++		} );
++	}
++
++	// -----------------------------------------------------------------
++	// forminator/quizzes
++	// -----------------------------------------------------------------
++	if ( typeof frmnt_quiz_data !== 'undefined' ) {
++		registerBlockType( 'forminator/quizzes', {
++			apiVersion: 3,
++			title: frmnt_quiz_data.l10n.quiz,
++			description: frmnt_quiz_data.l10n.quiz_description,
++			icon: forminatorIcon,
++			example: {
++				attributes: {
++					previewURL: frmnt_quiz_data.l10n.preview_image,
++				},
++			},
++			category: 'embed',
++			attributes: BLOCK_ATTRIBUTES,
++			supports: BLOCK_SUPPORTS,
++			transforms: {
++				from: [
++					{
++						type: 'shortcode',
++						tag: [ 'forminator_quiz' ],
++						attributes: {
++							module_id: {
++								type: 'string',
++								shortcode: function( attrs ) {
++									return attrs.named.id;
++								},
++							},
++						},
++					},
++				],
++			},
++			deprecated: [
++				{
++					attributes: BLOCK_ATTRIBUTES,
++					save: deprecatedQuizzesSave,
++				},
++			],
++			edit: QuizzesBlockEdit,
++			save: quizzesSave,
++		} );
++	}
++
++} )();
