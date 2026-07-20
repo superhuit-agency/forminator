@@ -35,7 +35,14 @@ jobs:
         run: |
           set -euo pipefail
 
-          out="$(bash tools/sync-wporg-svn.sh 2>&1)"
+          # Capture output but always print it, even on failure. Otherwise a
+          # non-zero exit makes the `out=$(...)` assignment fail under `set -e`
+          # *before* the echo, swallowing the script's diagnostics entirely.
+          if ! out="$(bash tools/sync-wporg-svn.sh 2>&1)"; then
+            echo "${out}"
+            echo "sync-wporg-svn.sh exited non-zero" >&2
+            exit 1
+          fi
           echo "${out}"
 
           tag="$(echo "${out}" | grep -E '^FORMINATOR_UPSTREAM_TAG=' | tail -n 1 | cut -d= -f2)"

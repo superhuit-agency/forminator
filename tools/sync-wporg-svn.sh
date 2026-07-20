@@ -104,9 +104,21 @@ for patch_file in "${patch_files[@]}"; do
   log "Applying patch: ${patch_name}"
 
   if git -C "${REPO_ROOT}" apply --check "${patch_file}" 2>/dev/null; then
-    git -C "${REPO_ROOT}" apply --3way "${patch_file}"
-    PATCH_NOTES+=("${patch_name}: applied successfully.")
-    log "  -> applied successfully."
+    # NOTE: `--check` only validates the working tree, but `--3way` also
+    # consults the index. After the rsync above, the index still holds the
+    # previously-committed blobs while the working tree has fresh upstream
+    # content, so `--3way` can fail ("does not match index") even when
+    # `--check` passed. Guard it so a failure is handled gracefully instead
+    # of killing the script under `set -e` (CI must still open a draft PR).
+    if git -C "${REPO_ROOT}" apply --3way "${patch_file}"; then
+      PATCH_NOTES+=("${patch_name}: applied successfully.")
+      log "  -> applied successfully."
+    else
+      ALL_APPLIED="0"
+      PATCH_NOTES+=("${patch_name}: FAILED to apply (3-way merge). Manual action required.")
+      log "  -> FAILED to apply (3-way merge). Manual action required."
+      # Do NOT fail: CI should still open a WIP/draft PR so it can be fixed manually.
+    fi
   else
     # Patch may already be present (e.g. if upstream incorporated the change).
     if git -C "${REPO_ROOT}" apply --check --reverse "${patch_file}" 2>/dev/null; then
