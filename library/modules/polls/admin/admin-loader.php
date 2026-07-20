@@ -253,6 +253,7 @@ class Forminator_Poll_Admin extends Forminator_Admin_Module {
 				'formName'           => $name,
 				'version'            => FORMINATOR_VERSION,
 				'store_submissions'  => '1',
+				'field-image-size'   => 'custom',
 			),
 			$settings
 		);
@@ -330,6 +331,30 @@ class Forminator_Poll_Admin extends Forminator_Admin_Module {
 	}
 
 	/**
+	 * Check if poll has valid answers.
+	 *
+	 * A poll is considered valid if it has at least one answer with a non-empty title.
+	 *
+	 * @param array $answers Poll answers.
+	 * @return bool True if poll has valid answers, false otherwise.
+	 */
+	public static function has_valid_answers( $answers ) {
+		if ( empty( $answers ) ) {
+			return false;
+		}
+
+		foreach ( $answers as $answer ) {
+			$answer_title = isset( $answer['title'] ) ? trim( (string) $answer['title'] ) : '';
+
+			if ( '' === $answer_title ) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/**
 	 * Update poll
 	 *
 	 * @param string $id Module ID.
@@ -369,6 +394,10 @@ class Forminator_Poll_Admin extends Forminator_Admin_Module {
 		if ( isset( $template->answers ) ) {
 			$answers = forminator_sanitize_array_field( $template->answers );
 			$answers = wp_slash( $answers );
+		}
+
+		if ( 'publish' === $status && ! self::has_valid_answers( $answers ) ) {
+			return new WP_Error( 'forminator_poll_empty_answers', esc_html__( 'Poll answers cannot be empty.', 'forminator' ) );
 		}
 
 		foreach ( $answers as $answer ) {

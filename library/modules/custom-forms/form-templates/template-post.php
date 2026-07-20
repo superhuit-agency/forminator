@@ -86,7 +86,7 @@ class Forminator_Template_Post extends Forminator_Template {
 		return array(
 			'form-type'                         => 'default',
 			'submission-behaviour'              => 'behaviour-thankyou',
-			'thankyou-message'                  => esc_html__( 'Thank you. Your post has been submitted.', 'forminator' ),
+			'thankyou-message'                  => esc_html__( 'Your post has been submitted.', 'forminator' ),
 			'submitData'                        => array(
 				'custom-submit-text'          => esc_html__( 'Create Post', 'forminator' ),
 				'custom-invalid-form-message' => esc_html__( 'Error: Your form is not valid, please fix the errors!', 'forminator' ),

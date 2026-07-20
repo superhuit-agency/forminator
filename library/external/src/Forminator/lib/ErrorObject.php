@@ -49,6 +49,7 @@ class ErrorObject extends StripeObject
     const CODE_ACCOUNT_INFORMATION_MISMATCH = 'account_information_mismatch';
     const CODE_ACCOUNT_INVALID = 'account_invalid';
     const CODE_ACCOUNT_NUMBER_INVALID = 'account_number_invalid';
+    const CODE_ACCOUNT_TOKEN_REQUIRED_FOR_V2_ACCOUNT = 'account_token_required_for_v2_account';
     const CODE_ACSS_DEBIT_SESSION_INCOMPLETE = 'acss_debit_session_incomplete';
     const CODE_ALIPAY_UPGRADE_REQUIRED = 'alipay_upgrade_required';
     const CODE_AMOUNT_TOO_LARGE = 'amount_too_large';
@@ -86,11 +87,14 @@ class ErrorObject extends StripeObject
     const CODE_COUPON_EXPIRED = 'coupon_expired';
     const CODE_CUSTOMER_MAX_PAYMENT_METHODS = 'customer_max_payment_methods';
     const CODE_CUSTOMER_MAX_SUBSCRIPTIONS = 'customer_max_subscriptions';
+    const CODE_CUSTOMER_SESSION_EXPIRED = 'customer_session_expired';
     const CODE_CUSTOMER_TAX_LOCATION_INVALID = 'customer_tax_location_invalid';
     const CODE_DEBIT_NOT_AUTHORIZED = 'debit_not_authorized';
     const CODE_EMAIL_INVALID = 'email_invalid';
     const CODE_EXPIRED_CARD = 'expired_card';
     const CODE_FINANCIAL_CONNECTIONS_ACCOUNT_INACTIVE = 'financial_connections_account_inactive';
+    const CODE_FINANCIAL_CONNECTIONS_ACCOUNT_PENDING_ACCOUNT_NUMBERS = 'financial_connections_account_pending_account_numbers';
+    const CODE_FINANCIAL_CONNECTIONS_ACCOUNT_UNAVAILABLE_ACCOUNT_NUMBERS = 'financial_connections_account_unavailable_account_numbers';
     const CODE_FINANCIAL_CONNECTIONS_NO_SUCCESSFUL_TRANSACTION_REFRESH = 'financial_connections_no_successful_transaction_refresh';
     const CODE_FORWARDING_API_INACTIVE = 'forwarding_api_inactive';
     const CODE_FORWARDING_API_INVALID_PARAMETER = 'forwarding_api_invalid_parameter';
@@ -103,6 +107,7 @@ class ErrorObject extends StripeObject
     const CODE_INCORRECT_CVC = 'incorrect_cvc';
     const CODE_INCORRECT_NUMBER = 'incorrect_number';
     const CODE_INCORRECT_ZIP = 'incorrect_zip';
+    const CODE_INDIA_RECURRING_PAYMENT_MANDATE_CANCELED = 'india_recurring_payment_mandate_canceled';
     const CODE_INSTANT_PAYOUTS_CONFIG_DISABLED = 'instant_payouts_config_disabled';
     const CODE_INSTANT_PAYOUTS_CURRENCY_DISABLED = 'instant_payouts_currency_disabled';
     const CODE_INSTANT_PAYOUTS_LIMIT_EXCEEDED = 'instant_payouts_limit_exceeded';
@@ -149,6 +154,7 @@ class ErrorObject extends StripeObject
     const CODE_PAYMENT_INTENT_MANDATE_INVALID = 'payment_intent_mandate_invalid';
     const CODE_PAYMENT_INTENT_PAYMENT_ATTEMPT_EXPIRED = 'payment_intent_payment_attempt_expired';
     const CODE_PAYMENT_INTENT_PAYMENT_ATTEMPT_FAILED = 'payment_intent_payment_attempt_failed';
+    const CODE_PAYMENT_INTENT_RATE_LIMIT_EXCEEDED = 'payment_intent_rate_limit_exceeded';
     const CODE_PAYMENT_INTENT_UNEXPECTED_STATE = 'payment_intent_unexpected_state';
     const CODE_PAYMENT_METHOD_BANK_ACCOUNT_ALREADY_VERIFIED = 'payment_method_bank_account_already_verified';
     const CODE_PAYMENT_METHOD_BANK_ACCOUNT_BLOCKED = 'payment_method_bank_account_blocked';
@@ -182,6 +188,7 @@ class ErrorObject extends StripeObject
     const CODE_RATE_LIMIT = 'rate_limit';
     const CODE_REFER_TO_CUSTOMER = 'refer_to_customer';
     const CODE_REFUND_DISPUTED_PAYMENT = 'refund_disputed_payment';
+    const CODE_REQUEST_BLOCKED = 'request_blocked';
     const CODE_RESOURCE_ALREADY_EXISTS = 'resource_already_exists';
     const CODE_RESOURCE_MISSING = 'resource_missing';
     const CODE_RETURN_INTENT_ALREADY_PROCESSED = 'return_intent_already_processed';
@@ -200,6 +207,8 @@ class ErrorObject extends StripeObject
     const CODE_SKU_INACTIVE = 'sku_inactive';
     const CODE_STATE_UNSUPPORTED = 'state_unsupported';
     const CODE_STATUS_TRANSITION_INVALID = 'status_transition_invalid';
+    const CODE_STORER_CAPABILITY_MISSING = 'storer_capability_missing';
+    const CODE_STORER_CAPABILITY_NOT_ACTIVE = 'storer_capability_not_active';
     const CODE_STRIPE_TAX_INACTIVE = 'stripe_tax_inactive';
     const CODE_TAX_ID_INVALID = 'tax_id_invalid';
     const CODE_TAX_ID_PROHIBITED = 'tax_id_prohibited';

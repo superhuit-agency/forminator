@@ -251,7 +251,7 @@ class Forminator_Time extends Forminator_Field {
 					$hours ['min']  = '0';
 				}
 
-				$html .= sprintf( '<div id="%s" class="forminator-col forminator-col-%s">', $hours['name'], $cols );
+				$html .= sprintf( '<div id="%s" class="forminator-col forminator-col-%s">', esc_attr( $hours['name'] ), esc_attr( $cols ) );
 
 					$html .= '<div class="forminator-field">';
 
@@ -327,7 +327,7 @@ class Forminator_Time extends Forminator_Field {
 					$minutes ['step'] = (int) $increment_minute;
 				}
 
-				$html .= sprintf( '<div id="%s" class="forminator-col forminator-col-%s">', $minutes['name'], $cols );
+				$html .= sprintf( '<div id="%s" class="forminator-col forminator-col-%s">', esc_attr( $minutes['name'] ), esc_attr( $cols ) );
 
 					$html .= sprintf( '<div class="forminator-field">', $cols );
 
@@ -403,7 +403,7 @@ class Forminator_Time extends Forminator_Field {
 						$ampm_value = $default_time_ampm;
 					}
 
-					$html .= sprintf( '<div id="%s" class="forminator-col forminator-col-%s">', $ampm['name'], $cols );
+					$html .= sprintf( '<div id="%s" class="forminator-col forminator-col-%s">', esc_attr( $ampm['name'] ), esc_attr( $cols ) );
 
 						$html .= '<div class="forminator-field">';
 

@@ -156,6 +156,18 @@
 				self.on_focus_input(e, input);
 			});
 
+			this.$el.on( 'validation:invalid', function() {
+				var validator = self.$el.data( 'validator' );
+				if ( ! validator || ! validator.errorList.length ) {
+					return;
+				}
+				var errorPage = self.get_page_of_input( validator.errorList[0].element );
+				if ( errorPage !== self.step ) {
+					self.go_to( errorPage, true );
+					self.update_buttons();
+				}
+			} );
+
 		},
 
 		/**
@@ -432,13 +444,16 @@
 				// set sender random from 1 to 99 number to avoid duplicate ids
 				render = Math.floor(Math.random() * 99) + 1;
 			}
+			if( render ) {
+				render = '-' + render;
+			}
 
 			steps.each( function() {
 
 				var $step        = $( this ),
 					$stepLabel   = self.encodeHTMLEntities( $step.data( 'label' ) ),
 					$stepNumb    = $step.data('step') - 1,
-					$stepControl = 'forminator-custom-form-' + self.form_id + '-' + render + '--page-' + $stepNumb,
+					$stepControl = 'forminator-custom-form-' + self.form_id + render + '--page-' + $stepNumb,
 					$stepId      = $stepControl + '-label'
 				;
 
@@ -457,7 +472,7 @@
 				var $step   = $(this),
 					label   = self.encodeHTMLEntities( $step.data( 'label' ) ),
 					numb    = steps.length,
-					control = 'forminator-custom-form-' + self.form_id + '-' + render + '--page-' + numb,
+					control = 'forminator-custom-form-' + self.form_id + render + '--page-' + numb,
 					stepid  = control + '-label'
 				;
 
@@ -478,13 +493,15 @@
 		 * @param step
 		 */
 		handle_step: function( step ) {
-			if ( this.settings.inline_validation ) {
-				for ( var i = 0; i < step; i++ ) {
-					if ( this.step <= i ) {
-						if ( ! this.is_step_inputs_valid( i ) ) {
-							this.go_to( i, true );
-							return;
-						}
+			for ( var i = 0; i < step; i++ ) {
+				if ( this.step <= i ) {
+					if ( this.settings.inline_validation && ! this.is_step_inputs_valid( i ) ) {
+						this.go_to( i, true );
+						return;
+					}
+					if ( ! this.validate_captcha_on_step( i ) ) {
+						this.go_to( i, true );
+						return;
 					}
 				}
 			}
@@ -502,6 +519,11 @@
 					if ( ! this.is_step_inputs_valid( this.step ) ) {
 						return;
 					}
+				}
+
+				// Always validate captcha on current step before proceeding to next page.
+				if ( ! this.validate_captcha_on_step( this.step ) ) {
+					return;
 				}
 
 				if(typeof this.$el.data().forminatorFrontPayment !== "undefined") {
@@ -587,6 +609,82 @@
 		},
 
 		/**
+		 * Validate captcha fields on a given step.
+		 * Shows an inline error and prevents navigation if captcha is not solved.
+		 *
+		 * @since 1.55
+		 * 
+		 * @param {number} step
+		 * @returns {boolean} true if valid (or no captcha / invisible), false otherwise
+		 */
+		validate_captcha_on_step: function ( step ) {
+			var page             = this.$el.find( 'div.forminator-pagination[data-step=' + step + ']' ),
+				$captcha_field   = page.find( '.forminator-g-recaptcha, .forminator-hcaptcha, .forminator-turnstile' ).first();
+
+			if ( ! $captcha_field.length ) {
+				return true;
+			}
+
+			// Skip validation for conditionally hidden pages.
+			if ( page.hasClass( 'forminator-page-hidden' ) ) {
+				return true;
+			}
+
+			// Skip if the captcha field is hidden.
+			if ( $captcha_field.closest( '.forminator-hidden' ).length ) {
+				return true;
+			}
+
+			var captcha_size     = $captcha_field.data( 'size' ),
+				$captcha_parent  = $captcha_field.parent( '.forminator-col' ),
+				captcha_widget   = null,
+				captcha_response = '';
+
+			// Invisible captcha is handled on submit, not on page navigation.
+			if ( captcha_size === 'invisible' ) {
+				return true;
+			}
+
+			if ( $captcha_field.hasClass( 'forminator-g-recaptcha' ) ) {
+				captcha_widget = $captcha_field.data( 'forminator-recapchta-widget' );
+				if ( typeof window.grecaptcha !== 'undefined' ) {
+					// Skip if the widget has not rendered yet.
+					if ( 0 === $captcha_field.children().length ) {
+						return true;
+					}
+					captcha_response = window.grecaptcha.getResponse( captcha_widget );
+				}
+			} else if ( $captcha_field.hasClass( 'forminator-hcaptcha' ) ) {
+				captcha_widget = $captcha_field.data( 'forminator-hcaptcha-widget' );
+				if ( typeof hcaptcha !== 'undefined' ) {
+					captcha_response = hcaptcha.getResponse( captcha_widget );
+				}
+			} else if ( $captcha_field.hasClass( 'forminator-turnstile' ) ) {
+				captcha_response = $captcha_field.find( 'input[name="forminator-turnstile-response"]' ).val() || '';
+			}
+
+			// Always clear stale captcha errors before re-evaluating.
+			$captcha_field.removeClass( 'error' );
+			$captcha_parent.removeClass( 'forminator-has_error' )
+				.find( '.forminator-error-message.forminator-invalid-captcha' ).remove();
+
+			if ( ! captcha_response ) {
+				$captcha_field.addClass( 'error' );
+				$captcha_parent.addClass( 'forminator-has_error' )
+					.append( '<span class="forminator-error-message forminator-invalid-captcha" aria-hidden="true">' + window.ForminatorFront.cform.captcha_error + '</span>' );
+
+				var forminatorFrontSubmit = this.$el.data( 'forminatorFrontSubmit' );
+				if ( forminatorFrontSubmit && typeof forminatorFrontSubmit.focus_to_element === 'function' ) {
+					forminatorFrontSubmit.focus_to_element( $captcha_parent );
+				}
+
+				return false;
+			}
+
+			return true;
+		},
+
+		/**
 		 * Get page on the input
 		 *
 		 * @since 1.0.3
@@ -642,13 +740,21 @@
 			var submitButtonClass = this.settings.submitButtonClass;
 			if ( this.actualStep === ( this.totalActiveSteps - 1 ) && ! this.finished ) {
 
-				var submit_button_text = this.$el.find('.forminator-pagination-submit').html(),
+				var submit_button_text = this.$form.hasClass('forminator-design--material')
+						? this.$el.find('.forminator-pagination-submit .forminator-button--text').html()
+						: this.$el.find('.forminator-pagination-submit').html(),
+					display_submit_button_text = $.trim( $( '<div />' ).html( submit_button_text ).text() ),
+					hasSubmitRightAway = this.$el.find( '.forminator-submit-rightaway').length,
 					loadingText = this.$el.find('.forminator-pagination-submit').data('loading'),
 					last_button_txt = ( this.custom_label[ 'pagination-labels' ] === 'custom'
 						&& this.custom_label['last-previous'] !== '' ) ? this.custom_label['last-previous'] : this.prev_button,
 					forminatorPayment = self.$el.find('.forminator-payment'),
 					nextBtn = this.$el.find('.forminator-button-next'),
 					submitButton = this.$el.find( '.forminator-button-submit' );
+
+				if ( this.$form.hasClass('forminator-quiz') && ! display_submit_button_text && hasSubmitRightAway ) {
+					submit_button_text = window.ForminatorFront.quiz.view_results;
+				}
 
 				if ( this.$form.hasClass('forminator-design--material') ) {
 
@@ -659,9 +765,10 @@
 						function() {
 							nextBtn
 							.addClass('forminator-button-submit ' + submitButtonClass )
+							.attr('data-loading', loadingText)
 							.find('.forminator-button--text')
 							.html('')
-							.html(submit_button_text).data('loading', loadingText);
+							.html(submit_button_text);
 							self.$el.trigger( 'forminator.front.pagination.buttons.updated' );
 						},
 						20
@@ -674,7 +781,7 @@
 						function() {
 							nextBtn
 							.addClass( 'forminator-button-submit ' + submitButtonClass )
-							.html( submit_button_text ).data('loading', loadingText);
+							.html(submit_button_text).data('loading', loadingText);
 							self.$el.trigger( 'forminator.front.pagination.buttons.updated' );
 						},
 						20
@@ -685,24 +792,32 @@
 				setTimeout(
 					function() {
 						submitButton = self.$el.find( '.forminator-button-submit' );
+
+						if ( self.$form.hasClass('forminator-quiz') && ! display_submit_button_text ) {
+							submitButton.addClass('forminator-hidden');
+
+							if ( hasSubmitRightAway ) {
+								if ( self.$form.hasClass('forminator-design--material') ) {
+									submitButton.find( '.forminator-button--text' ).html( window.ForminatorFront.quiz.view_results );
+								} else {
+									submitButton.html( window.ForminatorFront.quiz.view_results );
+								}
+							}
+						}
 					},
 					30
 				);
-
-				if ( this.$form.hasClass('forminator-quiz') && ! submit_button_text ) {
-					submitButton.addClass('forminator-hidden');
-					if ( this.$el.find( '.forminator-submit-rightaway').length ) {
-						submitButton.html( window.ForminatorFront.quiz.view_results );
-					}
-				}
 
 				if( this.custom_label['has-paypal'] === true ) {
 					forminatorPayment.attr('id', 'forminator-paypal-submit');
 
 					setTimeout(
 						function() {
-							if ( ! window.paypalHasCondition.includes( self.$el.data( 'form-id' ) ) ) {
+							const $stripe_element = self.$form.find('.forminator-field-stripe-ocs:not(.forminator-hidden), .forminator-field-stripe:not(.forminator-hidden)');
+							if ( ! window.paypalHasCondition.includes( self.$el.data( 'form-id' ) )  ) {
+							if( $stripe_element.length === 0 ){
 								submitButton.addClass('forminator-hidden');
+							}
 								forminatorPayment.removeClass( 'forminator-hidden' );
 							}
 						},

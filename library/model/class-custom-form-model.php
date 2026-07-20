@@ -57,6 +57,13 @@ class Forminator_Form_Model extends Forminator_Base_Form_Model {
 			return $this->get_field( $original_id, $to_array );
 		}
 
+		// Handle slider range subfield suffixes (e.g., slider-1-min, slider-1-max).
+		$suffix = substr( $id, -4 );
+		if ( 0 === strpos( $id, 'slider-' ) && in_array( $suffix, array( '-min', '-max' ), true ) ) {
+			$base_id = substr( $id, 0, -4 );
+			return $this->get_field( $base_id, $to_array );
+		}
+
 		return null;
 	}
 

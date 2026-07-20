@@ -232,7 +232,12 @@ abstract class Forminator_Front_Action {
 				// prepare FILES.
 				$relevant_file_keys = preg_grep( '/-' . $suffix . '$/', array_keys( $_FILES ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
 				foreach ( $relevant_file_keys as $file_key ) {
-					$new_key            = str_replace( $suffix, $index + 2, $file_key );
+					$new_key = str_replace( $suffix, $index + 2, $file_key );
+					// On draft reload suffixes are already numeric, so the key can be unchanged.
+					// Skip to avoid self-assigning and then unsetting the same key, which would drop the upload.
+					if ( $new_key === $file_key ) {
+						continue;
+					}
 					$_FILES[ $new_key ] = $_FILES[ $file_key ]; // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput
 					unset( $_FILES[ $file_key ] );
 				}
@@ -242,6 +247,10 @@ abstract class Forminator_Front_Action {
 					if ( ! empty( $multi_file_keys ) ) {
 						foreach ( $multi_file_keys as $mfile_key ) {
 							$new_mkey = str_replace( $suffix, $index + 2, $mfile_key );
+							// Same as above: skip unchanged keys so reloaded-draft uploads are not unset.
+							if ( $new_mkey === $mfile_key ) {
+								continue;
+							}
 							$prepared_data['forminator-multifile-hidden'][ $new_mkey ] = $prepared_data['forminator-multifile-hidden'][ $mfile_key ];
 							unset( $prepared_data['forminator-multifile-hidden'][ $mfile_key ] );
 						}
@@ -333,7 +342,7 @@ abstract class Forminator_Front_Action {
 			if ( $response['success'] ) {
 				if ( isset( $response['url'] ) && ( ! isset( $response['newtab'] ) || 'sametab' === $response['newtab'] ) ) {
 					$url = apply_filters( 'forminator_' . static::$module_slug . '_submit_url', $response['url'], self::$module_id );
-					wp_safe_redirect( $url );
+					wp_redirect( $url ); // phpcs:ignore WordPress.Security.SafeRedirect.wp_redirect_wp_redirect
 					exit;
 				} else {
 					add_action( 'forminator_' . static::$module_slug . '_post_message', array( $this, 'form_response_message' ), 10, 2 );
@@ -450,8 +459,7 @@ abstract class Forminator_Front_Action {
 	 */
 	public function validate_nonce() {
 		if ( self::$is_abandoned ) {
-			$form_uid = filter_input( INPUT_POST, 'form_uid' );
-			$valid    = $this->validate_ajax( 'forminator_abandonment_form' . $form_uid, 'POST', 'forminator_abandonment_nonce' );
+			$valid = $this->validate_ajax( 'forminator_abandonment_form' . self::$module_id, 'POST', 'forminator_abandonment_nonce' );
 		} else {
 			$valid = $this->validate_ajax( 'forminator_submit_form' . self::$module_id, 'POST', 'forminator_nonce' );
 		}
@@ -540,10 +548,11 @@ abstract class Forminator_Front_Action {
 	private static function show_draft_link( $form_id, $response ) {
 		$response['form_id']    = $form_id;
 		$response['type']       = 'save_draft';
-		$draft_link             = esc_url( add_query_arg( 'draft', $response['draft_id'], get_permalink( $response['page_id'] ) ) );
+		$draft_link             = Forminator_CForm_Front_Action::get_draft_link( $response['draft_id'], $response['page_id'] );
 		$send_draft_email_nonce = esc_attr( 'forminator_nonce_email_draft_link_' . $response['draft_id'] );
 		$message                = str_replace( '{retention_period}', $response['retention_period'], $response['message'] );
 		$message                = forminator_replace_form_data( $message, static::$module_object );
+		$message                = forminator_replace_variables( $message, $form_id );
 		$autofill_email         = isset( $response['first_email'] ) ? $response['first_email'] : '';
 
 		ob_start();

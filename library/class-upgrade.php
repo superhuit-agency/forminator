@@ -31,6 +31,15 @@ class Forminator_Upgrade {
 
 			if ( $version_changed ) {
 				update_option( 'forminator_version_upgraded', true );
+				// Set last updated date.
+				update_site_option( 'forminator_last_updated_date', time() );
+
+				$activation_date      = get_site_option( 'forminator_first_activation_date' );
+				$last_activation_date = get_site_option( 'forminator_last_activation_date' );
+				// Set activation dates if not set already.
+				if ( empty( $activation_date ) || empty( $last_activation_date ) ) {
+					Forminator::set_activation_dates();
+				}
 			}
 		} else {
 			$version_changed = true;
@@ -61,6 +70,25 @@ class Forminator_Upgrade {
 					do_action( 'forminator_update_version', FORMINATOR_VERSION, $old_version );
 				}
 			);
+
+			if ( $old_version ) {
+				self::maybe_enable_place_api_notice( $old_version );
+			}
+		}
+	}
+
+	/**
+	 * Enable notice for Place API update if the old version is less than 1.51.0.
+	 *
+	 * @param string $old_version Old plugin version.
+	 */
+	private static function maybe_enable_place_api_notice( $old_version ) {
+		// Show notice for Place API update if the old version is less than 1.51.0-alpha.
+		if ( version_compare( $old_version, '1.51.0-alpha', 'lt' ) ) {
+			$geolocation_settings = get_option( 'forminator_geolocation_settings', array() );
+			if ( ! empty( $geolocation_settings['api_key'] ) ) {
+				update_option( 'forminator_geolocation_update_place_api_notice', true );
+			}
 		}
 	}
 

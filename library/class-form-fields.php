@@ -212,11 +212,7 @@ class Forminator_Fields {
 
 		Forminator_Field::check_upload_root_index_file();
 
-		if ( ! file_exists( $upload_root . 'css/index.php' ) ) {
-			Forminator_Field::add_index_file( $upload_root . 'css/index.php' );
-		}
-		if ( ! file_exists( $upload_root . 'signatures/index.php' ) ) {
-			Forminator_Field::add_index_file( $upload_root . 'signatures/index.php' );
-		}
+		Forminator_Field::add_index_file( $upload_root . 'css' );
+		Forminator_Field::add_index_file( $upload_root . 'signatures' );
 	}
 }

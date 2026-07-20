@@ -102,6 +102,12 @@ class Forminator_Group extends Forminator_Field {
 	public function markup( $field, $views_obj ) {
 		$name     = self::get_property( 'element_id', $field );
 		$wrappers = $views_obj::get_grouped_wrappers( $name );
+
+		// Don't render field group if it has no fields inside.
+		if ( empty( $wrappers ) ) {
+			return '';
+		}
+
 		$options  = self::prepare_field_options( $field );
 		$settings = $views_obj->model->settings;
 		$html     = '';
@@ -132,7 +138,8 @@ class Forminator_Group extends Forminator_Field {
 
 		$i = 1;
 		do {
-			$html .= '<div class="forminator-grouped-fields" data-options="' . esc_attr( wp_json_encode( $options ) ) . '">';
+			$suffix_attr = 1 < $i ? ' data-suffix="' . intval( $i ) . '"' : '';
+			$html       .= '<div class="forminator-grouped-fields" data-options="' . esc_attr( wp_json_encode( $options ) ) . '"' . $suffix_attr . '>';
 
 			if ( 1 < $i ) {
 				$wrappers = array_map(

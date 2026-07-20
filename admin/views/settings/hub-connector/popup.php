@@ -35,7 +35,7 @@
 								<li class="sui-icon-cross-close"><?php esc_html_e( 'Forminator Form Templates and Add-ons', 'forminator' ); ?></li>
 								<li class="sui-icon-cross-close"><?php esc_html_e( 'AntiBot Global Firewall', 'forminator' ); ?></li>
 								<li class="sui-icon-cross-close"><?php esc_html_e( 'Cloud Broken Link Checker', 'forminator' ); ?></li>
-								<li class="sui-icon-cross-close"><?php esc_html_e( 'WPMU DEV site management tools via the Hub', 'forminator' ); ?></li>
+								<li class="sui-icon-cross-close"><?php esc_html_e( 'WPMU DEV site management tools via The Hub', 'forminator' ); ?></li>
 							</ul>
 						</div>
 					</div>

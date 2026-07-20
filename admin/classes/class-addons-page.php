@@ -326,9 +326,6 @@ class Forminator_Admin_Addons_Page {
 	 */
 	public static function get_addon_slug( $pid ) {
 		switch ( $pid ) {
-			case self::EXTENSION_PACK_PID:
-				$addon_slug = 'extension-pack';
-				break;
 			case 3953609:
 				$addon_slug = 'stripe';
 				break;
@@ -337,6 +334,9 @@ class Forminator_Admin_Addons_Page {
 				break;
 			case self::GEOLOCATION_PID:
 				$addon_slug = 'geolocation';
+				break;
+			case self::EXTENSION_PACK_PID:
+				$addon_slug = 'extension-pack';
 				break;
 			default:
 				$addon_slug = '';

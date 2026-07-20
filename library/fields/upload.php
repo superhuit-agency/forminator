@@ -152,7 +152,14 @@ class Forminator_Upload extends Forminator_Field {
 		$description = self::get_property( 'description', $field, '' );
 		$file_type   = self::get_property( 'file-type', $field, 'single' );
 		$form_id     = isset( $settings['form_id'] ) ? $settings['form_id'] : 0;
-		$uniq_id     = $id . '_' . Forminator_CForm_Front::$uid;
+
+		// Server-rendered draft clones include the group copy suffix in the element id (e.g. "upload-1-2").
+		// Strip it from the base id and append it after the render UID instead (e.g. "upload-1_{uid}-2"),
+		// matching the JS clone markup so the upload AJAX resolves every clone to its base field.
+		$group_suffix = self::get_property( 'group_suffix', $field, '' );
+		$has_suffix   = '' !== $group_suffix && substr( $id, -strlen( $group_suffix ) ) === $group_suffix;
+		$base_id      = $has_suffix ? substr( $id, 0, -strlen( $group_suffix ) ) : $id;
+		$uniq_id      = $base_id . '_' . Forminator_CForm_Front::$uid . $group_suffix;
 
 		if ( 'multiple' === $file_type ) {
 			$name = $name . '[]';
@@ -175,7 +182,7 @@ class Forminator_Upload extends Forminator_Field {
 				'data-method' => $upload_method,
 			);
 			if ( $custom_file_type ) {
-				$upload_attr['accept'] = str_replace( '|', ',.', implode( ',', preg_filter( '/^/', '.', $mime_types ) ) );
+				$upload_attr['accept'] = $this->build_accept_attribute( $mime_types );
 			}
 			if ( 'custom' === $file_limit_type ) {
 				$file_limit                        = self::get_property( 'file-limit-input', $field, 5 );
@@ -193,7 +200,13 @@ class Forminator_Upload extends Forminator_Field {
 			$rounded_max_size                 = $this->byte_to_size( $max_size );
 			$upload_attr['data-size-message'] = /* translators: %s: Maximum size */ sprintf( esc_html__( 'Maximum file size allowed is %s. ', 'forminator' ), $rounded_max_size );
 			if ( $custom_file_type ) {
-				$upload_attr['data-filetype']         = implode( '|', array_values( $mime_types ) );
+				$upload_attr['data-filetype'] = implode( '|', array_values( $mime_types ) );
+			} elseif ( 'submission' === $upload_method ) {
+				// If custom file type is not enabled, we will use all allowed mime types in WP as validation.
+				$mime_types                   = forminator_allowed_mime_types( array(), false );
+				$upload_attr['data-filetype'] = ! empty( $mime_types ) ? implode( '|', array_keys( $mime_types ) ) : '';
+			}
+			if ( $custom_file_type || 'submission' === $upload_method ) {
 				$upload_attr['data-filetype-message'] = esc_html__( 'file extension is not allowed.', 'forminator' );
 			}
 
@@ -210,7 +223,7 @@ class Forminator_Upload extends Forminator_Field {
 		} else {
 			$upload_attr = array();
 			if ( ! empty( $mime_types ) ) {
-				$upload_attr['accept'] = str_replace( '|', ',.', implode( ',', preg_filter( '/^/', '.', $mime_types ) ) );
+				$upload_attr['accept'] = $this->build_accept_attribute( $mime_types );
 			}
 
 			$html .= self::create_file_upload(
@@ -226,7 +239,7 @@ class Forminator_Upload extends Forminator_Field {
 		}
 
 		if ( 'multiple' === $file_type ) {
-			$html .= sprintf( '<ul class="forminator-uploaded-files upload-container-%s"></ul>', $uniq_id );
+			$html .= sprintf( '<ul class="forminator-uploaded-files upload-container-%s"></ul>', esc_attr( $uniq_id ) );
 		}
 
 		$html .= '</div>';
@@ -278,11 +291,19 @@ class Forminator_Upload extends Forminator_Field {
 		$mime_type          = $this->file_mime_type( $field );
 		$allowed_mime_types = ! empty( $mime_type ) ? implode( '|', array_values( $mime_type ) ) : '';
 
-		if ( $this->is_required( $field ) ) {
+		if ( 'multiple' === $file_type ) {
+			$rules .= '"multiFileValid": true,';
+		} elseif ( $this->is_required( $field ) ) {
 			$rules .= '"required": true,';
 		}
 
 		if ( 'multiple' !== $file_type && $custom_file_type ) {
+			$rules .= '"extension": "' . $allowed_mime_types . '",';
+		} elseif ( 'multiple' !== $file_type ) {
+			// If custom file type is not enabled, we will use all allowed mime types in WP as validation.
+			$mime_types         = forminator_allowed_mime_types( array(), false );
+			$allowed_mime_types = ! empty( $mime_types ) ? implode( '|', array_keys( $mime_types ) ) : '';
+
 			$rules .= '"extension": "' . $allowed_mime_types . '",';
 		}
 
@@ -315,7 +336,7 @@ class Forminator_Upload extends Forminator_Field {
 				$id,
 				$field
 			);
-			$messages                  = $messages . '"required": "' . forminator_addcslashes( $required_message ) . '",' . "\n";
+			$messages                  = $messages . '"' . ( 'multiple' === $file_type ? 'multiFileValid' : 'required' ) . '": "' . forminator_addcslashes( $required_message ) . '",' . "\n";
 		}
 		$extension_message = esc_html__( 'Error saving form. Uploaded file extension is not allowed.', 'forminator' );
 		$messages         .= '"extension": "' . forminator_addcslashes( $extension_message ) . '",' . "\n";
@@ -532,7 +553,7 @@ class Forminator_Upload extends Forminator_Field {
 					if ( $use_library && 'submit' === $upload_type ) {
 						$upload_id = wp_insert_attachment(
 							array(
-								'guid'           => $file_path,
+								'guid'           => $file_url,
 								'post_mime_type' => $file_mime,
 								'post_title'     => preg_replace( '/\.[^.]+$/', '', $filename ),
 								'post_content'   => '',
@@ -659,7 +680,7 @@ class Forminator_Upload extends Forminator_Field {
 							if ( $use_library ) {
 								$upload_id = wp_insert_attachment(
 									array(
-										'guid'           => $file_path,
+										'guid'           => $file_url,
 										'post_mime_type' => $upload['mime_type'],
 										'post_title'     => preg_replace( '/\.[^.]+$/', '', $filename ),
 										'post_content'   => '',
@@ -907,7 +928,7 @@ class Forminator_Upload extends Forminator_Field {
 				if ( $use_library ) {
 					$upload_id = wp_insert_attachment(
 						array(
-							'guid'           => $file_path,
+							'guid'           => $file_url,
 							'post_mime_type' => $file_mime,
 							'post_title'     => preg_replace( '/\.[^.]+$/', '', $filename ),
 							'post_content'   => '',
@@ -955,13 +976,13 @@ class Forminator_Upload extends Forminator_Field {
 
 		switch ( $file_size ) {
 			case 'KB':
-				$size = 1000;
+				$size = KB_IN_BYTES;
 				break;
 			case 'B':
 				$size = 1;
 				break;
 			default:
-				$size = 1000000;
+				$size = MB_IN_BYTES;
 				break;
 		}
 
@@ -994,11 +1015,11 @@ class Forminator_Upload extends Forminator_Field {
 	 * @return float|string
 	 */
 	public function byte_to_size( $size ) {
-		$rounded_max_size = round( $size / 1000000 );
+		$rounded_max_size = round( $size / MB_IN_BYTES );
 
 		if ( $rounded_max_size <= 0 ) {
 			// go to KB.
-			$rounded_max_size = round( $size / 1000 );
+			$rounded_max_size = round( $size / KB_IN_BYTES );
 
 			if ( $rounded_max_size <= 0 ) {
 				// go to B.
@@ -1080,6 +1101,33 @@ class Forminator_Upload extends Forminator_Field {
 			}
 		}
 		return $mime_types;
+	}
+
+	/**
+	 * Build the accept attribute value including both extensions and MIME types.
+	 *
+	 * @since 1.55.0
+	 *
+	 * @param array $extensions Array of file extension values.
+	 * @return string Accept attribute value.
+	 */
+	private function build_accept_attribute( $extensions ) {
+		$ext_accept = str_replace( '|', ',.', implode( ',', preg_filter( '/^/', '.', $extensions ) ) );
+		$wp_mimes   = wp_get_mime_types();
+		$mimes      = array();
+
+		foreach ( $extensions as $ext ) {
+			$ext_list = explode( '|', $ext );
+			foreach ( $wp_mimes as $pattern => $mime ) {
+				if ( array_intersect( $ext_list, explode( '|', $pattern ) ) ) {
+					$mimes[] = $mime;
+					break;
+				}
+			}
+		}
+
+		$mimes = array_unique( $mimes );
+		return empty( $mimes ) ? $ext_accept : $ext_accept . ',' . implode( ',', $mimes );
 	}
 
 	/**

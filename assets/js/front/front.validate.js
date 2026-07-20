@@ -41,7 +41,7 @@
 	$.extend( ForminatorFrontValidate.prototype, {
 
 		init: function () {
-			$( '.forminator-select2' ).on('change', this.element, function (e, param1) {
+			$( '.forminator-select2, .forminator-rating' ).on('change', this.element, function (e, param1) {
 				if ( 'forminator_emulate_trigger' !== param1 ) {
 					$( this ).trigger('focusout');
 				}
@@ -139,10 +139,26 @@
 					var holderField = holder.closest( '.forminator-field' );
 					var holderDate  = holder.closest( '.forminator-date-input' );
 					var holderTime  = holder.closest( '.forminator-timepicker' );
+					var holderMultiUpload = holder.closest( '.forminator-multi-upload' );
 					var holderError = '';
 					var getColumn   = false;
 					var getError    = false;
 					var getDesc     = false;
+
+					if (holderMultiUpload.length > 0) {
+						if ( holderField.find( '.forminator-uploaded-file.forminator-has_error' ).length > 0 ) {
+							return;
+						}
+
+						const hasUploadError = Array.isArray(this.errorList) &&
+							this.errorList.some(err =>
+								err.element === element && [ 'required', 'multiFileValid' ].includes( err.method )
+							);
+						if (!hasUploadError) {
+							// Handle validation separately for multi-upload fields except for upload-required errors.
+							return;
+						}
+					}
 
 					var errorMessage    = this.errorMap[element.name];
 					var errorId         = holder.attr('id') + '-error';
@@ -304,9 +320,17 @@
 
 					var holder      = $( element );
 					var holderField = holder.closest( '.forminator-field' );
+					var holderMultiUpload = holder.closest( '.forminator-multi-upload' );
 					var holderTime  = holder.closest( '.forminator-timepicker' );
 					var holderDate  = holder.closest( '.forminator-date-input' );
 					var holderError = '';
+					// Skip unhighlight for delete button in upload field.
+					if (holder.hasClass("forminator-uploaded-file--delete")) {
+						return;
+					}
+					if ( holderMultiUpload.length > 0 && holderField.find( '.forminator-uploaded-file.forminator-has_error' ).length > 0 ) {
+						return;
+					}
 
 					var errorId = holder.attr('id') + '-error';
 					var ariaDescribedby = holder.attr('aria-describedby');
@@ -355,11 +379,15 @@
 
 				messages: messages
 
-			});
+		});
 
 			$form.off('forminator.validate.signature').on('forminator.validate.signature', function () {
 				var validator = $( this ).validate();
-				validator.element( $( this ).find( "input[id$='_data']" ) );
+				var $signatureInput = $( this ).find( "input[id$='_data']" );
+				// Only validate if the element exists and has a type property
+				if ( $signatureInput.length && $signatureInput[0] && typeof $signatureInput[0].type !== 'undefined' ) {
+					validator.element( $signatureInput );
+				}
 			});
 
 			// Inline validation for upload field.
@@ -451,6 +479,17 @@
 					'yy.mm.dd' === param
 				? /^\d{4}-\d{1,2}-\d{1,2}$/ : /^\d{1,2}-\d{1,2}-\d{4}$/,
 			adata, gg, mm, aaaa, xdata;
+		value = value.trim();
+		// Reject if the value doesn't use the separator the admin configured.
+		var expectedSep = param.indexOf('/') !== -1 ? '/' : ( param.indexOf('.') !== -1 ? '.' : '-' );
+		var separators = value.match(/[\/.\-\s]/g);
+		if ( separators ) {
+			for ( var i = 0; i < separators.length; i++ ) {
+				if ( separators[i] !== expectedSep ) {
+					return this.optional(element) || check;
+				}
+			}
+		}
 		value = value.replace(/[ /.]/g, '-');
 		if (re.test(value)) {
 			if ('dd/mm/yy' === param || 'dd-mm-yy' === param || 'dd.mm.yy' === param) {
@@ -585,34 +624,42 @@
 	});
 	$.validator.addMethod("forminatorPasswordStrength", function (value, element, param) {
 		var passwordStrength = value.trim();
+		var allowedLevels = [ 'short', 'bad', 'good', 'strong' ];
+		var level = ( typeof param === 'string' && allowedLevels.indexOf( param ) !== -1 ) ? param : 'strong';
 
 		// Password is optional and is empty so don't check strength.
 		if ( passwordStrength.length == 0 ) {
 			return true;
 		}
 
-		//at least 8 characters
-		if ( ! passwordStrength || passwordStrength.length < 8) {
+		var minLengths = { 'short': 4, 'bad': 6, 'good': 8, 'strong': 8 };
+		var minLength = minLengths[ level ];
+
+		if ( ! passwordStrength || passwordStrength.length < minLength ) {
 			return false;
 		}
 
+		// 'short' level only checks minimum length.
+		if ( level === 'short' ) {
+			return true;
+		}
+
+		// Enforce required character classes before scoring.
+		var hasDigit   = /[0-9]/.test( passwordStrength );
+		var hasLower   = /[a-z]/.test( passwordStrength );
+		var hasUpper   = /[A-Z]/.test( passwordStrength );
+		var hasSpecial = /[^a-zA-Z0-9]/.test( passwordStrength );
+
+		if ( level === 'bad'    && ! ( ( hasLower || hasUpper ) && hasDigit ) ) { return false; }
+		if ( level === 'good'   && ! ( hasLower && hasUpper && hasDigit ) )      { return false; }
+		if ( level === 'strong' && ! ( hasLower && hasUpper && hasDigit && hasSpecial ) ) { return false; }
+
+		// Build the character-set size using the already-computed class flags.
 		var symbolSize = 0, natLog, score;
-		//at least one number
-		if ( passwordStrength.match(/[0-9]/) ) {
-			symbolSize += 10;
-		}
-		//at least one lowercase letter
-		if ( passwordStrength.match(/[a-z]/) ) {
-			symbolSize += 20;
-		}
-		//at least one uppercase letter
-		if ( passwordStrength.match(/[A-Z]/) ) {
-			symbolSize += 20;
-		}
-		if ( passwordStrength.match(/[^a-zA-Z0-9]/) ) {
-			symbolSize += 30;
-		}
-		//at least one special character
+		if ( hasDigit )   { symbolSize += 10; }
+		if ( hasLower )   { symbolSize += 20; }
+		if ( hasUpper )   { symbolSize += 20; }
+		if ( hasSpecial ) { symbolSize += 30; }
 		if ( passwordStrength.match(/[=!\-@.,_*#&?^`%$+\/{\[\]|}^?~]/) ) {
 			symbolSize += 30;
 		}
@@ -620,7 +667,10 @@
 		natLog = Math.log( Math.pow(symbolSize, passwordStrength.length) );
 		score = natLog / Math.LN2;
 
-		return score >= 54;
+		var thresholds = { 'bad': 25, 'good': 40, 'strong': 54 };
+		var threshold = thresholds[ level ];
+
+		return score >= threshold;
 	});
 
 	$.validator.addMethod("extension", function (value, element, param) {
@@ -639,6 +689,17 @@
 		}
 
 		return this.optional(element) || check;
+	});
+
+	$.validator.addMethod("multiFileValid", function (value, element, param) {
+		const $element = $(element),
+			$field = $element.closest( '.forminator-field' ),
+			hasFileError = $field.find( '.forminator-uploaded-file.forminator-has_error' ).length > 0,
+			hasFiles = $field.find( '.forminator-uploaded-files li' ).length > 0,
+			isRequired = $element.hasClass( 'forminator-input-file-required' );
+
+		// Keep multi-upload validity aligned with the rendered file list, not the hidden input value.
+		return ! hasFileError && ( hasFiles || ! isRequired );
 	});
 
 	// $.validator.methods.required = function(value, element, param) {
@@ -762,7 +823,7 @@
 				minutes = minutesDiv.find( '.time-minutes' ).val();
 			}
 
-			meridiem = minutesDiv.next().find( 'select[name$="ampm"] option:selected' ).val();
+			meridiem = minutesDiv.next().find( 'select.time-ampm option:selected' ).val();
 		}
 
 		if (

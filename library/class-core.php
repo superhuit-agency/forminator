@@ -161,6 +161,49 @@ class Forminator_Core {
 		// Clean up Action Scheduler.
 		add_action( 'init', array( $this, 'schedule_action_scheduler_cleanup' ), 999 );
 		add_action( 'forminator_action_scheduler_cleanup', array( &$this, 'action_scheduler_cleanup' ) );
+
+		// Ensure Forminator shortcodes render inside Synced Patterns in Block Editor templates.
+		if ( ! is_admin() ) {
+			add_filter( 'render_block', array( $this, 'maybe_process_forminator_shortcodes' ), 10, 2 );
+		}
+	}
+
+	/**
+	 * Process Forminator shortcodes in block content.
+	 *
+	 * Workaround for Gutenberg not parsing shortcodes inside Synced Patterns
+	 * (formerly Reusable Blocks) when used in Block Editor Page Templates.
+	 *
+	 * @since 1.54.0
+	 *
+	 * @param string $block_content The rendered block content.
+	 * @param array  $block         The parsed block data including blockName.
+	 * @return string The block content with Forminator shortcodes rendered.
+	 */
+	public function maybe_process_forminator_shortcodes( $block_content, $block ) {
+		if ( empty( $block_content ) ) {
+			return $block_content;
+		}
+
+		// Raw/classic blocks are already handled by the_content.
+		// Processing them here can wrap Divi background spans in <p> and break direct-child selectors.
+		if ( ! isset( $block['blockName'] ) || 'core/freeform' === $block['blockName'] ) {
+			return $block_content;
+		}
+
+		if ( false === strpos( $block_content, '[forminator_' ) ) {
+			return $block_content;
+		}
+
+		// Only process if block content contains a Forminator shortcode.
+		if ( has_shortcode( $block_content, 'forminator_form' )
+			|| has_shortcode( $block_content, 'forminator_poll' )
+			|| has_shortcode( $block_content, 'forminator_quiz' )
+		) {
+			$block_content = do_shortcode( $block_content );
+		}
+
+		return $block_content;
 	}
 
 	/**
@@ -310,11 +353,11 @@ class Forminator_Core {
 		include_once forminator_plugin_dir() . 'library/render/class-assets-enqueue.php';
 		/* @noinspection PhpIncludeInspection */
 
-		if ( version_compare( PHP_VERSION, '5.3.0', 'ge' ) && file_exists( forminator_plugin_dir() . 'library/gateways/class-paypal-express.php' ) ) {
+		if ( file_exists( forminator_plugin_dir() . 'library/gateways/class-paypal-express.php' ) ) {
 			include_once forminator_plugin_dir() . 'library/gateways/class-paypal-express.php';
 		}
 
-		if ( version_compare( PHP_VERSION, '5.6.0', 'ge' ) && file_exists( forminator_plugin_dir() . 'library/gateways/class-stripe.php' ) ) {
+		if ( file_exists( forminator_plugin_dir() . 'library/gateways/class-stripe.php' ) ) {
 			/* @noinspection PhpIncludeInspection */
 			include_once forminator_plugin_dir() . 'library/gateways/class-stripe.php';
 		}
@@ -353,10 +396,8 @@ class Forminator_Core {
 		/* @noinspection PhpIncludeInspection */
 		include_once forminator_plugin_dir() . 'library/helpers/helper-calculator.php';
 
-		if ( version_compare( PHP_VERSION, '5.6.0', 'ge' ) ) {
-			/* @noinspection PhpIncludeInspection */
-			include_once forminator_plugin_dir() . 'library/helpers/helper-payment.php';
-		}
+		/* @noinspection PhpIncludeInspection */
+		include_once forminator_plugin_dir() . 'library/helpers/helper-payment.php';
 
 		// Model.
 		/* @noinspection PhpIncludeInspection */
@@ -541,20 +582,21 @@ class Forminator_Core {
 	 *
 	 * @param array  $data Data.
 	 * @param string $current_key Current key.
+	 * @param bool   $force Force sanitization.
 	 *
 	 * @return array|string
 	 */
-	public static function sanitize_array( $data, $current_key = '' ) {
-		$data         = wp_unslash( $data );
-		$skipped_keys = array( 'preview_data' );
+	public static function sanitize_array( $data, $current_key = '', $force = false ) {
+		$data = wp_unslash( $data );
+
 		// TODO: Should skip fields that has its own sanitize function.
 		if (
-			in_array( $current_key, $skipped_keys, true ) ||
-			0 === strpos( $current_key, 'url-' ) ||
+			false === $force && ( 0 === strpos( $current_key, 'url-' ) ||
 			0 === strpos( $current_key, 'select-' ) ||
+			0 === strpos( $current_key, 'radio-' ) ||
 			0 === strpos( $current_key, 'checkbox-' ) ||
 			0 === strpos( $current_key, 'password-' ) ||
-			0 === strpos( $current_key, 'confirm_password-' )
+			0 === strpos( $current_key, 'confirm_password-' ) )
 		) {
 			return $data;
 		}
@@ -596,7 +638,6 @@ class Forminator_Core {
 			in_array( $current_key, $allow_html, true ) ||
 			0 === strpos( $current_key, 'html-' ) ||
 			0 === strpos( $current_key, 'textarea-' ) ||
-			0 === strpos( $current_key, 'radio-' ) ||
 			false !== strpos( $current_key, '-post-title' ) ||
 			false !== strpos( $current_key, '-post-content' ) ||
 			false !== strpos( $current_key, '-post-excerpt' )
@@ -630,7 +671,7 @@ class Forminator_Core {
 			return sanitize_text_field( $data );
 		} else {
 			foreach ( $data as $key => $value ) {
-				$data[ $key ] = self::sanitize_array( $value, $key );
+				$data[ $key ] = self::sanitize_array( $value, $key, $force );
 			}
 
 			return $data;
@@ -820,3 +861,4 @@ class Forminator_Core {
 		return $allowed_html;
 	}
 }
+

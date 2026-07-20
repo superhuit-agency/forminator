@@ -11,7 +11,7 @@
  */
 
 if ( ! defined( 'FORMINATOR_VERSION' ) ) {
-	define( 'FORMINATOR_VERSION', '1.50.3' );
+	define( 'FORMINATOR_VERSION', '1.55.1' );
 }
 
 if ( ! defined( 'FORMINATOR_SUI_VERSION' ) ) {
@@ -19,7 +19,7 @@ if ( ! defined( 'FORMINATOR_SUI_VERSION' ) ) {
 }
 
 if ( ! defined( 'FORMINATOR_STRIPE_LIB_VERSION' ) ) {
-	define( 'FORMINATOR_STRIPE_LIB_VERSION', '17.4.0' );
+	define( 'FORMINATOR_STRIPE_LIB_VERSION', '19.4.0' );
 }
 
 if ( ! defined( 'FORMINATOR_STRIPE_LIB_DATE' ) ) {
@@ -40,4 +40,8 @@ if ( ! defined( 'FORMINATOR_PRO' ) ) {
 
 if ( ! defined( 'FORMINATOR_PRO_URL' ) ) {
 	define( 'FORMINATOR_PRO_URL', 'https://wpmudev.com/project/forminator-pro/' );
+}
+
+if ( ! defined( 'FORMINATOR_MIN_PHP_VERSION' ) ) {
+	define( 'FORMINATOR_MIN_PHP_VERSION', '7.4' );
 }

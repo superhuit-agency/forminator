@@ -166,7 +166,7 @@ class Forminator_Text extends Forminator_Field {
 			}
 			// Counter.
 			if ( ( ! empty( $limit ) && ! empty( $limit_type ) ) ) {
-				$description_block .= sprintf( '<span data-limit="%s" data-type="%s">0 / %s</span>', $limit, $limit_type, $limit );
+				$description_block .= sprintf( '<span data-limit="%s" data-type="%s">0 / %s</span>', esc_attr( $limit ), esc_attr( $limit_type ), esc_html( $limit ) );
 			}
 			$description_block .= '</span>';
 		}

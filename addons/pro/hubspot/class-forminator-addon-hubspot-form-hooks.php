@@ -22,6 +22,7 @@ class Forminator_Hubspot_Form_Hooks extends Forminator_Integration_Form_Hooks {
 	protected function custom_entry_fields( $submitted_data, $current_entry_fields ): array {
 		$entry                = func_get_args()[2];
 		$addon_setting_values = $this->settings_instance->get_settings_values();
+		$addon_setting_values = $this->settings_instance->migrate_list_id( $addon_setting_values );
 		$data                 = array();
 
 		foreach ( $addon_setting_values as $key => $addon_setting_value ) {
@@ -178,7 +179,7 @@ class Forminator_Hubspot_Form_Hooks extends Forminator_Integration_Form_Hooks {
 				$to_object_id = $contact_id;
 
 				if ( ! empty( $list_id ) ) {
-					$api->add_to_contact_list( $contact_id, $args['email'], $list_id );
+					$api->add_to_contact_list( $contact_id, $list_id );
 				}
 			}
 
@@ -196,10 +197,8 @@ class Forminator_Hubspot_Form_Hooks extends Forminator_Integration_Form_Hooks {
 				$object_id = $api->create_ticket( $ticket );
 
 				if ( ! is_null( $to_object_id ) && ! is_object( $object_id ) && (int) $object_id > 0 ) {
-					$from_object_id            = $object_id;
-					$associate['fromObjectId'] = $from_object_id;
-					$associate['toObjectId']   = $to_object_id;
-					$api->ticket_associate_contact( $associate );
+					$from_object_id = $object_id;
+					$api->ticket_associate_contact( $from_object_id, $to_object_id );
 				}
 			}
 

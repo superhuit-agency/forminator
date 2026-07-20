@@ -11,7 +11,11 @@
 	<?php if ( forminator_array_value_exists( $properties, 'steps-outline-focus' ) && !empty( $properties['steps-outline-focus'] ) ) { ?>
 		#forminator-module-<?php echo $properties['form_id'] ?>.forminator-design--<?php echo $theme; ?> .forminator-pagination-steps .forminator-step:focus {
 			outline: 2px solid <?php echo $properties['steps-outline-focus'] ?>;
-			outline-offset: 1px;
+			<?php if (forminator_array_value_exists( $properties, 'cform-timeline-font-size' ) && ! empty( $properties['cform-timeline-font-size'] ) ) { ?>
+				outline-offset: <?php echo max( 1, round( $properties['cform-timeline-font-size'] * 0.33 ) ) ?>px;
+			<?php } else { ?>
+				outline-offset: 2px;
+			<?php } ?>
 		}
 	<?php } ?>
 
@@ -66,7 +70,11 @@
 	<?php if ( forminator_array_value_exists( $properties, 'steps-outline-focus' ) && !empty( $properties['steps-outline-focus'] ) ) { ?>
 		#forminator-module-<?php echo $properties['form_id'] ?>.forminator-design--<?php echo $theme; ?> .forminator-pagination-steps .forminator-step:focus {
 			outline: 2px solid #254DEB;
-			outline-offset: 1px;
+			<?php if (forminator_array_value_exists( $properties, 'cform-timeline-font-size' ) && ! empty( $properties['cform-timeline-font-size'] ) ) { ?>
+				outline-offset: <?php echo max( 1, round( $properties['cform-timeline-font-size'] * 0.33 ) ) ?>px;
+			<?php } else { ?>
+				outline-offset: 2px;
+			<?php } ?>
 		}
 	<?php } ?>
 

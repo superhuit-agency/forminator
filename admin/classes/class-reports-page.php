@@ -197,13 +197,15 @@ class Forminator_Admin_Report_Page {
 	public static function forminator_montly_average( $start_date ) {
 		$total_month = 0;
 		if ( ! empty( $start_date ) ) {
-			$start_date  = strtotime( trim( $start_date ) );
-			$end_date    = strtotime( gmdate( 'Y/m/d' ) );
-			$start_year  = gmdate( 'Y', $start_date );
-			$end_year    = gmdate( 'Y', $end_date );
-			$start_month = gmdate( 'm', $start_date );
-			$end_month   = gmdate( 'm', $end_date );
-			$total_month = ( ( $end_year - $start_year ) * 12 ) + ( $end_month - $start_month );
+			$start_timestamp = strtotime( trim( $start_date ) );
+			$end_timestamp   = strtotime( gmdate( 'Y/m/d' ) );
+
+			// Calculate the difference in days and convert to months (using 30.44 days/month average).
+			$days_diff   = ( $end_timestamp - $start_timestamp ) / ( 60 * 60 * 24 );
+			$total_month = $days_diff / 30.44;
+
+			// Ensure at least 1 month to avoid division issues.
+			$total_month = max( 1, $total_month );
 		}
 
 		return apply_filters( 'forminator_reports_average_month', $total_month );
@@ -267,12 +269,14 @@ class Forminator_Admin_Report_Page {
 	/**
 	 * Report array
 	 *
-	 * @param array $reports Reports.
-	 * @param int   $form_id Form Id.
+	 * @param array  $reports   Reports.
+	 * @param int    $form_id   Form Id.
+	 * @param string $form_type Form type.
 	 *
 	 * @return array[]
 	 */
-	public function forminator_report_array( $reports, $form_id ) {
+	public function forminator_report_array( $reports, $form_id, $form_type = '' ) {
+		$module_slug = $this->get_module_slug( $form_type );
 		$report_data = array();
 		if ( ! empty( $reports ) ) {
 			$entries_and_abandoned          = intval( $reports['selected_entries'] + $reports['selected_abandoned'] );
@@ -296,7 +300,7 @@ class Forminator_Admin_Report_Page {
 					'previous'   => intval( $reports['previous_views'] ),
 					'increment'  => $this->forminator_difference_calculate( $reports['selected_views'], $reports['previous_views'] ),
 					'average'    => 0 < $reports['average_month']
-						? round( intval( $reports['total_views'] ) / intval( $reports['average_month'] ) )
+						? round( $reports['total_views'] / $reports['average_month'] )
 						: '',
 					'difference' => $reports['selected_views'] > $reports['previous_views'] ? 'high' : 'low',
 				),
@@ -305,7 +309,7 @@ class Forminator_Admin_Report_Page {
 					'previous'   => 0 < $previous_conversion ? floatval( $previous_conversion ) . '%' : 0,
 					'increment'  => $this->forminator_difference_calculate( $selected_conversion, $previous_conversion ),
 					'average'    => 0 < $reports['average_month']
-						? number_format( floatval( $selected_conversion ) / intval( $reports['average_month'] ), 1 ) . '%'
+						? number_format( floatval( $selected_conversion ) / $reports['average_month'], 1 ) . '%'
 						: 0,
 					'difference' => $selected_conversion > $previous_conversion ? 'high' : 'low',
 				),
@@ -314,7 +318,7 @@ class Forminator_Admin_Report_Page {
 					'previous'   => intval( $reports['previous_abandoned'] ),
 					'increment'  => $this->forminator_difference_calculate( $reports['selected_abandoned'], $reports['previous_abandoned'] ),
 					'average'    => 0 < $reports['average_month']
-						? round( intval( $reports['total_abandoned'] ) / intval( $reports['average_month'] ) )
+						? round( $reports['total_abandoned'] / $reports['average_month'] )
 						: '',
 					'difference' => $reports['selected_abandoned'] > $reports['previous_abandoned'] ? 'high' : 'low',
 				),
@@ -347,7 +351,7 @@ class Forminator_Admin_Report_Page {
 					'previous'   => intval( $reports['previous_entries'] ),
 					'increment'  => $this->forminator_difference_calculate( $reports['selected_entries'], $reports['previous_entries'] ),
 					'average'    => 0 < $reports['average_month']
-						? round( intval( $reports['total_entries'] ) / intval( $reports['average_month'] ) )
+						? round( $reports['total_entries'] / $reports['average_month'] )
 						: '',
 					'difference' => $reports['selected_entries'] > $reports['previous_entries'] ? 'high' : 'low',
 				),
@@ -358,7 +362,7 @@ class Forminator_Admin_Report_Page {
 					'previous'   => intval( $reports['previous_leads'] ),
 					'increment'  => $this->forminator_difference_calculate( $reports['selected_leads'], $reports['previous_leads'] ),
 					'average'    => 0 < $reports['average_month']
-						? round( intval( $reports['total_leads'] ) / intval( $reports['average_month'] ) )
+						? round( $reports['total_leads'] / $reports['average_month'] )
 						: '',
 					'difference' => $reports['selected_leads'] > $reports['previous_leads'] ? 'high' : 'low',
 				);
@@ -380,8 +384,24 @@ class Forminator_Admin_Report_Page {
 						$previous_send = Forminator_Form_Entry_Model::addons_data( $form_id, $meta_key, $reports['previous_start'], $reports['previous_end'] );
 						$selected_sent = Forminator_Form_Entry_Model::addons_data( $form_id, $meta_key, $reports['start_date'], $reports['end_date'] );
 
-						$integration_data[ $slug ] = array(
-							'title'       => $addon_data['title'],
+						// Build a display title that includes the connection name when there are multiple connections.
+						$title           = $addon_data['title'];
+						$connection_name = '';
+						if ( ! empty( $integration->multi_global_id ) ) {
+							$global_ids      = $integration->get_multi_global_ids();
+							$connection_name = ! empty( $global_ids[ $integration->multi_global_id ] ) ? $global_ids[ $integration->multi_global_id ] : '';
+						} else {
+							$settings_instance = $integration->get_addon_settings( $form_id, $module_slug );
+							if ( $settings_instance ) {
+								$connection_name = $settings_instance->get_multi_id_settings( $multi_id, 'name', '' );
+							}
+						}
+						if ( ! empty( $connection_name ) ) {
+							$title = $addon_data['title'] . ' - ' . $connection_name;
+						}
+
+						$integration_data[ $slug . '_' . $multi_id ] = array(
+							'title'       => $title,
 							'short_title' => $addon_data['short_title'],
 							'image'       => $addon_data['image'],
 							'selected'    => $selected_sent,

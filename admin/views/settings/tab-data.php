@@ -143,6 +143,7 @@ $upload_root              = ! empty( $upload_root ) ? basename( $upload_root ) :
 
 				<div class="sui-box-settings-col-2">
 					<button
+							type="button"
 							class="sui-button sui-button-ghost wpmudev-open-modal"
 							data-modal="reset-plugin-settings"
 							data-modal-title="<?php esc_attr_e( 'Reset Plugin', 'forminator' ); ?>"

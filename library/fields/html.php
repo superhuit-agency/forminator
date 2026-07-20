@@ -115,7 +115,7 @@ class Forminator_Html extends Forminator_Field {
 		$id      = self::get_property( 'element_id', $field );
 		$form_id = false;
 
-		$html .= '<div class="forminator-field forminator-merge-tags" data-field="' . $id . '">';
+		$html .= '<div class="forminator-field forminator-merge-tags" data-field="' . esc_attr( $id ) . '">';
 
 		if ( $label ) {
 

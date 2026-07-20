@@ -21,6 +21,7 @@ if ( $count > 0 ) {
 
 	$form_type = get_option( 'forminator_submissions_form_type', 'forminator_forms' );
 	$form_id   = get_option( 'forminator_submissions_form_id' );
+
 	?>
 
 	<form method="get"
@@ -46,6 +47,7 @@ if ( $count > 0 ) {
 					<?php } ?>
 				</select>
 
+
 				<?php Forminator_Entries_Page::render_form_switcher( $form_type, $form_id ); ?>
 
 			</div>
@@ -53,7 +55,7 @@ if ( $count > 0 ) {
 			<button class="sui-button sui-button-blue show-submissions" onclick="submit()"><?php esc_html_e( 'Show Submissions', 'forminator' ); ?></button>
 
 			<?php if ( $markup ) : ?>
-				<a href="/" class="sui-button sui-button-ghost wpmudev-open-modal" data-modal="exports-schedule"><i class="sui-icon-paperclip" aria-hidden="true"></i> <?php esc_html_e( 'Export', 'forminator' ); ?></a>
+				<a href="#" class="sui-button sui-button-ghost wpmudev-open-modal" data-modal="exports-schedule"><i class="sui-icon-paperclip" aria-hidden="true"></i> <?php esc_html_e( 'Export', 'forminator' ); ?></a>
 			<?php endif; ?>
 
 		</div>

@@ -36,13 +36,14 @@ class Forminator_Hub_Connector {
 	 * Forminator_Hub_Connector constructor.
 	 */
 	private function __construct() {
+		add_filter( 'forminator_data', array( __CLASS__, 'add_hub_connector_data' ) );
+
 		if ( forminator_cloud_templates_disabled() ) {
 			return;
 		}
-		$this->init();
 
-		add_filter( 'forminator_data', array( __CLASS__, 'add_hub_connector_data' ) );
 		add_filter( 'wpmudev_hub_connector_localize_text_vars', array( __CLASS__, 'customize_text_vars' ), 10, 2 );
+		$this->init();
 	}
 
 	/**
@@ -67,12 +68,11 @@ class Forminator_Hub_Connector {
 		static $connected = null;
 
 		if ( is_null( $connected ) ) {
+			$connected = false;
 			if ( class_exists( 'WPMUDEV_Dashboard' ) ) {
 				$connected = self::get_dashboard_api()->has_key();
 			} elseif ( ! FORMINATOR_PRO ) {
 				$connected = self::hub_connector_logged_in();
-			} else {
-				$connected = false; // Pro version should use WPMUDEV Dashboard.
 			}
 		}
 
@@ -266,8 +266,6 @@ class Forminator_Hub_Connector {
 				),
 				network_admin_url()
 			);
-		} elseif ( FORMINATOR_PRO ) {
-			return 'https://wpmudev.com/project/wpmu-dev-dashboard/';
 		}
 		$args = array(
 			'page'    => $page,
@@ -293,10 +291,11 @@ class Forminator_Hub_Connector {
 
 		$args['page_action'] = self::CONNECTION_ACTION;
 
-		return add_query_arg(
+		$url = add_query_arg(
 			$args,
 			admin_url( 'admin.php' )
 		);
+		return apply_filters( 'forminator_hub_connect_url', $url, $args );
 	}
 
 	/**
@@ -307,11 +306,9 @@ class Forminator_Hub_Connector {
 	public static function get_hub_connect_cta_text(): string {
 		if ( self::is_wpmudev_dashboard_installed() ) {
 			return __( 'LOG IN TO WPMU DEV', 'forminator' );
-		} elseif ( FORMINATOR_PRO ) {
-			return __( 'Install Plugin', 'forminator' );
 		}
 
-		return __( 'Connect site', 'forminator' );
+		return apply_filters( 'forminator_hub_connect_cta_text', __( 'Connect site', 'forminator' ) );
 	}
 
 	/**
@@ -320,11 +317,7 @@ class Forminator_Hub_Connector {
 	 * @return string
 	 */
 	public static function get_hub_connect_title(): string {
-		if ( FORMINATOR_PRO && ! self::is_wpmudev_dashboard_installed() ) {
-			return __( 'Install WPMU DEV Dashboard', 'forminator' );
-		}
-
-		return __( 'Save Forms as Templates', 'forminator' );
+		return apply_filters( 'forminator_hub_connect_title', __( 'Save Forms as Templates', 'forminator' ) );
 	}
 
 	/**
@@ -333,11 +326,7 @@ class Forminator_Hub_Connector {
 	 * @return string
 	 */
 	public static function get_hub_connect_description(): string {
-		if ( FORMINATOR_PRO && ! self::is_wpmudev_dashboard_installed() ) {
-			return __( 'You don\'t have the WPMU DEV Dashboard plugin, which you\'ll need to access Pro preset templates. Install and log in to the dashboard to unlock the complete list of preset templates.', 'forminator' );
-		}
-
-		return __( 'Save your forms as templates in the Hub cloud to easily reuse them on any sites you manage via the Hub. Customize once and reuse on different sites with one click.', 'forminator' );
+		return apply_filters( 'forminator_hub_connect_description', __( 'Save your forms as templates in The Hub cloud to easily reuse them on any sites you manage via The Hub. Customize once and reuse on different sites with one click.', 'forminator' ) );
 	}
 
 	/**
@@ -346,10 +335,6 @@ class Forminator_Hub_Connector {
 	 * @return string
 	 */
 	public static function get_hub_connect_logo(): string {
-		if ( FORMINATOR_PRO && ! self::is_wpmudev_dashboard_installed() ) {
-			return 'wpmudev-logo';
-		}
-
-		return 'forminator-templates';
+		return apply_filters( 'forminator_hub_connect_logo', 'forminator-templates' );
 	}
 }

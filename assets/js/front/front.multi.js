@@ -91,6 +91,7 @@
 			$(document).on("hustle:module:displayed", function (e, data) {
 				var $modal = $('.wph-modal-active');
 				$modal.find('form').css('display', '');
+				$( document ).trigger( 'forminator.front.loaded' );
 			});
 
 			self.reint_intlTelInput();
@@ -99,6 +100,7 @@
 			setTimeout(function () {
 				var $modal = $('.wph-modal-active');
 				$modal.find('form').css('display', '');
+				$( document ).trigger( 'forminator.front.loaded' );
 			}, 10);
 
 			//selective activation based on type of form
@@ -482,7 +484,7 @@
 						'facebook': 'https://www.facebook.com/sharer/sharer.php?u=' + url + '&quote=' + message,
 						'twitter': 'https://twitter.com/intent/tweet?&url=' + url + '&text=' + message,
 						'google': 'https://plus.google.com/share?url=' + url,
-						'linkedin': 'https://www.linkedin.com/shareArticle?mini=true&url=' + url + '&title=' + message
+						'linkedin': 'https://www.linkedin.com/feed/?shareActive=true&text=' + message
 					};
 
 				if (social_shares[social] !== undefined) {
@@ -600,7 +602,42 @@
 						args.separateDialCode = true;
 					}
 
+					// Adjust dropdown for mobile in elementor popup to prevent overflow.
+					const popupModal = form.closest('.elementor-popup-modal');
+					const isMobileDevice = typeof elementorFrontend !== 'undefined'
+						&& elementorFrontend.getCurrentDeviceMode() === 'mobile';
+
+					if ( popupModal.length && isMobileDevice ) {
+						args.dropdownContainer = popupModal[0];
+					}
+
 					var iti = window.intlTelInput(self, args);
+
+					// Prevent auto-switching to a country with the same dial code.
+					var dropdownSelected   = false,
+						configuredCountry  = iti.getSelectedCountryData().iso2,
+						configuredDialCode = iti.getSelectedCountryData().dialCode;
+
+					// Remove previous handlers to avoid duplicates
+					$( self ).off('close:countrydropdown countrychange');
+
+					$( self ).on( 'close:countrydropdown', function () {
+						dropdownSelected = true;
+						setTimeout( function () { dropdownSelected = false; }, 0 ); // Clear flag after countrychange fires.
+					} );
+
+					$( self ).on( 'countrychange', function () {
+						if ( dropdownSelected ) {
+							dropdownSelected   = false;
+							configuredCountry  = iti.getSelectedCountryData().iso2;
+							configuredDialCode = iti.getSelectedCountryData().dialCode;
+							return;
+						}
+						var newCountry = iti.getSelectedCountryData();
+						if ( newCountry.dialCode === configuredDialCode && newCountry.iso2 !== configuredCountry ) {
+							iti.setCountry( configuredCountry );
+						}
+					} );
 
 					if ( 'undefined' !== typeof ( validation ) && 'standard' === validation ) {
 						// Reset country to default if changed and invalid previously.
@@ -610,6 +647,11 @@
 								form.validate().element( $( self ) );
 							}
 						});
+					}
+
+					// Set RTL attribute to LTR for intlTelInput plugin if the form is in RTL, to prevent the plugin from breaking.
+					if( 'rtl' === $( 'html' ).attr( 'dir' ) ) {
+						$(this).closest( '.forminator-field' ).find( 'div.iti' ).attr( 'dir', 'ltr' );
 					}
 
 					if ( ! is_material ) {
@@ -736,6 +778,52 @@
 					});
 				}
 			}
+
+			// Password visibility toggle.
+			this.init_password_toggle( form_selector );
+		},
+
+		/**
+		 * Initialize password visibility toggle buttons.
+		 *
+		 * @param {string|object} form_selector Form selector.
+		 */
+		init_password_toggle: function ( form_selector ) {
+			var form = $( form_selector );
+
+			form.find( '.forminator-input-with-toggle' ).each( function () {
+				var $wrapper = $( this ),
+					$button  = $wrapper.find( '.forminator-password-toggle' ),
+					$input   = $wrapper.find( '.forminator-input' );
+
+				if ( ! $input.length || ! $button.length ) {
+					return;
+				}
+
+				$button.off( 'click.forminatorPasswordToggle' ).on( 'click.forminatorPasswordToggle', function ( e ) {
+					e.preventDefault();
+
+					var isPassword = 'password' === $input.attr( 'type' ),
+						newType    = isPassword ? 'text' : 'password',
+						showLabel  = $button.data( 'label-show' ) || '',
+						hideLabel  = $button.data( 'label-hide' ) || '';
+
+					$input.attr( 'type', newType );
+
+					// Toggle icon visibility.
+					if ( isPassword ) {
+						$button.find( '.forminator-icon-eye' ).hide();
+						$button.find( '.forminator-icon-eye-hide' ).show();
+						$button.attr( 'aria-label', hideLabel ).attr( 'title', hideLabel );
+						$button.find( '.forminator-screen-reader-only' ).text( hideLabel );
+					} else {
+						$button.find( '.forminator-icon-eye' ).show();
+						$button.find( '.forminator-icon-eye-hide' ).hide();
+						$button.attr( 'aria-label', showLabel ).attr( 'title', showLabel );
+						$button.find( '.forminator-screen-reader-only' ).text( showLabel );
+					}
+				});
+			});
 		},
 
 		responsive_captcha: function ( form_selector ) {
@@ -1072,6 +1160,12 @@
 					});
 					$( this ).trigger( 'change' );
 				}
+
+				// If inputmask is not loaded, skip.
+				if( 'undefined' === typeof $( this ).inputmask ) {
+					return;
+				}
+
 				/*
 				* If you need to retrieve the formatted (masked) value, you can use something like this:
 				* $element.inputmask({'autoUnmask' : false});
@@ -1388,6 +1482,10 @@
 				}
 
 				if (data.sitekey !== "") {
+					// Ensure grecaptcha API is fully loaded before calling render.
+					if ( typeof window.grecaptcha === 'undefined' || typeof window.grecaptcha.render !== 'function' ) {
+						return;
+					}
 					// noinspection Annotator
 					var widget = window.grecaptcha.render(captcha_field, data);
 					// mark as rendered
@@ -1428,29 +1526,6 @@
 					$( captcha_field ).data( 'forminator-hcaptcha-widget', widgetId );
 					// this.addCaptchaAria( captcha_field );
 					// this.responsive_captcha();
-				}
-			}
-		},
-
-		renderTurnstileCaptcha: function ( captcha_field ) {
-			var self = this;
-			//render captcha only if not rendered
-			if (typeof $( captcha_field ).data( 'forminator-turnstile-widget' ) === 'undefined') {
-				var sitekey = $( captcha_field ).data( 'sitekey' ),
-					data = {
-						'response-field-name': 'forminator-turnstile-response',
-						callback: function (token, data, test) {
-							$( captcha_field ).parent( '.forminator-col' )
-								.removeClass( 'forminator-has_error' )
-								.remove( '.forminator-error-message' );
-						}
-					};
-
-				if ( sitekey !== "" ) {
-					// noinspection Annotator
-					var widgetId = turnstile.render( captcha_field, data );
-					// mark as rendered
-					$( captcha_field ).data( 'forminator-turnstile-widget', widgetId );
 				}
 			}
 		},
@@ -1615,9 +1690,36 @@
 							self.init();
 							forminatorSignInit();
 							forminatorSignatureResize();
+							if ( 'custom-form' === self.settings.form_type ) {
+								self.resetCaptchaWidgets();
+								var captchaRenderers = [
+									forminator_render_captcha,
+									forminator_render_hcaptcha,
+									forminator_render_turnstile
+								];
+								for ( var i = 0; i < captchaRenderers.length; i++ ) {
+									if ( 'function' === typeof captchaRenderers[ i ] ) {
+										captchaRenderers[ i ]();
+									}
+								}
+							}
 						},
 						100
 					);
+				});
+			}
+		},
+
+		resetCaptchaWidgets: function () {
+			var captchaTypes = [
+				{ selector: '.forminator-g-recaptcha', dataKey: 'forminator-recapchta-widget' },
+				{ selector: '.forminator-hcaptcha', dataKey: 'forminator-hcaptcha-widget' },
+				{ selector: '.forminator-turnstile', dataKey: 'forminator-turnstile-widget' }
+			];
+
+			for ( var i = 0; i < captchaTypes.length; i++ ) {
+				this.$el.find( captchaTypes[ i ].selector ).each( function () {
+					$( this ).removeData( captchaTypes[ i ].dataKey ).html( '' );
 				});
 			}
 		},
@@ -1843,6 +1945,37 @@
 
 })(jQuery, window, document);
 
+var forminator_render_turnstile_captcha = function ( captcha_field ) {
+	var $captcha_field = jQuery( captcha_field );
+
+	// Render captcha only if not rendered.
+	if ( typeof $captcha_field.data( 'forminator-turnstile-widget' ) !== 'undefined' ) {
+		return;
+	}
+
+	// Ensure Turnstile API is fully loaded before calling render.
+	if ( typeof turnstile === 'undefined' || typeof turnstile.render !== 'function' ) {
+		return;
+	}
+
+	var sitekey = $captcha_field.data( 'sitekey' ),
+		data = {
+			'response-field-name': 'forminator-turnstile-response',
+			callback: function () {
+				$captcha_field.parent( '.forminator-col' )
+					.removeClass( 'forminator-has_error' )
+					.remove( '.forminator-error-message' );
+			}
+		};
+
+	if ( sitekey !== "" ) {
+		// noinspection Annotator
+		var widgetId = turnstile.render( captcha_field, data );
+		// mark as rendered
+		$captcha_field.data( 'forminator-turnstile-widget', widgetId );
+	}
+};
+
 // noinspection JSUnusedGlobalSymbols
 var forminator_render_turnstile = function () {
 	jQuery('.forminator-turnstile').each(function () {
@@ -1851,11 +1984,9 @@ var forminator_render_turnstile = function () {
 			form 		= thisCaptcha.closest('form');
 
 		if ( form.length > 0 && '' === thisCaptcha.html() ) {
+			// Turnstile can load before Forminator stores its front instance on the form.
 			window.setTimeout( function() {
-				var forminatorFront = form.data( 'forminatorFront' );
-				if ( typeof forminatorFront !== 'undefined' ) {
-					forminatorFront.renderTurnstileCaptcha( thisCaptcha[0] );
-				}
+				forminator_render_turnstile_captcha( thisCaptcha[0] );
 			}, 100 );
 		}
 	});
@@ -2022,4 +2153,55 @@ var forminatorDateUtil = {
 
 	    return d2.getFullYear()-d1.getFullYear();
 	},
+};
+
+const forminator_init_wp_editor = function ( id, args, force = false ) {
+	const editor = typeof tinymce !== "undefined" ? tinymce.get( id ) : null;
+	const links = jQuery( '#wp-' + id + '-wrap link' );
+	let clonedLinks;
+	if ( links.length ) {
+		// Clone the link elements to add them after re-initialization.
+		clonedLinks = jQuery( '#wp-' + id + '-wrap link' ).clone();
+	}
+
+	if ( editor || force ) {
+		// Remove the existing editor instance before reinitializing to avoid conflicts.
+		wp.editor.remove( id );
+		const textarea = document.getElementById( id );
+		if( textarea ) {
+			// Ensure the textarea is visible before reinitialization to prevent TinyMCE from hiding it.
+			document.getElementById( id ).style.visibility = 'visible';
+		}
+	}
+	// Ensure the editor is not initialized to prevent duplicate initialization.
+	if ( jQuery( '#wp-' + id + '-wrap' ).length === 0 ) {
+		wp.editor.initialize( id, args );
+		if ( links.length ) {
+			// Append the cloned link elements back to the editor wrapper after initialization to ensure the necessary styles are applied.
+			jQuery( '#wp-' + id + '-wrap' ).append( clonedLinks );
+		}
+	}
+};
+
+const forminator_init_wp_editor_on_visible = function ( id, args, force = false ) {
+	const textarea = document.getElementById( id );
+	if ( ! textarea ) {
+		return;
+	}
+	const observer = new IntersectionObserver(
+		( entries, observerInstance ) => {
+			entries.forEach( ( entry ) => {
+				// Check if the element is visible on the DOM.
+				if ( entry.isIntersecting ) {
+					// Initialize WP Editor when the textarea becomes visible.
+					forminator_init_wp_editor( id, args, force );
+					// Stop observing after initialization to prevent unnecessary calls.
+					observerInstance.unobserve( entry.target );
+				}
+			} );
+		}
+	);
+
+	// Start watching the textarea.
+	observer.observe( textarea );
 };

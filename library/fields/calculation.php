@@ -139,6 +139,14 @@ class Forminator_Calculation extends Forminator_Field {
 
 		$point = ! empty( $precision ) ? $separators['point'] : '';
 
+		// If this field is in a group and has a group suffix, replace the formula with the suffix for fields in the same group.
+		if ( ! empty( $field['group_suffix'] ) && ! empty( $field['parent_group'] ) ) {
+			$grouped_fields = $views_obj->model->get_grouped_fields_slugs( $field['parent_group'] );
+			foreach ( $grouped_fields as $group_field_slug ) {
+				$formula = str_replace( '{' . $group_field_slug . '}', '{' . $group_field_slug . $field['group_suffix'] . '}', $formula );
+			}
+		}
+
 		if ( is_numeric( $formula ) ) {
 			$formula = $formula . '*1';
 		}

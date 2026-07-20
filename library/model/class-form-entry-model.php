@@ -1378,9 +1378,7 @@ class Forminator_Form_Entry_Model {
 								continue;
 							}
 
-							$normalized_upload_root = wp_normalize_path( $upload_root );
-							$normalized_path        = wp_normalize_path( $path );
-							if ( ! empty( $normalized_upload_root ) && 0 !== strpos( $normalized_path, $normalized_upload_root ) ) {
+							if ( ! forminator_attachment_path_is_allowed( $path ) ) {
 								continue;
 							}
 
@@ -1406,11 +1404,12 @@ class Forminator_Form_Entry_Model {
 	 * @param mixed  $meta_value Meta value.
 	 * @param bool   $allow_html Allow HTML.
 	 * @param int    $truncate truncate returned string (usefull if display container is limited).
+	 * @param mixed  $field Field data (optional).
 	 *
 	 * @return string
 	 * @since 1.0.5
 	 */
-	public static function meta_value_to_string( $field_type, $meta_value, $allow_html = false, $truncate = PHP_INT_MAX ) {
+	public static function meta_value_to_string( $field_type, $meta_value, $allow_html = false, $truncate = PHP_INT_MAX, $field = null ) {
 		switch ( $field_type ) {
 			case 'postdata':
 				$string_value = self::postdata_to_string( $meta_value, $allow_html, $truncate );
@@ -1544,16 +1543,26 @@ class Forminator_Form_Entry_Model {
 				break;
 			case 'calculation':
 				if ( ! is_array( $meta_value ) ) {
-					$string_value = '0.0';
+					if ( '' === (string) $meta_value ) {
+						$string_value = '0.0';
+					} elseif ( is_array( $field ) && ! empty( $field ) ) {
+						// Apply number formatting for scalar calculation values.
+						$string_value = Forminator_Field::forminator_number_formatting( $field, $meta_value );
+					} else {
+						$string_value = (string) $meta_value;
+					}
 				} elseif ( ! empty( $meta_value['error'] ) ) {
 						$string_value = $meta_value['error'];
 				} else {
-					if ( isset( $meta_value['formatting_result'] ) ) {
+					$result = null;
+					if ( isset( $meta_value['result'] ) && is_array( $field ) && ! empty( $field ) ) {
+							$result = Forminator_Field::forminator_number_formatting( $field, $meta_value['result'] );
+					} elseif ( isset( $meta_value['formatting_result'] ) ) {
 						$result = $meta_value['formatting_result'];
-					} else {
+					} elseif ( isset( $meta_value['result'] ) ) {
 						$result = $meta_value['result'];
 					}
-					if ( ! isset( $result ) ) {
+					if ( null === $result ) {
 						$string_value = '0.0';
 					} elseif ( is_infinite( floatval( $result ) ) ) {
 							$string_value = 'INF';
@@ -1597,6 +1606,16 @@ class Forminator_Form_Entry_Model {
 				// Hide value for login/template forms.
 				$string_value = '*****';
 				break;
+			case 'name':
+				if ( is_array( $meta_value ) ) {
+					$string_value = implode( ' ', array_filter( array_values( $meta_value ) ) );
+				} else {
+					$string_value = (string) $meta_value;
+				}
+				if ( strlen( $string_value ) > $truncate ) {
+					$string_value = substr( $string_value, 0, $truncate ) . '...';
+				}
+				break;
 			case 'slider':
 				// Change behavior for range slider.
 				if ( is_array( $meta_value ) && isset( $meta_value['min'] ) && isset( $meta_value['max'] ) ) {
@@ -1604,6 +1623,20 @@ class Forminator_Form_Entry_Model {
 					break;
 				}
 				// fall-through.
+			case 'currency':
+			case 'number':
+				$raw = isset( $meta_value['result'] ) ? $meta_value['result'] : $meta_value;
+
+				if ( is_array( $field ) && ! empty( $field ) ) {
+					$string_value = Forminator_Field::forminator_number_formatting( $field, (string) $raw );
+				} else {
+					$string_value = (string) $raw;
+				}
+				// truncate.
+				if ( strlen( $string_value ) > $truncate ) {
+					$string_value = substr( $string_value, 0, $truncate ) . '...';
+				}
+				break;
 			default:
 				// base flattener.
 				// implode on array.
@@ -2251,11 +2284,11 @@ class Forminator_Form_Entry_Model {
 
 		foreach ( $connected_addons as $connected_addon ) {
 			try {
-				$method = "get_addon_{$module_slug}_hooks";
-				if ( ! method_exists( $connected_addon, $method ) ) {
-					throw new Exception( 'Method ' . $method . ' doesn\'t exist.' );
+				$addon_slug = $connected_addon->get_slug();
+				if ( ! method_exists( $connected_addon, 'get_addon_hooks' ) ) {
+					throw new Exception( $addon_slug . ': Method get_addon_hooks doesn\'t exist.' );
 				}
-				$module_hooks    = $connected_addon->$method( $form_id );
+				$module_hooks    = $connected_addon->get_addon_hooks( $form_id, $module_slug );
 				$addon_meta_data = forminator_find_addon_meta_data_from_entry_model( $connected_addon, $entry_model );
 				$module_hooks->on_before_delete_entry( $entry_model, $addon_meta_data );
 			} catch ( Exception $e ) {
@@ -2845,6 +2878,7 @@ class Forminator_Form_Entry_Model {
 			return false;
 		}
 		$entries = self::select_count_entries_by_meta_field( $module_id, $field_name, $option['value'], $option['label'], $field_type );
+
 		if ( $option['limit'] <= $entries ) {
 			return true;
 		}
@@ -2857,26 +2891,32 @@ class Forminator_Form_Entry_Model {
 			 * @param string $module_id Module ID.
 			 */
 			$expiration = apply_filters( 'forminator_form_select_option_limit_interval', 10, $module_id );
-
 			do {
-				$transient_key = 'forminator_select_option_limit_in_process' . $module_id . $field_name . $option['value'] . '_' . $entries;
-				$is_set        = set_transient( $transient_key, 1, $expiration );
-			} while ( ! $is_set && $entries++ );
+				// Use md5 hash to handle special characters in the option value.
+				$transient_key = 'forminator_select_option_limit_in_process' . $module_id . $field_name . md5( $option['value'] ) . '_' . $entries;
+				$is_set        = set_transient( $transient_key, true, $expiration );
+				if ( ! $is_set ) {
+					++$entries;
+				}
+			} while ( ! $is_set && $entries < $option['limit'] );
 
-			add_filter(
-				'forminator_submission_success',
-				function ( $response ) use ( $transient_key ) {
-					delete_transient( $transient_key );
-					return $response;
-				}
-			);
-			add_filter(
-				'forminator_submission_error',
-				function ( $response ) use ( $transient_key ) {
-					delete_transient( $transient_key );
-					return $response;
-				}
-			);
+			// Only register cleanup filters if transient was successfully set.
+			if ( $is_set ) {
+				add_filter(
+					'forminator_submission_success',
+					function ( $response ) use ( $transient_key ) {
+						delete_transient( $transient_key );
+						return $response;
+					}
+				);
+				add_filter(
+					'forminator_submission_error',
+					function ( $response ) use ( $transient_key ) {
+						delete_transient( $transient_key );
+						return $response;
+					}
+				);
+			}
 
 			if ( $option['limit'] <= $entries ) {
 				return true;
@@ -2901,14 +2941,26 @@ class Forminator_Form_Entry_Model {
 	public static function select_count_entries_by_meta_field( $form_id, $field_name, $field_value, $field_label, $option_type = 'single' ) {
 		global $wpdb;
 
+		// Check both raw and HTML-encoded versions to handle special characters like &.
+		$field_value_encoded = htmlspecialchars( $field_value, ENT_QUOTES );
+		$field_label_encoded = htmlspecialchars( $field_label, ENT_QUOTES );
+
 		if ( 'single' === $option_type ) {
-			$condition = $wpdb->prepare( ' AND ( m.`meta_value` = %s OR m.`meta_value` = %s )', esc_sql( $field_value ), esc_sql( $field_label ) );
+			$condition = $wpdb->prepare(
+				' AND m.`meta_value` IN (%s, %s, %s, %s)',
+				esc_sql( $field_value ),
+				esc_sql( $field_label ),
+				esc_sql( $field_value_encoded ),
+				esc_sql( $field_label_encoded )
+			);
 		} else {
 			// todo: change this condition to check if it's multiple one - do this, otherwise do the previous code block.
 			$condition = $wpdb->prepare(
-				' AND ( m.`meta_value` LIKE %s OR m.`meta_value` LIKE %s )',
+				' AND ( m.`meta_value` LIKE %s OR m.`meta_value` LIKE %s OR m.`meta_value` LIKE %s OR m.`meta_value` LIKE %s )',
 				'%' . $wpdb->esc_like( $field_value ) . '%',
-				'%' . $wpdb->esc_like( $field_label ) . '%'
+				'%' . $wpdb->esc_like( $field_label ) . '%',
+				'%' . $wpdb->esc_like( $field_value_encoded ) . '%',
+				'%' . $wpdb->esc_like( $field_label_encoded ) . '%'
 			);
 		}
 

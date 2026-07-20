@@ -41,11 +41,7 @@ $sui_body_class   = "sui-$sanitize_version";
 						<p>
 							<?php
 							esc_html_e( 'Please tell us why. Your feedback helps us improve.', 'forminator' );
-							if ( FORMINATOR_PRO && forminator_is_show_documentation_link() ) {
-								echo ' ';
-								/* Translators: 1. Opening <a> tag, 2. closing <a> tag. */
-								printf( esc_html__( '%1$sNeed Help?%2$s', 'forminator' ), '<a class="forminator-deactivation-help" href="https://wpmudev.com/hub2/support" target="_blank">', '</a>' );
-							}
+							do_action( 'forminator_after_deactivation_survey_message' );
 							?>
 						</p>
 						<form class="forminator-deactivation-survey">

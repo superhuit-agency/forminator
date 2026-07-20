@@ -415,7 +415,7 @@ class Forminator_Slider extends Forminator_Field {
 	 * @param array|string $submitted_field The field value.
 	 * @param array        $field_settings The field settings.
 	 *
-	 * @return float
+	 * @return mixed
 	 */
 	private static function calculable_value( $submitted_field, $field_settings ) {
 		$enabled = self::get_property( 'calculations', $field_settings, false, 'bool' );
@@ -423,7 +423,7 @@ class Forminator_Slider extends Forminator_Field {
 			return self::FIELD_NOT_CALCULABLE;
 		}
 
-		return floatval( $submitted_field );
+		return self::get_calculable_number_format( $field_settings, $submitted_field );
 	}
 
 	/**

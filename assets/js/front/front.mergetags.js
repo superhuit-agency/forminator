@@ -46,6 +46,8 @@
 
 			ForminatorFront.MergeTags[ formId ] = ForminatorFront.MergeTags[ formId ] || [];
 
+			this._mergeTagInputs = {};
+
 			if (fields.length > 0) {
 				fields.each(function () {
 					let html = $(this).html(),
@@ -74,9 +76,11 @@
 					}
 
 					ForminatorFront.MergeTags[ formId ][ fieldId ] = {
-						$input: $(this),
 						value: html,
 					};
+
+					// Store the DOM reference per-instance to avoid cross-instance pollution.
+					self._mergeTagInputs[ fieldId ] = $(this);
 				});
 			}
 
@@ -124,36 +128,38 @@
 					formFields = ForminatorFront.MergeTags[ formId ];
 
 			for ( const key in formFields ) {
+				// Only update fields belonging to this specific form instance.
+				if ( ! self._mergeTagInputs[ key ] ) {
+					continue;
+				}
 				const formField = formFields[key];
-				self.replace( formField );
+				self.replace( formField, self._mergeTagInputs[ key ] );
 			}
 		},
 
-		replace: function ( field ) {
-			var $input = field.$input;
+		replace: function ( field, $input ) {
 			var res = this.maybeReplaceValue(field.value);
 			if ( typeof window.DOMPurify !== 'undefined' ) {
-				let config = {};
+				let config = { ADD_ATTR: [ 'target' ] };
 				// Allow iframe tags and attributes if the original value contains iframes.
 				if( this.hasIframes(field.value) ) {
-					config = {
-						ADD_TAGS: ['iframe'],
-						ADD_ATTR: [
-							'align',
-							'width',
-							'height',
-							'frameborder',
-							'name',
-							'src',
-							'id',
-							'class',
-							'style',
-							'scrolling',
-							'marginwidth',
-							'marginheight',
-							'allowfullscreen',
-						]
-					};
+					config.ADD_TAGS = [ 'iframe' ];
+					config.ADD_ATTR = [
+						'align',
+						'width',
+						'height',
+						'frameborder',
+						'name',
+						'src',
+						'id',
+						'class',
+						'style',
+						'scrolling',
+						'marginwidth',
+						'marginheight',
+						'allowfullscreen',
+						'target'
+					];
 				}
 				res = window.DOMPurify.sanitize( res, config );
 			}
@@ -270,6 +276,12 @@
 				value       = '',
 				checked     = null;
 
+			// Check if this is a postdata field (e.g., postdata-1).
+			// Postdata fields have a wrapper div, so we check by element_id pattern first.
+			if ( element_id.indexOf('postdata-') === 0 ) {
+				return this.get_postdata_field_value(element_id);
+			}
+
 			if ( $element.length === 0 ) {
 				return '';
 			}
@@ -332,9 +344,56 @@
 						value += self.append_custom_input_value_if_present( $(this), 'select' );
 					} );
 				}
-			} else if (this.field_is_upload($element)) {
-				value = $element.val().split('\\').pop();
-			} else if (this.field_has_inputMask($element)) {
+				} else if (this.field_is_upload($element)) {
+					var $form = this.$el,
+						hiddenValue = '';
+
+					if ( $form.hasClass( 'forminator-grouped-fields' ) ) {
+						$form = $form.closest( 'form.forminator-ui' );
+					}
+
+					$element.each(function () {
+						if ( this.files && this.files.length ) {
+							$.each( this.files, function ( index, file ) {
+								if ( file && file.name ) {
+									value += ( value !== '' ? ', ' : '' ) + file.name;
+								}
+							});
+						}
+					});
+
+					if ( value !== '' ) {
+						return this.sanitize_text_field( value );
+					}
+
+					hiddenValue = $form.find( '.forminator-multifile-hidden' ).val();
+					if ( hiddenValue ) {
+						try {
+							var uploadedFiles = $.parseJSON( hiddenValue ),
+								uploadFieldKey = Object.keys( uploadedFiles ).find( function ( key ) {
+									return key === element_id || 0 === key.indexOf( element_id + '_' );
+								} ),
+								uploadFiles = uploadFieldKey && Array.isArray( uploadedFiles[ uploadFieldKey ] )
+									? uploadedFiles[ uploadFieldKey ]
+									: null;
+
+							if ( uploadFiles ) {
+								value = uploadFiles
+									.filter( function ( file ) {
+										return file && file.success && file.file_name;
+									} )
+									.map( function ( file ) {
+										return file.file_name.replace( /^[a-z0-9]{12}-/i, '' );
+									} )
+									.join( ', ' );
+
+								return this.sanitize_text_field( value );
+							}
+						} catch ( e ) {}
+					}
+
+					value = $element.val().split('\\').pop();
+				} else if (this.field_has_inputMask($element)) {
 				$element.inputmask({'autoUnmask' : false});
 				value = $element.val();
 				$element.inputmask({'autoUnmask' : true});
@@ -343,6 +402,97 @@
 			}
 
 			return this.sanitize_text_field( value );
+		},
+
+		/**
+		 * Get postdata field value by collecting values from its sub-fields.
+		 * Postdata fields have sub-fields like: postdata-1-post-title, postdata-1-post-content, postdata-1-post-image, etc.
+		 *
+		 * @param {string} element_id The postdata element ID (e.g., "postdata-1").
+		 * @return {string} The combined value of the postdata field.
+		 */
+		get_postdata_field_value: function (element_id) {
+			var $form = this.$el,
+				parts = [];
+
+			if ($form.hasClass('forminator-grouped-fields')) {
+				$form = $form.closest('form.forminator-ui');
+			}
+
+			// Post Title.
+			var $title = $form.find('[name="' + element_id + '-post-title"]');
+			if ($title.length && $title.val()) {
+				parts.push('<strong>' + this.sanitize_text_field($title.val()) + '</strong>');
+			}
+
+			// Post Content - handle both textarea and WP Editor (preserve formatting).
+			var $content = $form.find('[name="' + element_id + '-post-content"]');
+			if ($content.length) {
+				var contentVal = '';
+				var editorId = $content.attr('id');
+
+				// Check if TinyMCE is active for this field.
+				if (typeof tinymce !== 'undefined' && tinymce.get(editorId)) {
+					// Get HTML content to preserve formatting (bold, italic, lists, etc.)
+					contentVal = tinymce.get(editorId).getContent();
+				} else {
+					contentVal = $content.val();
+				}
+
+				if (contentVal) {
+					// Don't sanitize - preserve HTML formatting from editor.
+					parts.push(contentVal);
+				}
+			}
+
+			// Post Excerpt.
+			var $excerpt = $form.find('[name="' + element_id + '-post-excerpt"]');
+			if ($excerpt.length && $excerpt.val()) {
+				parts.push(this.sanitize_text_field($excerpt.val()));
+			}
+
+			// Post Image - show preview if available (200x200 max).
+			var $image = $form.find('[name="' + element_id + '-post-image"]');
+			if ($image.length && $image[0].files && $image[0].files[0]) {
+				var file = $image[0].files[0];
+				parts.push('<em>[File: ' + this.sanitize_text_field(file.name) + ']</em>');
+			}
+
+			var getPostdataTaxonomyValue = function (fieldName) {
+				var $checkboxes = $form.find('input[name="' + fieldName + '[]"]');
+				if ($checkboxes.length) {
+					return $checkboxes.filter(':checked').map(function () {
+						return $(this).closest('label').text().trim();
+					}).get().filter(function (label) {
+						return label !== '';
+					}).join(', ');
+				}
+
+				var $select = $form.find('select[name="' + fieldName + '"], select[name="' + fieldName + '[]"]');
+				if ($select.length) {
+					return $select.find('option:selected').map(function () {
+						return $(this).text().trim();
+					}).get().filter(function (label) {
+						return label !== '';
+					}).join(', ');
+				}
+
+				return '';
+			};
+
+			// Post Category.
+			var categoryValue = getPostdataTaxonomyValue(element_id + '-category');
+			if (categoryValue) {
+				parts.push(this.sanitize_text_field(categoryValue));
+			}
+
+			// Post Tags.
+			var tagsValue = getPostdataTaxonomyValue(element_id + '-post_tag');
+			if (tagsValue) {
+				parts.push(this.sanitize_text_field(tagsValue));
+			}
+
+			return parts.join('<br>');
 		},
 
 		append_custom_input_value_if_present: function ( $element, type ) {

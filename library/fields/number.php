@@ -98,7 +98,6 @@ class Forminator_Number extends Forminator_Field {
 			array(
 				'calculations' => 'true',
 				'limit_min'    => 1,
-				'limit_max'    => 150,
 				'field_label'  => esc_html__( 'Number', 'forminator' ),
 			)
 		);
@@ -428,7 +427,7 @@ class Forminator_Number extends Forminator_Field {
 	 * @param array|mixed $submitted_field Submitted field.
 	 * @param array       $field_settings Field settings.
 	 *
-	 * @return float
+	 * @return mixed
 	 */
 	private static function calculable_value( $submitted_field, $field_settings ) {
 		$enabled = self::get_property( 'calculations', $field_settings, false, 'bool' );
@@ -436,7 +435,7 @@ class Forminator_Number extends Forminator_Field {
 			return self::FIELD_NOT_CALCULABLE;
 		}
 
-		return floatval( $submitted_field );
+		return self::get_calculable_number_format( $field_settings, $submitted_field );
 	}
 
 	/**
