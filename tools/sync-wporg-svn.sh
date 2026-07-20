@@ -73,6 +73,11 @@ trap cleanup EXIT
 svn export "${svn_export_flags[@]}" --force "${UPSTREAM_URL}" "${TMP_DIR}/upstream"
 
 log "Syncing upstream files into repo (preserving fork-owned files)..."
+# Fork-owned files that must SURVIVE the sync (they do not exist upstream, so
+# `--delete` would otherwise wipe them every run, forcing a patch to recreate
+# them). Excluding them here keeps them in their natural location so their
+# in-code paths (__DIR__, get_plugin_url()) keep resolving, and shrinks the
+# related patch to only the upstream lines it truly needs to touch.
 rsync -a --delete "${rsync_quiet_flags[@]}" \
   --exclude '.git/' \
   --exclude '.github/' \
@@ -80,6 +85,9 @@ rsync -a --delete "${rsync_quiet_flags[@]}" \
   --exclude 'tools/' \
   --exclude 'composer.json' \
   --exclude 'README.md' \
+  --exclude '/fork/' \
+  --exclude '/addons/pro/gutenberg/class-forminator-gfblock-v3.php' \
+  --exclude '/addons/pro/gutenberg/js/blocks-v3.js' \
   "${TMP_DIR}/upstream/" "${REPO_ROOT}/"
 
 # --- Apply all patches from patches/ in sorted order ---
