@@ -12,26 +12,26 @@ Content-Transfer-Encoding: 8bit
  1 file changed, 36 insertions(+)
 
 diff --git a/forminator.php b/forminator.php
-index 55e894d..c02f423 100644
+index 3e35a52..4041bcc 100644
 --- a/forminator.php
 +++ b/forminator.php
-@@ -158,6 +158,12 @@ if ( ! class_exists( 'Forminator' ) ) {
- 				// Prevent updating PRO plugin to a free version.
- 				add_action( 'site_transient_update_plugins', array( __CLASS__, 'remove_free_version_update' ) );
- 			}
-+
+@@ -136,6 +136,12 @@ if ( ! class_exists( 'Forminator' ) ) {
+ 			add_action( 'admin_init', array( $this, 'add_custom_cap' ) );
+ 			add_action( 'template_redirect', array( $this, 'maybe_remove_cache_bust_query_arg' ) );
+
 +			/**
 +			 * Disable all updates for this plugin
 +			 */
 +			add_filter( 'site_transient_update_plugins', array( __CLASS__, 'disable_plugin_update' ) );
 +			add_filter( 'auto_update_plugin', array( __CLASS__, 'disable_auto_update' ), 10, 2 );
++
+ 			$this->includes();
+ 			$this->include_vendors();
+
+@@ -147,6 +153,36 @@ if ( ! class_exists( 'Forminator' ) ) {
+ 			$this->load_textdomain();
  		}
- 
- 		/**
-@@ -179,6 +185,36 @@ if ( ! class_exists( 'Forminator' ) ) {
- 			return $transient;
- 		}
- 
+
 +		/**
 +		 * Remove this plugin from the list of available updates
 +		 *
@@ -40,14 +40,14 @@ index 55e894d..c02f423 100644
 +		 */
 +		public static function disable_plugin_update( $transient ) {
 +			$plugin_slug = 'forminator/forminator.php';
-+		
++
 +			if ( isset( $transient->response[ $plugin_slug ] ) ) {
 +				unset( $transient->response[ $plugin_slug ] );
 +			}
-+		
++
 +			return $transient;
 +		}
-+		
++
 +		/**
 +		 * Disable automatic updates for this plugin
 +		 *
@@ -63,8 +63,8 @@ index 55e894d..c02f423 100644
 +		}
 +
  		/**
- 		 * Add manage_forminator custom capability
+ 		 * Called on plugin activation
  		 *
--- 
+--
 2.52.0
 
