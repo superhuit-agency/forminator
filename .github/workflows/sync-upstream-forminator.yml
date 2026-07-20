@@ -20,7 +20,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -66,7 +66,7 @@ jobs:
           echo "patch_note=${patch_note}" >> "${GITHUB_OUTPUT}"
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v8
         with:
           commit-message: "chore(upstream): sync Forminator ${{ steps.sync.outputs.tag }}"
           title: "${{ steps.sync.outputs.patch_applied == '1' && format('chore(upstream): sync Forminator {0}', steps.sync.outputs.tag) || format('WIP: chore(upstream): sync Forminator {0} (patches NOT applied)', steps.sync.outputs.tag) }}"
