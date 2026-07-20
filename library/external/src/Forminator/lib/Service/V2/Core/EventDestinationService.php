@@ -16,7 +16,7 @@ class EventDestinationService extends \Forminator\Stripe\Service\AbstractService
      * @param null|array{include?: string[], limit?: int} $params
      * @param null|RequestOptionsArray|\Stripe\Util\RequestOptions $opts
      *
-     * @return \Stripe\V2\Collection<\Stripe\V2\EventDestination>
+     * @return \Stripe\V2\Collection<\Stripe\V2\Core\EventDestination>
      *
      * @throws \Stripe\Exception\ApiErrorException if the request fails
      */
@@ -30,7 +30,7 @@ class EventDestinationService extends \Forminator\Stripe\Service\AbstractService
      * @param null|array{description?: string, enabled_events: string[], event_payload: string, events_from?: string[], include?: string[], metadata?: array<string, string>, name: string, snapshot_api_version?: string, type: string, amazon_eventbridge?: array{aws_account_id: string, aws_region: string}, webhook_endpoint?: array{url: string}} $params
      * @param null|RequestOptionsArray|\Stripe\Util\RequestOptions $opts
      *
-     * @return \Stripe\V2\EventDestination
+     * @return \Stripe\V2\Core\EventDestination
      *
      * @throws \Stripe\Exception\ApiErrorException if the request fails
      */
@@ -45,7 +45,7 @@ class EventDestinationService extends \Forminator\Stripe\Service\AbstractService
      * @param null|array $params
      * @param null|RequestOptionsArray|\Stripe\Util\RequestOptions $opts
      *
-     * @return \Stripe\V2\EventDestination
+     * @return \Stripe\V2\DeletedObject
      *
      * @throws \Stripe\Exception\ApiErrorException if the request fails
      */
@@ -60,7 +60,7 @@ class EventDestinationService extends \Forminator\Stripe\Service\AbstractService
      * @param null|array $params
      * @param null|RequestOptionsArray|\Stripe\Util\RequestOptions $opts
      *
-     * @return \Stripe\V2\EventDestination
+     * @return \Stripe\V2\Core\EventDestination
      *
      * @throws \Stripe\Exception\ApiErrorException if the request fails
      */
@@ -75,7 +75,7 @@ class EventDestinationService extends \Forminator\Stripe\Service\AbstractService
      * @param null|array $params
      * @param null|RequestOptionsArray|\Stripe\Util\RequestOptions $opts
      *
-     * @return \Stripe\V2\EventDestination
+     * @return \Stripe\V2\Core\EventDestination
      *
      * @throws \Stripe\Exception\ApiErrorException if the request fails
      */
@@ -90,7 +90,7 @@ class EventDestinationService extends \Forminator\Stripe\Service\AbstractService
      * @param null|array $params
      * @param null|RequestOptionsArray|\Stripe\Util\RequestOptions $opts
      *
-     * @return \Stripe\V2\Event
+     * @return \Stripe\V2\Core\Event
      *
      * @throws \Stripe\Exception\ApiErrorException if the request fails
      */
@@ -105,7 +105,7 @@ class EventDestinationService extends \Forminator\Stripe\Service\AbstractService
      * @param null|array{include?: string[]} $params
      * @param null|RequestOptionsArray|\Stripe\Util\RequestOptions $opts
      *
-     * @return \Stripe\V2\EventDestination
+     * @return \Stripe\V2\Core\EventDestination
      *
      * @throws \Stripe\Exception\ApiErrorException if the request fails
      */
@@ -120,7 +120,7 @@ class EventDestinationService extends \Forminator\Stripe\Service\AbstractService
      * @param null|array{description?: string, enabled_events?: string[], include?: string[], metadata?: array<string, null|string>, name?: string, webhook_endpoint?: array{url: string}} $params
      * @param null|RequestOptionsArray|\Stripe\Util\RequestOptions $opts
      *
-     * @return \Stripe\V2\EventDestination
+     * @return \Stripe\V2\Core\EventDestination
      *
      * @throws \Stripe\Exception\ApiErrorException if the request fails
      */

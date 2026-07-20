@@ -115,7 +115,7 @@ class Forminator_Template_Contact_Form extends Forminator_Template {
 		return array(
 			'form-type'                         => 'default',
 			'submission-behaviour'              => 'behaviour-thankyou',
-			'thankyou-message'                  => esc_html__( 'Thank you for contacting us, we will be in touch shortly.', 'forminator' ),
+			'thankyou-message'                  => esc_html__( 'Thanks for contacting us! We’ll be in touch shortly.', 'forminator' ),
 			'submitData'                        => array(
 				'custom-submit-text'          => esc_html__( 'Submit', 'forminator' ),
 				'custom-invalid-form-message' => esc_html__( 'Error: Your form is not valid, please fix the errors!', 'forminator' ),

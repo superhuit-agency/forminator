@@ -36,6 +36,59 @@ class Forminator_QForm_Front extends Forminator_Render_Form {
 	private static $steps_count = 1;
 
 	/**
+	 * Render Breakdance SSR preview in the required order.
+	 *
+	 * Order matters here: enqueue assets first so we can capture style handles,
+	 * print the collected styles and inline styles next, then output the HTML.
+	 *
+	 * @param bool $hide If true, display: none will be added on the form markup.
+	 * @param bool $is_preview Is preview.
+	 *
+	 * @return void
+	 */
+	private function render_breakdance_ssr_preview( $hide, $is_preview ) {
+		$this->enqueue_breakdance_ssr_preview_assets();
+		$this->render_breakdance_ssr_preview_markup( $this->get_html( $hide, $is_preview ), $is_preview );
+	}
+
+	/**
+	 * Enqueue Breakdance SSR preview assets and collect the generated style handles.
+	 *
+	 * @return void
+	 */
+	private function enqueue_breakdance_ssr_preview_assets() {
+
+		$before_style_handles = wp_styles()->queue;
+
+		$assets = new Forminator_Assets_Enqueue_Quiz( $this->model, false );
+		$assets->enqueue_styles();
+		$assets->enqueue_scripts();
+		$assets->load_module_css( true );
+		$this->enqueue_google_fonts();
+		$this->set_breakdance_preview_style_handles( $before_style_handles );
+	}
+
+	/**
+	 * Enqueue quiz Google fonts.
+	 *
+	 * @return void
+	 */
+	private function enqueue_google_fonts() {
+
+		$google_fonts = $this->get_google_fonts();
+
+		foreach ( $google_fonts as $font_name ) {
+			if ( ! empty( $font_name ) ) {
+				wp_enqueue_style(
+					'forminator-font-' . sanitize_title( $font_name ),
+					'https://fonts.bunny.net/css?family=' . $font_name,
+					array(),
+					'1.0'
+				);
+			}
+		}
+	}
+	/**
 	 * Display form method
 	 *
 	 * @since 1.0
@@ -82,14 +135,17 @@ class Forminator_QForm_Front extends Forminator_Render_Form {
 			}
 
 			$this->maybe_define_cache_constants();
+			$this->set_breakdance_ssr_preview( $is_preview );
 
 			// TODO: make preview and ajax load working similar.
 			$is_ajax_load = $this->is_ajax_load( $is_preview );
 
-			// Load assets conditionally.
-			$assets = new Forminator_Assets_Enqueue_Quiz( $this->model, $is_ajax_load );
-			$assets->enqueue_styles();
-			$assets->enqueue_scripts();
+			if ( ! $this->is_breakdance_ssr_preview ) {
+				// Load assets conditionally.
+				$assets = new Forminator_Assets_Enqueue_Quiz( $this->model, $is_ajax_load );
+				$assets->enqueue_styles();
+				$assets->enqueue_scripts();
+			}
 
 			if ( $is_ajax_load ) {
 				$this->generate_render_id( $id );
@@ -107,23 +163,19 @@ class Forminator_QForm_Front extends Forminator_Render_Form {
 
 				$this->generate_render_id( $id );
 
-				echo $this->get_html( $hide, $is_preview ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+				if ( $this->is_breakdance_ssr_preview ) {
+					$this->render_breakdance_ssr_preview( $hide, $is_preview );
+				} else {
+					echo $this->get_html( $hide, $is_preview ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 
-				if ( is_admin() || $is_preview ) {
-					$this->print_styles();
-				}
-
-				$google_fonts = $this->get_google_fonts();
-
-				foreach ( $google_fonts as $font_name ) {
-					if ( ! empty( $font_name ) ) {
-						wp_enqueue_style( 'forminator-font-' . sanitize_title( $font_name ), 'https://fonts.bunny.net/css?family=' . $font_name, array(), '1.0' );
+					if ( is_admin() || $is_preview ) {
+						$this->print_styles();
 					}
+
+					$this->enqueue_google_fonts();
+					add_action( 'wp_footer', array( $this, 'forminator_render_front_scripts' ), 9999 );
 				}
-
-				add_action( 'wp_footer', array( $this, 'forminator_render_front_scripts' ), 9999 );
 			}
-
 			if ( $this->has_lead() && ! $is_preview && ! $is_ajax_load ) {
 				$custom_form_view = Forminator_CForm_Front::get_instance();
 				$custom_form_view->display( $this->get_leads_id(), $is_preview, $data, true, $this->model );
@@ -704,7 +756,7 @@ class Forminator_QForm_Front extends Forminator_Render_Form {
 		<?php
 		$intro = ob_get_clean();
 
-		if ( ! empty( $this->model->settings['pagination'] ) ) {
+		if ( ! empty( $this->model->settings['pagination'] ) && ! empty( $this->get_fields() ) ) {
 			$start_text = $this->get_start_button_text();
 			$html       = '<div class="forminator-quiz-intro">' . $intro;
 			if ( ! $this->has_lead() || 'beginning' !== $this->get_form_placement() ) {
@@ -778,7 +830,7 @@ class Forminator_QForm_Front extends Forminator_Render_Form {
 
 		$submit_data  = $this->get_submit_data();
 		$settings     = $this->model->settings ?? array();
-		$pagination   = ! empty( $settings['pagination'] );
+		$pagination   = ! empty( $settings['pagination'] ) && self::$steps_count > 0;
 		$result_behav = $settings['results_behav'] ?? '';
 		$lead_result  = 'beginning' === $this->get_form_placement() ? $result_behav : 'end';
 		$current_url  = $this->is_ajax_load( $this->is_preview ) && isset( $_SERVER['HTTP_REFERER'] ) ? esc_url_raw( wp_unslash( $_SERVER['HTTP_REFERER'] ) ) : forminator_get_current_url();
@@ -1001,15 +1053,16 @@ class Forminator_QForm_Front extends Forminator_Render_Form {
 	 *
 	 * @param bool $hide Hide.
 	 * @param bool $is_preview Is preview.
+	 * @param int  $render_id Render ID.
 	 *
 	 * @return false|string
 	 */
-	public function get_html( $hide = true, $is_preview = false ) {
+	public function get_html( $hide = true, $is_preview = false, $render_id = 0 ) {
 		ob_start();
 
 		$id = $this->get_module_id();
 
-		$this->render( $id, $hide, $is_preview );
+		$this->render( $id, $hide, $is_preview, $render_id );
 
 		$this->set_forms_properties();
 

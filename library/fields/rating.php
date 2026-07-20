@@ -72,12 +72,13 @@ class Forminator_Rating extends Forminator_Field {
 	 */
 	public function defaults(): array {
 		return array(
-			'validation'  => false,
-			'field_label' => esc_html__( 'Rating', 'forminator' ),
-			'max_rating'  => 5,
-			'suffix'      => true,
-			'icon'        => 'star',
-			'size'        => 'md',
+			'validation'    => false,
+			'field_label'   => esc_html__( 'Rating', 'forminator' ),
+			'max_rating'    => 5,
+			'default_value' => '',
+			'suffix'        => true,
+			'icon'          => 'star',
+			'size'          => 'md',
 		);
 	}
 
@@ -118,7 +119,18 @@ class Forminator_Rating extends Forminator_Field {
 
 		$descr_position = self::get_description_position( $field, $settings );
 
-		$value = 0;
+		$maximum_rating = max( 0, min( (int) $max_rating, 50 ) );
+		$default_value  = self::get_property( 'default_value', $field, '' );
+		$safe_default   = 0;
+		if ( '' !== $default_value && is_numeric( $default_value ) ) {
+			$parsed_default = (int) $default_value;
+			if ( $parsed_default >= 1 && $parsed_default <= $maximum_rating ) {
+				$safe_default = $parsed_default;
+			}
+		}
+
+		$value = (int) self::get_post_data( $name, $safe_default );
+
 		if ( isset( $draft_value['value'] ) ) {
 			$rating_value = explode( '/', $draft_value['value'] )[0] ?? 0;
 			$value        = esc_html( $rating_value );
@@ -146,7 +158,6 @@ class Forminator_Rating extends Forminator_Field {
 			),
 		);
 
-		$maximum_rating = max( 0, min( $max_rating, 50 ) );
 		for ( $rating = 1; $rating <= $maximum_rating; $rating++ ) {
 			$options[] = array(
 				'value'    => $rating,

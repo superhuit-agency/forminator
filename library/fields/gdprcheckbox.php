@@ -141,12 +141,12 @@ class Forminator_GdprCheckbox extends Forminator_Field {
 
 		$html .= self::get_field_label( $label, $id, true );
 
-			$html .= sprintf( '<label for="%s" class="forminator-checkbox">', $id );
+			$html .= sprintf( '<label for="%s" class="forminator-checkbox">', esc_attr( $id ) );
 
 				$html .= sprintf(
 					'<input type="checkbox" name="%s" value="true" id="%s" data-required="true" aria-required="true" />',
-					$name,
-					$id
+					esc_attr( $name ),
+					esc_attr( $id )
 				);
 
 				$html .= '<span class="forminator-checkbox-box" aria-hidden="true"></span>';

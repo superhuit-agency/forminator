@@ -98,13 +98,15 @@ abstract class Forminator_Admin_Module_Edit_Page extends Forminator_Admin_Page {
 	 * Get modules for search
 	 *
 	 * @param null|string $search_keyword Search Keyword.
+	 * @param null|int    $page_number Optional page number. Added in 1.52.
 	 *
 	 * @since 1.14.12
 	 * @return array
 	 */
-	public static function get_searched_modules( $search_keyword = null ) {
-		$modules = array();
-		$data    = self::get_models( -1 );
+	public static function get_searched_modules( $search_keyword = null, $page_number = 1 ) {
+		$modules           = array();
+		self::$page_number = max( 1, $page_number );
+		$data              = self::get_models( null, $search_keyword );
 
 		// Fallback.
 		if ( ! isset( $data['models'] ) || empty( $data['models'] ) ) {
@@ -114,18 +116,12 @@ abstract class Forminator_Admin_Module_Edit_Page extends Forminator_Admin_Page {
 		// Search.
 		if ( ! is_null( $search_keyword ) ) {
 
-			$search_keyword = explode( ' ', $search_keyword );
-			$form_view      = Forminator_Form_Views_Model::get_instance();
-			$module_slug    = self::get_slug_ajax( true );
+			$form_view   = Forminator_Form_Views_Model::get_instance();
+			$module_slug = self::get_slug_ajax( true );
 
 			$class_name = 'Forminator_' . $module_slug . '_Page';
 
 			foreach ( $data['models'] as $model ) {
-
-				foreach ( $search_keyword as $keyword ) {
-
-					// If found.
-					if ( false !== stripos( $model->settings['formName'], $keyword ) ) {
 
 						$modules[] = $class_name::module_array(
 							$model->id,
@@ -135,14 +131,14 @@ abstract class Forminator_Admin_Module_Edit_Page extends Forminator_Admin_Page {
 							$model->status,
 							$model
 						);
-						// prevent duplicates.
-						break;
-					}
-				}
+
 			}
 		}
 
-		return $modules;
+		return array(
+			'modules'       => $modules,
+			'total_modules' => $data['foundPosts'],
+		);
 	}
 
 	/**
@@ -232,6 +228,26 @@ abstract class Forminator_Admin_Module_Edit_Page extends Forminator_Admin_Page {
 	}
 
 	/**
+	 * Check if module is editable by the current user.
+	 *
+	 * @since 1.52.0
+	 *
+	 * @param array $module Module data array (may contain 'model' object or flat 'settings' array).
+	 * @return bool
+	 */
+	public static function is_module_editable( $module ) {
+		if ( ! empty( $module['model'] ) && is_object( $module['model'] ) ) {
+			$settings = $module['model']->settings;
+		} elseif ( ! empty( $module['settings'] ) && is_array( $module['settings'] ) ) {
+			$settings = $module['settings'];
+		} else {
+			return true;
+		}
+
+		return true === forminator_check_registration_form_permissions( $settings );
+	}
+
+	/**
 	 * Show the modules
 	 *
 	 * @param array  $modules Modules.
@@ -283,6 +299,7 @@ abstract class Forminator_Admin_Module_Edit_Page extends Forminator_Admin_Page {
 			}
 			$display_warning_icon         = self::has_payment_field_error( $module, $is_stripe_connected );
 			$display_registration_warning = self::has_error_on_registration_form( $module );
+			$is_module_editable           = self::is_module_editable( $module );
 			if ( $display_warning_icon || $display_registration_warning ) {
 				$opened_class .= ' forminator-notice-yellow';
 			}
@@ -324,6 +341,7 @@ abstract class Forminator_Admin_Module_Edit_Page extends Forminator_Admin_Page {
 
 					<div class="sui-accordion-col-auto">
 
+						<?php if ( $is_module_editable ) : ?>
 						<a href="<?php echo esc_url( $edit_url ); ?>"
 							class="forminator-edit-<?php echo esc_attr( $module_slug ); ?> sui-button sui-button-ghost sui-accordion-item-action sui-desktop-visible">
 							<i class="sui-icon-pencil" aria-hidden="true"></i> <?php esc_html_e( 'Edit', 'forminator' ); ?>
@@ -334,6 +352,7 @@ abstract class Forminator_Admin_Module_Edit_Page extends Forminator_Admin_Page {
 							<i class="sui-icon-pencil" aria-hidden="true"></i>
 							<span class="sui-screen-reader-text"><?php esc_html_e( 'Edit', 'forminator' ); ?></span>
 						</a>
+						<?php endif; ?>
 
 						<div class="sui-dropdown sui-accordion-item-action<?php echo $soon ? ' fui-dropdown-soon' : ''; ?>">
 
@@ -651,11 +670,12 @@ abstract class Forminator_Admin_Module_Edit_Page extends Forminator_Admin_Page {
 	 *
 	 * @since 1.0
 	 * @since 1.6 add $limit
-	 * @param int $limit Limit.
+	 * @param int         $limit Limit.
+	 * @param null|string $search_keyword  Optional Search Keyword.Added in 1.52.
 	 *
 	 * @return array
 	 */
-	public static function get_models( $limit = null ) {
+	public static function get_models( $limit = null, $search_keyword = null ) {
 
 		if ( ! isset( static::$module_slug ) ) {
 			$module_slug = self::get_slug_for_search();
@@ -664,7 +684,7 @@ abstract class Forminator_Admin_Module_Edit_Page extends Forminator_Admin_Page {
 		}
 
 		$class_name = 'Forminator_' . forminator_get_prefix( $module_slug, '', true ) . '_Model';
-		$data       = $class_name::model()->get_all_paged( self::$page_number, $limit );
+		$data       = $class_name::model()->get_all_paged( self::$page_number, $limit, '', null, $search_keyword );
 
 		return $data;
 	}
@@ -761,7 +781,7 @@ abstract class Forminator_Admin_Module_Edit_Page extends Forminator_Admin_Page {
 		// check if this id is valid and the record is exists.
 		$model = Forminator_Base_Form_Model::get_model( $id );
 		if ( is_object( $model ) ) {
-			$validate = forminator_validate_registration_form_settings( $model->settings );
+			$validate = forminator_check_registration_form_permissions( $model->settings );
 			if ( is_wp_error( $validate ) ) {
 				return $validate;
 			}
@@ -973,9 +993,16 @@ abstract class Forminator_Admin_Module_Edit_Page extends Forminator_Admin_Page {
 				break;
 		}
 
+		$slug = 'forminator-cform';
+		if ( 'poll' === static::$module_slug ) {
+			$slug = 'forminator-poll';
+		} elseif ( 'quiz' === static::$module_slug ) {
+			$slug = 'forminator-quiz';
+		}
 		// Verify nonce.
 		$nonce = Forminator_Core::sanitize_text_field( $nonce_name );
-		if ( ! $nonce || ! wp_verify_nonce( $nonce, $nonce_action ) ) {
+		if ( ! $nonce || ! wp_verify_nonce( $nonce, $nonce_action )
+			|| ! forminator_is_user_allowed( $slug ) ) {
 			return;
 		}
 
@@ -984,6 +1011,7 @@ abstract class Forminator_Admin_Module_Edit_Page extends Forminator_Admin_Page {
 		$ids              = Forminator_Core::sanitize_text_field( 'ids' );
 		$module_ids       = ! empty( $ids ) ? explode( ',', $ids ) : array();
 		$has_access_error = 0;
+		$has_form_error   = 0;
 		switch ( $action ) {
 			case 'delete':
 				if ( ! empty( $id ) ) {
@@ -1069,19 +1097,9 @@ abstract class Forminator_Admin_Module_Edit_Page extends Forminator_Admin_Page {
 				$status = Forminator_Core::sanitize_text_field( 'status' );
 
 				if ( ! empty( $id ) && ! empty( $status ) ) {
-					// only publish and draft status avail.
-					if ( in_array( $status, array( 'publish', 'draft' ), true ) ) {
-						$model = Forminator_Base_Form_Model::get_model( $id );
-						if ( $model instanceof Forminator_Base_Form_Model ) {
-							$model->status = $status;
-							$result        = $model->save();
-							if ( is_wp_error( $result ) ) {
-								$error_message = $result->get_error_message();
-							} else {
-								// Call module update do action on status update.
-								Forminator_Base_Form_Model::module_update_do_action( static::$module_slug, $id, $model );
-							}
-						}
+					$result = $this->update_module_status( $id, $status );
+					if ( is_wp_error( $result ) ) {
+						$error_message = $result->get_error_message();
 					}
 				}
 				break;
@@ -1124,12 +1142,18 @@ abstract class Forminator_Admin_Module_Edit_Page extends Forminator_Admin_Page {
 			case 'publish-' . $plural_slug:
 				foreach ( $module_ids as $form_id ) {
 					$result = $this->update_module_status( $form_id, 'publish' );
-					if ( is_wp_error( $result ) && ( in_array( $result->get_error_code(), array( 'invalid_access', 'invalid_user_role' ), true ) ) ) {
-						++$has_access_error;
+					if ( is_wp_error( $result ) ) {
+						if ( in_array( $result->get_error_code(), array( 'invalid_access', 'invalid_user_role' ), true ) ) {
+							++$has_access_error;
+						} elseif ( 'form_error' === $result->get_error_code() ) {
+							++$has_form_error;
+						}
 					}
 				}
 				if ( $has_access_error ) {
 					$text_message = esc_html__( 'The selected form(s) have been updated. Note: This action cannot be performed on forms without sufficient permissions.', 'forminator' );
+				} elseif ( $has_form_error ) {
+					$text_message = esc_html__( 'The selected form(s) have been updated. Note: Some forms could not be published due to validation errors.', 'forminator' );
 				}
 				break;
 
@@ -1239,6 +1263,10 @@ abstract class Forminator_Admin_Module_Edit_Page extends Forminator_Admin_Page {
 		if ( in_array( $status, array( 'publish', 'draft' ), true ) ) {
 			$model = Forminator_Base_Form_Model::get_model( $id );
 			if ( $model instanceof Forminator_Base_Form_Model ) {
+				$is_publishable = $model->is_publishable();
+				if ( 'publish' === $status && is_wp_error( $is_publishable ) ) {
+					return $is_publishable;
+				}
 				$model->status = $status;
 				$result        = $model->save();
 				if ( is_wp_error( $result ) ) {

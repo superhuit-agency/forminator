@@ -296,8 +296,10 @@ class Forminator_Name extends Forminator_Field {
 			);
 
 			$options        = array();
-			$value          = false;
 			$prefix_options = forminator_get_name_prefixes();
+			$default_prefix = self::get_property( 'prefix_placeholder', $field, '' );
+			$value          = $default_prefix;
+			$matched_value  = $default_prefix;
 
 			if ( isset( $draft_value['prefix'] ) ) {
 
@@ -306,8 +308,17 @@ class Forminator_Name extends Forminator_Field {
 			} elseif ( $this->has_prefill( $field, 'prefix' ) ) {
 
 				// We have pre-fill parameter, use its value or $value.
-				$value = $this->get_prefill( $field, false, 'prefix' );
+				$value = $this->get_prefill( $field, $default_prefix, 'prefix' );
 			}
+
+			foreach ( $prefix_options as $key => $pfx ) {
+				if ( strtolower( $key ) === strtolower( $value ) ) {
+					$matched_value = $key;
+					break;
+				}
+			}
+
+			$value = $matched_value;
 
 			foreach ( $prefix_options as $key => $pfx ) {
 				$selected = false;
@@ -330,7 +341,7 @@ class Forminator_Name extends Forminator_Field {
 						$prefix_data,
 						self::get_property( 'prefix_label', $field ),
 						$options,
-						self::get_property( 'prefix_placeholder', $field ),
+						$value,
 						self::get_property( 'prefix_description', $field ),
 						$prefix_required,
 						$descr_position,

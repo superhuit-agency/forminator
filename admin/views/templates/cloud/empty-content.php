@@ -15,7 +15,7 @@
 		<h2><?php esc_html_e( 'No saved templates yet', 'forminator' ); ?></h2>
 		<p>
 			<?php
-			esc_html_e( 'Save any of your forms as cloud templates to reuse them across your sites connected to the Hub – no need to start from scratch. Your saved templates will appear here. ', 'forminator' );
+			esc_html_e( 'Save any of your forms as cloud templates to reuse them across your sites connected to The Hub – no need to start from scratch. Your saved templates will appear here. ', 'forminator' );
 			?>
 			<br/>
 			<?php

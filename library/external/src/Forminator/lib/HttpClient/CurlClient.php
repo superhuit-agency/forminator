@@ -219,6 +219,8 @@ class CurlClient implements ClientInterface, StreamingClientInterface
         }
         if ($body) {
             $opts[\CURLOPT_POSTFIELDS] = $body;
+        } elseif (isset($opts[\CURLOPT_POST]) && 1 === $opts[\CURLOPT_POST]) {
+            $opts[\CURLOPT_POSTFIELDS] = '';
         }
         // this is a little verbose, but makes v1 vs v2 behavior really clear
         if (!$this->hasHeader($headers, 'Idempotency-Key')) {
@@ -620,7 +622,9 @@ class CurlClient implements ClientInterface, StreamingClientInterface
     private function closeCurlHandle()
     {
         if (null !== $this->curlHandle) {
-            \curl_close($this->curlHandle);
+            if (\PHP_VERSION_ID < 80000) {
+                \curl_close($this->curlHandle);
+            }
             $this->curlHandle = null;
         }
     }

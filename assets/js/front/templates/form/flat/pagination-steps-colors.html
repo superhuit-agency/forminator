@@ -16,12 +16,17 @@
 		<?php } ?>
 	}
 
-	<?php if ( forminator_array_value_exists( $properties, 'steps-outline-focus' ) && !empty( $properties['steps-outline-focus'] ) ) { ?>
-		#forminator-module-<?php echo $properties['form_id'] ?>.forminator-design--<?php echo $theme; ?> .forminator-pagination-steps .forminator-step:focus {
+	#forminator-module-<?php echo $properties['form_id'] ?>.forminator-design--<?php echo $theme; ?> .forminator-pagination-steps .forminator-step:focus {
+		outline: none;
+	}
+	#forminator-module-<?php echo $properties['form_id'] ?>.forminator-design--<?php echo $theme; ?> .forminator-pagination-steps .forminator-step:focus-visible .forminator-step-label {
+		<?php if ( forminator_array_value_exists( $properties, 'steps-outline-focus' ) && !empty( $properties['steps-outline-focus'] ) ) { ?>
 			outline: 2px solid <?php echo $properties['steps-outline-focus'] ?>;
-			outline-offset: 1px;
-		}
-	<?php } ?>
+		<?php } else { ?>
+			outline: 2px solid #254DEB;
+		<?php } ?>
+		outline-offset: 2px;
+	}
 
 	#forminator-module-<?php echo $properties['form_id'] ?>.forminator-design--<?php echo $theme; ?> .forminator-pagination-steps .forminator-step .forminator-step-label {
 		<?php if ( forminator_array_value_exists( $properties, 'timeline-text-current' ) && !empty( $properties['timeline-text-current'] ) ) { ?>
@@ -65,12 +70,13 @@
 		background-color: #097BAA;
 	}
 
-	<?php if ( forminator_array_value_exists( $properties, 'steps-outline-focus' ) && !empty( $properties['steps-outline-focus'] ) ) { ?>
-		#forminator-module-<?php echo $properties['form_id'] ?>.forminator-design--<?php echo $theme; ?> .forminator-pagination-steps .forminator-step:focus {
-			outline: 2px solid #254DEB;
-			outline-offset: 1px;
-		}
-	<?php } ?>
+	#forminator-module-<?php echo $properties['form_id'] ?>.forminator-design--<?php echo $theme; ?> .forminator-pagination-steps .forminator-step:focus {
+		outline: none;
+	}
+	#forminator-module-<?php echo $properties['form_id'] ?>.forminator-design--<?php echo $theme; ?> .forminator-pagination-steps .forminator-step:focus-visible .forminator-step-label {
+		outline: 2px solid #254DEB;
+		outline-offset: 2px;
+	}
 
 	#forminator-module-<?php echo $properties['form_id'] ?>.forminator-design--<?php echo $theme; ?> .forminator-pagination-steps .forminator-step .forminator-step-label {
 		color: #097BAA;

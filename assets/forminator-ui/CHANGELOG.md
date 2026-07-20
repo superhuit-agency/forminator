@@ -1,5 +1,61 @@
 # Change Log
 
+## 1.12.46
+
+### Patch Changes
+
+- [#183](https://github.com/wpmudev/forminator-ui/pull/183) [`2d8eb73`](https://github.com/wpmudev/forminator-ui/commit/2d8eb731fc6e0e1ae18dd018f7fe8c0136fa5977) Thanks [@creador-dev](https://github.com/creador-dev)! - Select dropdown not working properly in popups.
+
+## 1.12.45
+
+### Patch Changes
+
+- [#181](https://github.com/wpmudev/forminator-ui/pull/181) [`bacfeb2`](https://github.com/wpmudev/forminator-ui/commit/bacfeb29f66a4e567d66d711bac9b075b01a930e) Thanks [@creador-dev](https://github.com/creador-dev)! - Authentication page input field styles fix.
+
+## 1.12.44
+
+### Patch Changes
+
+- [#178](https://github.com/wpmudev/forminator-ui/pull/178) [`f628e9d`](https://github.com/wpmudev/forminator-ui/commit/f628e9da3f8347b7f1d1efeb6190fc3c564800ee) Thanks [@creador-dev](https://github.com/creador-dev)! - Upload field basic styles improvement.
+
+- [#176](https://github.com/wpmudev/forminator-ui/pull/176) [`6ba383f`](https://github.com/wpmudev/forminator-ui/commit/6ba383f9b9ca49f17d6fbc4630b154b8e1a7816f) Thanks [@creador-dev](https://github.com/creador-dev)! - Quizzes question descriotion alignment.
+
+- [#179](https://github.com/wpmudev/forminator-ui/pull/179) [`7d2ac1b`](https://github.com/wpmudev/forminator-ui/commit/7d2ac1b049a6461498ba65f0c18f9476e636aa36) Thanks [@creador-dev](https://github.com/creador-dev)! - Improve select2 rendering in modals.
+
+- [#177](https://github.com/wpmudev/forminator-ui/pull/177) [`4decf96`](https://github.com/wpmudev/forminator-ui/commit/4decf96a96f2ac8c2ff221a9c447358efb7dcbce) Thanks [@creador-dev](https://github.com/creador-dev)! - migrate password field styles and icons to FUI
+
+## 1.12.43
+
+### Patch Changes
+
+- [#172](https://github.com/wpmudev/forminator-ui/pull/172) [`7e25a39`](https://github.com/wpmudev/forminator-ui/commit/7e25a397e8d66e11c44e44862bcf84a900745669) Thanks [@creador-dev](https://github.com/creador-dev)! - Textarea field remove inline styles.
+
+- [#168](https://github.com/wpmudev/forminator-ui/pull/168) [`0b8cfbc`](https://github.com/wpmudev/forminator-ui/commit/0b8cfbcbedff4c992d9204fc611bdbabdd56e890) Thanks [@creador-dev](https://github.com/creador-dev)! - remove phone field rtl support
+
+- [#171](https://github.com/wpmudev/forminator-ui/pull/171) [`7c20c22`](https://github.com/wpmudev/forminator-ui/commit/7c20c22f3161bdb476e42c90da8c1fd6f51fdadb) Thanks [@creador-dev](https://github.com/creador-dev)! - Remove hover effect from non editable fields in material design.
+
+- [#169](https://github.com/wpmudev/forminator-ui/pull/169) [`1094c1b`](https://github.com/wpmudev/forminator-ui/commit/1094c1bbb4d4e17b566161edfded79f5a9b2336c) Thanks [@creador-dev](https://github.com/creador-dev)! - Truncate labels of polls to fit in one line.
+
+- [#170](https://github.com/wpmudev/forminator-ui/pull/170) [`a74d757`](https://github.com/wpmudev/forminator-ui/commit/a74d757c63686f63114c40a238b7e4f27d5370ab) Thanks [@creador-dev](https://github.com/creador-dev)! - Hover effect fix in material design.
+
+## 1.12.42
+
+### Patch Changes
+
+- f16ed9c: fix(consent): consent field p tag margin fix
+
+## 1.12.41
+
+### Patch Changes
+
+- 492a637: Geolocation dropdown style improvments.
+
+## 1.12.40
+
+### Patch Changes
+
+- 62d68e5: Add geolocation dropdown styles
+
 ## 1.12.39
 
 ### Patch Changes

@@ -130,12 +130,14 @@ $modules = Forminator_API::$method( null, 1, $num_recent, $statuses );
 								</button>
 
 								<ul>
+									<?php if ( Forminator_Admin_Module_Edit_Page::is_module_editable( $module ) ) : ?>
 									<li>
-									<?php $wizard_page_prefix = 'quiz' !== $module_type ? $module_type : ( 'nowrong' === $module['quiz_type'] ? $module['quiz_type'] : 'knowledge' ); ?>
+										<?php $wizard_page_prefix = 'quiz' !== $module_type ? $module_type : ( 'nowrong' === $module['quiz_type'] ? $module['quiz_type'] : 'knowledge' ); ?>
 										<a href="<?php echo esc_url( admin_url( 'admin.php?page=forminator-' . $wizard_page_prefix . '-wizard&id=' . $module['id'] ) ); ?>">
 											<i class="sui-icon-pencil" aria-hidden="true"></i> <?php esc_html_e( 'Edit', 'forminator' ); ?>
 										</a>
 									</li>
+									<?php endif; ?>
 
 									<li><button class="wpmudev-open-modal"
 										data-modal="<?php echo esc_attr( $preview_dialog ); ?>"
@@ -198,7 +200,7 @@ $modules = Forminator_API::$method( null, 1, $num_recent, $statuses );
 									<?php endif; ?>
 
 									<li>
-										<button class="wpmudev-open-modal"
+										<button class="sui-option-red wpmudev-open-modal"
 											data-modal="delete-module"
 											data-modal-title="<?php echo esc_attr( $delete_title ); ?>"
 											data-modal-content="<?php echo esc_attr( $delete_description ); ?>"

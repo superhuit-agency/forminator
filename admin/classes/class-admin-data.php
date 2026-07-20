@@ -49,6 +49,7 @@ class Forminator_Admin_Data {
 		$data['fieldsPro'] = forminator_get_pro_fields();
 
 		$data['default_required_messages'] = Forminator_Field::$default_required_messages;
+		$data['passwordStrengthMessages']  = Forminator_Password::get_strength_messages();
 
 		return $data;
 	}
@@ -138,11 +139,11 @@ class Forminator_Admin_Data {
 			'gFontNonce'                     => wp_create_nonce( 'forminator_load_google_fonts' ),
 			'dismissNonce'                   => wp_create_nonce( 'forminator_dismiss_notification' ),
 			'dismissNoticeNonce'             => wp_create_nonce( 'forminator_dismiss_notice' ),
-			'formProcessNonce'               => wp_create_nonce( 'forminator_form_request' ),
+			'formProcessNonce'               => forminator_is_user_allowed( 'forminator-cform' ) ? wp_create_nonce( 'forminator_form_request' ) : '',
 			'formExportNonce'                => wp_create_nonce( 'forminator_popup_export_form' ),
-			'pollProcessNonce'               => wp_create_nonce( 'forminator_poll_request' ),
+			'pollProcessNonce'               => forminator_is_user_allowed( 'forminator-poll' ) ? wp_create_nonce( 'forminator_poll_request' ) : '',
 			'pollExportNonce'                => wp_create_nonce( 'forminator_popup_export_poll' ),
-			'quizProcessNonce'               => wp_create_nonce( 'forminator_quiz_request' ),
+			'quizProcessNonce'               => forminator_is_user_allowed( 'forminator-quiz' ) ? wp_create_nonce( 'forminator_quiz_request' ) : '',
 			'quizExportNonce'                => wp_create_nonce( 'forminator_popup_export_quiz' ),
 			'cloneNonce'                     => wp_create_nonce( 'forminator-nonce-clone-' . $id ),
 			'load_cloud_templates'           => wp_create_nonce( 'forminator_load_cloud_templates' ),
@@ -202,6 +203,7 @@ class Forminator_Admin_Data {
 			'pdfAddonActive'                 => class_exists( 'Forminator_PDF_Addon' ),
 			'wpmudevMembership'              => forminator_get_wpmudev_membership(), // 'free'
 			'pdfExtensionsEnabled'           => $this->pdf_extensions_enabled(),
+			'isPDFAddonCompatible'           => $this->is_pdf_addon_compatible(),
 			'userPermissions'                => $user->get_role_caps(),
 			'manage_forminator_templates'    => forminator_is_user_allowed( 'forminator-templates' ),
 			'cloudDisabled'                  => forminator_cloud_templates_disabled(),
@@ -288,6 +290,24 @@ class Forminator_Admin_Data {
 	public function pdf_extensions_enabled() {
 		if ( function_exists( 'forminator_pdf_extensions_enabled' ) ) {
 			return forminator_pdf_extensions_enabled();
+		}
+
+		return false;
+	}
+
+	/**
+	 * Check if PDF addon is compatible.
+	 *
+	 * @since 1.51
+	 *
+	 * @return bool
+	 */
+	public function is_pdf_addon_compatible() {
+		if ( class_exists( 'Forminator_PDF_Addon' ) ) {
+			$pdf_addon = Forminator_PDF_Addon::get_instance();
+			if ( method_exists( $pdf_addon, 'is_supported_version' ) ) {
+				return $pdf_addon->is_supported_version();
+			}
 		}
 
 		return false;

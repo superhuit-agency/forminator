@@ -87,6 +87,7 @@ if ( $count > 0 || $is_search ) {
 					<input type="hidden" name="post_type" value="<?php echo esc_attr( $forminator_post_type ); ?>" />
 					<input type="hidden" name="soon" value="<?php echo esc_attr( $soon ); ?>" />
 					<input type="hidden" name="page" value="<?php echo isset( $_GET['page'] ) ? esc_html( Forminator_Core::sanitize_text_field( 'page' ) ) : ''; /* phpcs:ignore WordPress.Security.NonceVerification.Recommended */ ?>" />
+					<input type="hidden" name="paged" value="1" />
 					<?php
 						wp_nonce_field( $search_module_nonce, $search_module_nonce, false );
 					?>

@@ -27,7 +27,7 @@ $last_submission         = forminator_get_latest_entry_time( 'all' );
 				<span class="sui-summary-large">0</span>
 			<?php } ?>
 
-			<?php if ( 1 === $total_modules ) { ?>
+			<?php if ( 1 === $count_active ) { ?>
 				<span class="sui-summary-sub"><?php esc_html_e( 'Active Module', 'forminator' ); ?></span>
 			<?php } else { ?>
 				<span class="sui-summary-sub"><?php esc_html_e( 'Active Modules', 'forminator' ); ?></span>

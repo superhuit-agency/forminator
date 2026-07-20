@@ -303,7 +303,7 @@
 								self._stripeData['paymentid'] = data.data.paymentid;
 								self._stripeData['secret'] = data.data.paymentsecret;
 								if ( self.intent ) {
-									self.mountStripeField(data.data.paymentsecret);
+									self.mountStripeField(data.data.paymentsecret, data.data.amount);
 								}
 							}
 							if (data.data.paymentmethod_failed) {
@@ -597,8 +597,9 @@
 			}
 		},
 
-		mountStripeField: function ( clientSecret = null ) {
-			if ( 'subscription' === clientSecret ) {
+		mountStripeField: function ( clientSecret = null, amount = null ) {
+			let isSubscription = 'subscription' === clientSecret;
+			if ( isSubscription ) {
 				clientSecret = null;
 			}
 			if ( this._paymentElement ) {
@@ -621,6 +622,10 @@
 				// unset paymentMethodTypes because we can't set it without mode attribute.
 				delete  stripeObject.paymentMethodTypes;
 				stripeObject.clientSecret = clientSecret;
+			} else if ( isSubscription && amount ) {
+				stripeObject.mode = 'subscription';
+				stripeObject.amount = amount;
+				stripeObject.currency = this.getStripeData('currency') || 'usd';
 			} else {
 				stripeObject.mode = 'setup';
 				stripeObject.currency = this.getStripeData('currency') || 'usd';
@@ -630,6 +635,11 @@
 
 			this._paymentElement = this._elements.create('payment', paymentOptions );
 
+			let paymentElement = document.getElementById('payment-element-' + fieldId);
+			if( ! paymentElement ) {
+				// In case if the element is not found, we can't mount it, so we stop the process to avoid errors in console.
+				return false;
+			}
 			this._paymentElement.mount('#payment-element-' + fieldId);
 
 			var self = this;

@@ -566,10 +566,11 @@ abstract class Forminator_Field {
 	 * @param bool    $required Required.
 	 * @param string  $default_height Height.
 	 * @param integer $limit Limit.
+	 * @param bool    $media_buttons Whether to show media buttons or not.
 	 *
 	 * @return mixed
 	 */
-	public static function create_wp_editor( $attr = array(), $label = '', $description = '', $required = false, $default_height = '140', $limit = 0 ) {
+	public static function create_wp_editor( $attr = array(), $label = '', $description = '', $required = false, $default_height = '140', $limit = 0, $media_buttons = false ) {
 		$html = '';
 
 		$content = isset( $attr['content'] ) ? $attr['content'] : '';
@@ -597,24 +598,49 @@ abstract class Forminator_Field {
 		$wp_editor_class = isset( $attr['class'] ) ? $attr['class'] : '';
 
 		if ( $required ) {
-			apply_filters( 'the_editor', array( __CLASS__, 'add_required_wp_editor' ) );
+			add_filter( 'the_editor', array( __CLASS__, 'add_required_wp_editor' ) );
 			$wp_editor_class .= ' do-validate forminator-wp-editor-required';
 		} elseif ( ! empty( $limit ) ) {
 			$wp_editor_class .= ' do-validate';
+		}
+
+		$settings = array(
+			'textarea_name' => isset( $attr['name'] ) ? $attr['name'] : '',
+			'media_buttons' => $media_buttons,
+			'editor_class'  => $wp_editor_class,
+			'editor_height' => $default_height,
+		);
+
+		if ( did_action( 'elementor/loaded' ) ) {
+			// Disable TinyMCE and Quicktags in Elementor to prevent console errors when wp.editor.initialize is triggered.
+			$settings['tinymce']       = false;
+			$settings['quicktags']     = false;
+			$settings['media_buttons'] = false;
 		}
 
 		ob_start();
 		wp_editor(
 			$content,
 			$editor_id,
-			array(
-				'textarea_name' => isset( $attr['name'] ) ? $attr['name'] : '',
-				'media_buttons' => false,
-				'editor_class'  => $wp_editor_class,
-				'editor_height' => $default_height,
-			)
+			$settings
 		);
-
+		if ( did_action( 'elementor/loaded' ) ) {
+			// Ensure the editor script is loaded; otherwise, wp.editor.initialize will not function in the Elementor popup.
+			Forminator_CForm_Front::$load_wp_enqueue_editor = true;
+			$args = self::get_tinymce_args( $editor_id, $media_buttons );
+			?>
+			<script>
+				jQuery(function() {
+					setTimeout(() => {
+						<?php
+						// Initialize the editor when the textarea is visible in the DOM, as we created the editor without TinyMCE and Quicktags, so we need to initialize it manually.
+						?>
+						forminator_init_wp_editor_on_visible( "<?php echo esc_attr( $editor_id ); ?>", <?php echo wp_kses_post( $args ); ?>, true );
+					}, 10); /* Small delay to ensure the textarea is rendered in the DOM. */
+				});
+			</script>
+			<?php
+		}
 		$html .= ob_get_clean();
 
 		if ( 'above' !== self::$description_position ) {
@@ -1013,9 +1039,6 @@ abstract class Forminator_Field {
 	public function is_valid_entry() {
 		$this->is_valid = empty( $this->validation_message );
 		if ( ! $this->is_valid ) {
-			foreach ( $this->validation_message as $field_name => $error ) {
-				Forminator_CForm_Front_Action::$submit_errors[][ $field_name ] = $error;
-			}
 			return $this->validation_message;
 		}
 
@@ -1084,7 +1107,8 @@ abstract class Forminator_Field {
 
 			if ( in_array( $element_id, Forminator_CForm_Front_Action::$hidden_fields, true ) ) {
 				$current_is_hidden      = true;
-				$is_condition_fulfilled = isset( $condition['rule'] ) && 'is_not' === $condition['rule']
+				$opposite_operators     = array( 'is_not', 'does_not_contain', 'day_is_not', 'month_is_not' );
+				$is_condition_fulfilled = isset( $condition['rule'] ) && in_array( $condition['rule'], $opposite_operators, true )
 					&& isset( $condition['value'] ) && ! is_null( $condition['value'] ) && '' !== $condition['value'];
 			} else {
 				$current_is_hidden      = false;
@@ -1241,6 +1265,13 @@ abstract class Forminator_Field {
 				$field_value            = self::forminator_replace_number( $form_field, $field_value );
 				$is_condition_fulfilled = self::is_condition_fulfilled( $field_value, $condition );
 			}
+		} elseif ( stripos( $element_id, 'consent-' ) !== false ) {
+			// Consent fields always submit the canonical value 'checked'. Conditions saved
+			// under a non-English admin locale may store a translated string instead, so
+			// normalize the condition value before comparison.
+			$normalized_condition          = $condition;
+			$normalized_condition['value'] = 'checked';
+			$is_condition_fulfilled        = self::is_condition_fulfilled( $field_value, $normalized_condition );
 		} else {
 			$is_condition_fulfilled = self::is_condition_fulfilled( $field_value, $condition, $form_id );
 		}
@@ -1279,7 +1310,8 @@ abstract class Forminator_Field {
 		// }.
 
 		$element_id = $condition['element_id'];
-		if ( stripos( $element_id, 'upload-' ) !== false ) {
+		if ( stripos( $element_id, 'upload-' ) !== false && is_array( $form_field_value ) ) {
+			// Treat unfilled uploads as empty strings so blank "is not" conditions stay unmatched.
 			// Single file upload type.
 			if ( ! empty( $form_field_value['file']['name'] ) ) {
 				$form_field_value = $form_field_value['file']['name'];
@@ -1291,7 +1323,9 @@ abstract class Forminator_Field {
 						$file_names[] = $file['file_name'];
 					}
 				}
-				$form_field_value = $file_names;
+				$form_field_value = empty( $file_names ) ? '' : $file_names;
+			} else {
+				$form_field_value = '';
 			}
 		}
 
@@ -1764,25 +1798,40 @@ abstract class Forminator_Field {
 		}
 
 		$element_id = self::get_property( 'element_id', $field_array );
-		if ( is_array( $field_data ) ) {
-			foreach ( $field_data as $element_id_suffix => $field_datum ) {
-				$element_id                = $element_id . '-' . $element_id_suffix;
-				$element_autofill_settings = self::get_element_autofill_settings( $element_id, $autofill_settings );
-				if ( ! self::element_autofill_is_editable( $element_autofill_settings ) ) {
-					// refill with autofill provider.
-					$field_data[ $element_id_suffix ] = $this->maybe_replace_to_autofill_value( $field_datum, $element_autofill_settings );
+		$is_array   = is_array( $field_data );
+
+		$parts           = explode( '-', $element_id );
+		$base_element_id = implode( '-', array_slice( $parts, 0, 2 ) );
+
+		$targets = array();
+		if ( $is_array ) {
+			$sub_prefix = $base_element_id . '-';
+			foreach ( $autofill_settings as $autofill_element_id => $element_autofill_settings ) {
+				if ( 0 !== strpos( $autofill_element_id, $sub_prefix ) ) {
+					continue;
 				}
+				$targets[ substr( $autofill_element_id, strlen( $sub_prefix ) ) ] = $element_autofill_settings;
 			}
 		} else {
-			$element_autofill_settings = self::get_element_autofill_settings( $element_id, $autofill_settings );
+			$targets[''] = self::get_element_autofill_settings( $base_element_id, $autofill_settings );
+		}
 
-			if ( ! self::element_autofill_is_editable( $element_autofill_settings ) ) {
-				$current_data = $field_data;
-				// refill with autofill provider.
-				$field_data = $this->maybe_replace_to_autofill_value( $field_data, $element_autofill_settings );
-				if ( ! strlen( $field_data ) ) {
-					$field_data = $current_data;
-				}
+		foreach ( $targets as $suffix => $element_autofill_settings ) {
+			if ( self::element_autofill_is_editable( $element_autofill_settings ) ) {
+				continue;
+			}
+
+			$current  = $is_array ? ( isset( $field_data[ $suffix ] ) ? $field_data[ $suffix ] : '' ) : $field_data;
+			$replaced = $this->maybe_replace_to_autofill_value( $current, $element_autofill_settings );
+
+			if ( null === $replaced || ( is_scalar( $replaced ) && '' === (string) $replaced ) ) {
+				continue;
+			}
+
+			if ( $is_array ) {
+				$field_data[ $suffix ] = $replaced;
+			} else {
+				$field_data = $replaced;
 			}
 		}
 
@@ -1816,13 +1865,24 @@ abstract class Forminator_Field {
 			return array();
 		}
 
-		$element_autofill_settings = self::get_element_autofill_settings( $element_id, $autofill_settings );
+		// Strip the trailing group-row suffix (e.g. `address-1-city-2`) to match base autofill keys.
+		$lookup_id = $element_id;
+		if ( ! isset( $autofill_settings[ $lookup_id ] ) ) {
+			$stripped = preg_replace( '/-\d+$/', '', $element_id, 1 );
+			if ( null !== $stripped && isset( $autofill_settings[ $stripped ] ) ) {
+				$lookup_id = $stripped;
+			}
+		}
+
+		$element_autofill_settings = self::get_element_autofill_settings( $lookup_id, $autofill_settings );
 		$value                     = $this->maybe_replace_to_autofill_value( '', $element_autofill_settings );
 
 		// only return value when its autofilled.
 		if ( ! empty( $value ) ) {
 			$markup_attr = array(
-				'value' => $value,
+				'value'        => $value,
+				// Preserved through repeater JS clone so newly added group rows keep the autofill value.
+				'data-default' => $value,
 			);
 			// only disable if value is not empty.
 			if ( ! self::element_autofill_is_editable( $element_autofill_settings ) ) {
@@ -1981,6 +2041,27 @@ abstract class Forminator_Field {
 	}
 
 	/**
+	 * Get calculable number format
+	 *
+	 * @since 1.52.0
+	 *
+	 * @param mixed $field_settings Field settings.
+	 * @param mixed $value Value.
+	 * @return string
+	 */
+	public static function get_calculable_number_format( $field_settings, $value ) {
+		// Apply configured decimal precision for fields that define it.
+		$precision_field_types = array( 'number', 'currency', 'calculation' );
+		$field_type            = isset( $field_settings['type'] ) ? $field_settings['type'] : '';
+		if ( in_array( $field_type, $precision_field_types, true ) ) {
+			$precision = self::get_calculable_precision( $field_settings );
+			return number_format( floatval( $value ), $precision, '.', '' );
+		}
+
+		return $value;
+	}
+
+	/**
 	 * Return if field has pre-fill value filled
 	 *
 	 * @since 1.10
@@ -2064,9 +2145,10 @@ abstract class Forminator_Field {
 	 * Get TinyMCE arguments for js on front-end
 	 *
 	 * @param string $id Editor ID.
+	 * @param bool   $media_buttons Whether to show the Add Media button.
 	 * @return string
 	 */
-	public static function get_tinymce_args( $id ) {
+	public static function get_tinymce_args( $id, $media_buttons = false ) {
 		$args = "{
 			tinymce: {
 				wpautop  : true,
@@ -2114,7 +2196,8 @@ abstract class Forminator_Field {
 
 			},
 			quicktags: true,
-		}";
+			mediaButtons: " . ( $media_buttons ? 'true' : 'false' ) . ',
+		}';
 
 		/**
 		 * Filter TinyMCE arguments for js on front-end.
@@ -2183,7 +2266,8 @@ abstract class Forminator_Field {
 		$precision  = self::get_calculable_precision( $field );
 		$separator  = self::get_property( 'separators', $field, 'blank' );
 		$separators = self::forminator_separators( $separator, $field );
-		$data_value = (float) str_replace( $separators['point'], '.', $number );
+		// All unformatted numbers use either a comma or a dot as the decimal point. We need to convert commas to dots.
+		$data_value = (float) str_replace( ',', '.', $number );
 		$formatted  = number_format( $data_value, $precision, $separators['point'], $separators['separator'] );
 
 		if ( ! empty( $field['prefix'] ) || ! empty( $field['suffix'] ) ) {
@@ -2222,14 +2306,21 @@ abstract class Forminator_Field {
 	 * Check index and htaccess files inside root directory. And create them if need it.
 	 */
 	public static function check_upload_root_index_file() {
+		global $wp_locale_switcher;
+
+		// Return if $wp_locale_switcher is not ready.
+		if ( ! $wp_locale_switcher ) {
+			return false;
+		}
+
 		$upload_root = forminator_upload_root();
-		if ( is_wp_error( $upload_root ) ) {
+		if ( is_wp_error( $upload_root ) || ! is_dir( $upload_root ) || ! wp_is_writable( $upload_root ) ) {
 			return;
 		}
 		// Make sure it was not called before WP init.
-		if ( ! file_exists( $upload_root . 'index.php' ) && function_exists( 'insert_with_markers' ) ) {
+		if ( function_exists( 'insert_with_markers' ) ) {
 			self::add_index_file( $upload_root );
-			self::add_htaccess_file();
+			self::add_htaccess_file( $upload_root );
 		}
 	}
 
@@ -2241,8 +2332,9 @@ abstract class Forminator_Field {
 	 * @return void
 	 */
 	public static function add_index_file( $dir ) {
-		$dir = untrailingslashit( $dir );
-		if ( ! is_dir( $dir ) || ! wp_is_writable( $dir ) || is_link( $dir ) ) {
+		$dir             = untrailingslashit( $dir );
+		$index_file_path = $dir . '/index.php';
+		if ( is_file( $index_file_path ) || ! is_dir( $dir ) || ! wp_is_writable( $dir ) || is_link( $dir ) ) {
 			return;
 		}
 		$dp = opendir( $dir );
@@ -2256,7 +2348,6 @@ abstract class Forminator_Field {
 
 		global $wp_filesystem;
 		if ( WP_Filesystem() ) {
-			$index_file_path = $dir . '/index.php';
 			// creates an empty index.php file.
 			$wp_filesystem->put_contents( $index_file_path, '', FS_CHMOD_FILE );
 		}
@@ -2289,38 +2380,20 @@ abstract class Forminator_Field {
 		}
 
 		self::check_upload_root_index_file();
-		if ( ! file_exists( forminator_get_upload_path( $form_id ) . 'index.php' ) ) {
-			self::add_index_file( forminator_get_upload_path( $form_id ) );
-		}
-		if ( ! file_exists( $path . 'index.php' ) ) {
-			self::add_index_file( $path );
-		}
+		self::add_index_file( forminator_get_upload_path( $form_id ) );
+		self::add_index_file( $path );
 	}
 
 	/**
 	 * Add htaccess file
+	 *
+	 * @param string $upload_root Upload root.
+	 * @return void
 	 */
-	public static function add_htaccess_file() {
-		global $wp_locale_switcher;
-
-		// Return if $wp_locale_switcher is not ready.
-		if ( ! $wp_locale_switcher ) {
-			return false;
-		}
-
-		$upload_root = forminator_upload_root();
-
-		if ( is_wp_error( $upload_root ) || ! is_dir( $upload_root ) ) {
-			return;
-		}
-
-		if ( ! wp_is_writable( $upload_root ) ) {
-			return;
-		}
-
+	public static function add_htaccess_file( $upload_root ) {
 		$htaccess_file = $upload_root . '.htaccess';
 		if ( file_exists( $htaccess_file ) ) {
-			wp_delete_file( $htaccess_file );
+			return;
 		}
 		$rules = '# Disable parsing of PHP for some server configurations.
 <Files *>
@@ -2414,5 +2487,98 @@ abstract class Forminator_Field {
 			$html .= '</div>';
 		}
 		return $html;
+	}
+
+	/**
+	 * * Get formatted amount for Stripe and PayPal fields
+	 *
+	 * @param array        $field Field.
+	 * @param string|array $amount_data Amount Data.
+	 * @param object       $module Module.
+	 * @return string
+	 */
+	public static function get_formatted_amount( $field, $amount_data, $module = null ) {
+		if ( is_array( $amount_data ) ) {
+			$amount = $amount_data['amount'];
+			// find the selected payment plan.
+			if ( ! empty( $field['payments'] ) && ! empty( $amount_data['product_name'] ) ) {
+				foreach ( $field['payments'] as $payment ) {
+					if ( $payment['plan_name'] === $amount_data['product_name'] ) {
+						$field = $payment;
+						break;
+					}
+				}
+			}
+		} else {
+			$amount = $amount_data;
+		}
+
+		$amount_type     = self::get_property( 'amount_type', $field, 'fixed' );
+		$amount_variable = self::get_property( 'variable', $field, '' );
+		if ( empty( $amount_variable ) || 'fixed' === $amount_type ) {
+			return $amount;
+		}
+		if ( null === $module ) {
+			if ( empty( Forminator_Front_Action::$module_object ) ) {
+				return $amount;
+			}
+			$module = Forminator_Front_Action::$module_object;
+		}
+		$field = $module->get_field( $amount_variable, false );
+		if ( ! $field ) {
+			return $amount;
+		}
+		$field_settings = $field->to_formatted_array();
+		if ( ! $field_settings ) {
+			return $amount;
+		}
+		// Remove the currency key since it's displayed separately.
+		unset( $field_settings['currency'] );
+		return self::forminator_number_formatting( $field_settings, $amount );
+	}
+
+	/**
+	 * Get rich text editor script
+	 *
+	 * @since 1.53
+	 *
+	 * @param string $id Editor ID.
+	 * @param bool   $media_buttons Whether to show the Add Media button.
+	 * @return string
+	 */
+	public function get_richtext_editor_script( $id, $media_buttons = false ) {
+		$args            = self::get_tinymce_args( $id, $media_buttons );
+		$is_block_editor = filter_input( INPUT_POST, 'is_block_editor', FILTER_VALIDATE_BOOLEAN );
+		if ( $is_block_editor ) {
+			// Message to show when rich text editor preview is not available in Gutenberg block editor.
+			$message = '<div style="all: initial;"><div class="block-editor-warning"><div class="block-editor-warning__contents"><p class="block-editor-warning__message">'
+						. esc_html__( 'The rich text editor can\'t be previewed in the block editor. Save the post and view the form on the frontend to see it.', 'forminator' )
+						. '</p></div></div></div>';
+			$script  = '<script>
+				if ( typeof wp !== "undefined" && wp.editor && typeof wp.editor.initialize === "function" ) {
+					wp.editor.initialize("' . esc_attr( $id ) . '", ' . $args . ');
+				} else {
+				 	let textElement = document.getElementById("' . esc_attr( $id ) . '");
+					if( textElement ) {
+						textElement.outerHTML = \'' . $message . '\';
+					}
+				}</script>';
+		} elseif ( did_action( 'elementor/loaded' ) ) {
+				$script = '<script>
+				(function ($, document) {
+					setTimeout(() => {
+						const editor = typeof tinymce !== "undefined" && tinymce.get( "' . esc_attr( $id ) . '" );
+						let textarea = document.getElementById("' . esc_attr( $id ) . '");
+						if ( textarea && ( textarea.offsetParent !== null || editor ) ) {
+							wp.editor.initialize("' . esc_attr( $id ) . '", ' . wp_kses_post( $args ) . ');
+						} else {
+							forminator_init_wp_editor_on_visible("' . esc_attr( $id ) . '", ' . wp_kses_post( $args ) . ');
+						}
+					}, 50);
+				})(jQuery, document);</script>';
+		} else {
+			$script = '<script>wp.editor.initialize("' . esc_attr( $id ) . '", ' . $args . ');</script>';
+		}
+		return $script;
 	}
 }

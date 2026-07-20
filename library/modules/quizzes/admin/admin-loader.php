@@ -1029,7 +1029,7 @@ class Forminator_Quiz_Admin extends Forminator_Admin_Module {
 		$model->settings = $settings;
 
 		// status.
-		$model->status = Forminator_Form_Model::STATUS_PUBLISH;
+		$model->status = 'leads';
 
 		// Save data.
 		$id = $model->save();

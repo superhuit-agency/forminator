@@ -59,15 +59,6 @@ class Forminator_Template_API {
 	}
 
 	/**
-	 * Check if connected to Hub
-	 *
-	 * @return bool
-	 */
-	public static function is_connected(): bool {
-		return FORMINATOR_PRO && ! empty( self::get_api_key() );
-	}
-
-	/**
 	 * Get templates
 	 *
 	 * @param bool   $is_official - official or custom cloud templates.
@@ -77,6 +68,10 @@ class Forminator_Template_API {
 	 * @return array
 	 */
 	public static function get_templates( bool $is_official, int $page_number = 0, string $category = '', string $search = '' ): array {
+		if ( ! forminator_is_user_allowed( 'forminator-templates' ) && ! forminator_is_user_allowed( 'forminator-cform' ) ) {
+			return array();
+		}
+
 		/**
 		 * Filter templates per page
 		 *
@@ -128,6 +123,9 @@ class Forminator_Template_API {
 	 * @return array
 	 */
 	public static function get_template( int $id ): array {
+		if ( ! forminator_is_user_allowed( 'forminator-templates' ) && ! forminator_is_user_allowed( 'forminator-cform' ) ) {
+			return array();
+		}
 		$template = self::request(
 			'api/hub/v1/forminator-templates/' . $id,
 			'GET'
@@ -269,6 +267,10 @@ class Forminator_Template_API {
 	 * @return array
 	 */
 	public static function get_categories(): array {
+		if ( ! forminator_is_user_allowed( 'forminator-templates' ) && ! forminator_is_user_allowed( 'forminator-cform' ) ) {
+			return array();
+		}
+
 		$categories = self::request(
 			'api/hub/v1/forminator-templates/categories',
 			'GET'

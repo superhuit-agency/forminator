@@ -695,7 +695,7 @@ abstract class Forminator_Integration implements Forminator_Integration_Interfac
 			return false;
 		}
 
-		$is_forminator_version_supported = version_compare( FORMINATOR_VERSION, $this->_min_forminator_version, '>=' );
+		$is_forminator_version_supported = version_compare( FORMINATOR_VERSION, $this->_min_forminator_version . '-alpha', '>=' );
 		if ( ! $is_forminator_version_supported ) {
 			forminator_addon_maybe_log( __METHOD__, $this->get_slug(), $this->_min_forminator_version, FORMINATOR_VERSION, 'Forminator Version not supported' );
 
@@ -1945,6 +1945,24 @@ abstract class Forminator_Integration implements Forminator_Integration_Interfac
 	 * @return bool
 	 */
 	public function is_allow_multi_on_form() {
+		return false;
+	}
+
+	/**
+	 * Check if more connections can be added for a specific module type.
+	 *
+	 * When an addon already has active connections on a module and supports
+	 * multiple connections, this controls whether the "add more" option
+	 * appears in the Connected Apps section. Returns false by default
+	 * so existing addon behavior is unchanged. Override in subclasses
+	 * to opt in.
+	 *
+	 * @since 1.54.0
+	 *
+	 * @param string $module_type Module type (form, poll, quiz).
+	 * @return bool
+	 */
+	public function can_add_more_on_module( $module_type ) {
 		return false;
 	}
 

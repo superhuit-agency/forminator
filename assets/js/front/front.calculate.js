@@ -95,11 +95,13 @@
 			var slice = Array.prototype.slice;
 
 			return function() {
-				var args = slice.call(arguments);
+				var context = this,
+				    args    = slice.call(arguments);
 
 				var later = function() {
 					timeout = null;
 					memo    = {};
+					func.apply(context, args);
 				};
 
 				clearTimeout(timeout);
@@ -478,6 +480,11 @@
 		},
 
 		displayErrorMessage: function ($element, errorMessage) {
+			// Skip error display when validations are disabled in Preview.
+			var validationDisabled = $( '#forminator-field-disable_validations' ).is(':checked');
+			if ( validationDisabled ) {
+				return;
+			}
 			var $field_holder = $element.closest('.forminator-field--inner');
 
 			if ($field_holder.length === 0) {

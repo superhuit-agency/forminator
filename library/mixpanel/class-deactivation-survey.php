@@ -56,13 +56,21 @@ class Forminator_Mixpanel_Deactivation_Survey extends Events {
 			return;
 		}
 
+		// Get timestamp options and format to ISO 8601 UTC.
+		$first_activation = get_site_option( 'forminator_first_activation_date', false );
+		$last_activation  = get_site_option( 'forminator_last_activation_date', false );
+		$last_updated     = get_site_option( 'forminator_last_updated_date', false );
+
 		$properties = array(
-			'Modal Action'         => $action,
-			'Requested Assistance' => $requested_assistance,
-			'Tracking Status'      => Forminator_Core::is_tracking_active() ? 'opted_in' : 'opted_out',
-			'published_forms'      => forminator_cforms_total( 'publish' ),
-			'submissions_count'    => Forminator_Form_Entry_Model::count_all_entries_by_type(),
-			'active_plugins'       => self::get_active_plugins(),
+			'Modal Action'          => $action,
+			'Requested Assistance'  => $requested_assistance,
+			'Tracking Status'       => Forminator_Core::is_tracking_active() ? 'opted_in' : 'opted_out',
+			'published_forms'       => forminator_cforms_total( 'publish' ),
+			'submissions_count'     => Forminator_Form_Entry_Model::count_all_entries_by_type(),
+			'active_plugins'        => self::get_active_plugins(),
+			'first_activation_date' => $first_activation ? gmdate( 'Y-m-d\\TH:i:s', $first_activation ) : '',
+			'last_activation_date'  => $last_activation ? gmdate( 'Y-m-d\\TH:i:s', $last_activation ) : '',
+			'last_updated'          => $last_updated ? gmdate( 'Y-m-d\\TH:i:s', $last_updated ) : '',
 		);
 
 		if ( 'Submit' === $action ) {

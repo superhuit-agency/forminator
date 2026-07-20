@@ -9,7 +9,7 @@ if ( empty( $args['reports'] ) ) {
 	return;
 }
 $reports     = $args['reports'];
-$report_data = Forminator_Admin_Report_Page::get_instance()->forminator_report_array( $reports, $args['form_id'] );
+$report_data = Forminator_Admin_Report_Page::get_instance()->forminator_report_array( $reports, $args['form_id'], $args['form_type'] );
 ?>
 <div class="sui-tab-content">
 	<?php

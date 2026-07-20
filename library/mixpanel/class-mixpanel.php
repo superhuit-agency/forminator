@@ -142,7 +142,7 @@ class Forminator_Mixpanel {
 			'mysql_version'      => $wpdb->get_var( 'SELECT VERSION()' ), // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
 			'php_version'        => phpversion(),
 			'plugin'             => 'Forminator',
-			'plugin_type'        => FORMINATOR_PRO ? 'Pro' : 'Free',
+			'plugin_type'        => 'Free',
 			'plugin_version'     => FORMINATOR_VERSION,
 			'server_type'        => $this->get_server_type(),
 			'device'             => $this->get_device(),
@@ -259,12 +259,15 @@ class Forminator_Mixpanel {
 
 		$plugins = array(
 			'wpforms-lite/wpforms.php'             => 'WP Forms',
+			'wpforms/wpforms.php'                  => 'WP Forms Pro',
 			'ninja-forms/ninja-forms.php'          => 'Ninja Forms',
 			'gravityforms/gravityforms.php'        => 'Gravity Forms',
 			'contact-form-7/wp-contact-form-7.php' => 'Contact Form 7',
 			'formidable/formidable.php'            => 'Formidable Forms',
 			'everest-forms/everest-forms.php'      => 'Everest Forms',
 			'fluentform/fluentform.php'            => 'Fluent Forms (Contact Form Plugin)',
+			'metform/metform.php'                  => 'MetForm',
+			'sureforms/sureforms.php'              => 'SureForms',
 		);
 
 		foreach ( $plugins as $plugin => $name ) {

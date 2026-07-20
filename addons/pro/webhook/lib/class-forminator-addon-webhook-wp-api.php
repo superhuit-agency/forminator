@@ -188,7 +188,11 @@ class Forminator_Webhook_Wp_Api {
 
 		$this->_last_data_sent = $args;
 
-		$res         = wp_remote_request( $url, $_args );
+		// Re-validate before sending.
+		$_args['reject_unsafe_urls'] = true;
+		add_filter( 'http_allowed_safe_ports', 'forminator_webhook_extend_ports' );
+		$res = wp_remote_request( $url, $_args );
+		remove_filter( 'http_allowed_safe_ports', 'forminator_webhook_extend_ports' );
 		$wp_response = $res;
 
 		remove_filter( 'http_headers_useragent', array( $this, 'filter_user_agent' ) );

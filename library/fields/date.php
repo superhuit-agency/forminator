@@ -229,8 +229,11 @@ class Forminator_Date extends Forminator_Field {
 			}
 
 			if ( 'custom' === $default_date ) {
-				$default_date_value = self::get_property( 'date', $field, '' );
-				$default_value      = $default_date_value;
+				list( $day, $month, $year ) = $this->get_default_date_parts( $field, $default_date, $date_format );
+				if ( ! empty( $day ) && ! empty( $month ) && ! empty( $year ) ) {
+					$datepicker_format = $this->normalize_date_format( $date_format );
+					$default_value     = gmdate( $datepicker_format, gmmktime( 0, 0, 0, (int) $month, (int) $day, (int) $year ) );
+				}
 			}
 
 			if ( $is_prefil_valid ) {
@@ -342,8 +345,7 @@ class Forminator_Date extends Forminator_Field {
 				$html .= self::get_description( $description, $id, $descr_position );
 			}
 
-			$default_date       = esc_html( self::get_property( 'default_date', $field, false ) );
-			$default_date_value = esc_html( self::get_property( 'date', $field, '' ) );
+			$default_date = self::get_property( 'default_date', $field, false );
 
 			if ( $is_prefil_valid ) {
 				$default_value = $prefill;
@@ -358,19 +360,8 @@ class Forminator_Date extends Forminator_Field {
 				$day   = $parsed_date['day'];
 				$month = $parsed_date['month'];
 				$year  = $parsed_date['year'];
-			} elseif ( 'today' === $default_date ) {
-				list( $day, $month, $year ) = explode( ' ', current_time( 'j n Y' ) );
-			} elseif ( 'custom' === $default_date && ! empty( $default_date_value ) ) {
-				if ( empty( strtotime( $default_date_value ) ) ) {
-					if ( false !== strpos( $date_format, '-' ) || false !== strpos( $date_format, '.' ) ) {
-						$default_date_value = str_replace( array( '.', '-' ), '/', $default_date_value );
-					} elseif ( false !== strpos( $date_format, '/' ) ) {
-						$default_date_value = str_replace( '/', '-', $default_date_value );
-					}
-				}
-				$day   = gmdate( 'j', strtotime( $default_date_value ) );
-				$month = gmdate( 'n', strtotime( $default_date_value ) );
-				$year  = gmdate( 'Y', strtotime( $default_date_value ) );
+			} elseif ( in_array( $default_date, array( 'today', 'custom' ), true ) ) {
+				list( $day, $month, $year ) = $this->get_default_date_parts( $field, $default_date, $date_format );
 			} else {
 				$day               = '';
 				$month             = '';
@@ -393,7 +384,7 @@ class Forminator_Date extends Forminator_Field {
 
 					case 'dd':
 						$day_id = self::get_subfield_id( $name, '-day' );
-						$html  .= '<div id="' . $day_id . '" class="forminator-col">';
+						$html  .= '<div id="' . esc_attr( $day_id ) . '" class="forminator-col">';
 
 						$html .= '<div class="forminator-field">';
 
@@ -416,7 +407,7 @@ class Forminator_Date extends Forminator_Field {
 							if ( ! empty( $label ) ) {
 								$html .= sprintf(
 									'<label for="%s" class="forminator-label">%s %s</label>',
-									$day_data['id'],
+									esc_attr( $day_data['id'] ),
 									self::convert_markdown( esc_html( $label ) ),
 									'<span class="forminator-required">*</span>'
 								);
@@ -447,7 +438,7 @@ class Forminator_Date extends Forminator_Field {
 
 					case 'mm':
 						$month_id = self::get_subfield_id( $name, '-month' );
-						$html    .= '<div id="' . $month_id . '" class="forminator-col">';
+						$html    .= '<div id="' . esc_attr( $month_id ) . '" class="forminator-col">';
 
 						$html .= '<div class="forminator-field">';
 
@@ -470,7 +461,7 @@ class Forminator_Date extends Forminator_Field {
 							if ( ! empty( $label ) ) {
 								$html .= sprintf(
 									'<label for="%s" class="forminator-label">%s %s</label>',
-									$month_data['id'],
+									esc_attr( $month_data['id'] ),
 									self::convert_markdown( esc_html( $label ) ),
 									'<span class="forminator-required">*</span>'
 								);
@@ -501,7 +492,7 @@ class Forminator_Date extends Forminator_Field {
 
 					case 'yy':
 						$year_id = self::get_subfield_id( $name, '-year' );
-						$html   .= '<div id="' . $year_id . '" class="forminator-col">';
+						$html   .= '<div id="' . esc_attr( $year_id ) . '" class="forminator-col">';
 
 						$html .= '<div class="forminator-field">';
 
@@ -525,7 +516,7 @@ class Forminator_Date extends Forminator_Field {
 
 								$html .= sprintf(
 									'<label for="%s" class="forminator-label">%s %s</label>',
-									$year_data['id'],
+									esc_attr( $year_data['id'] ),
 									self::convert_markdown( esc_html( $label ) ),
 									'<span class="forminator-required">*</span>'
 								);
@@ -567,9 +558,10 @@ class Forminator_Date extends Forminator_Field {
 				$html .= self::get_description( $description, $id, $descr_position );
 			}
 		} elseif ( 'input' === $type ) {
-			$day_value   = '';
-			$month_value = '';
-			$year_value  = '';
+			$day_value    = '';
+			$month_value  = '';
+			$year_value   = '';
+			$default_date = self::get_property( 'default_date', $field, false );
 
 			if ( isset( $draft_value['value'] ) ) {
 				$parsed_date = $draft_value['value'];
@@ -580,6 +572,8 @@ class Forminator_Date extends Forminator_Field {
 				$day_value   = $parsed_date['day'];
 				$month_value = $parsed_date['month'];
 				$year_value  = $parsed_date['year'];
+			} elseif ( in_array( $default_date, array( 'today', 'custom' ), true ) ) {
+				list( $day_value, $month_value, $year_value ) = $this->get_default_date_parts( $field, $default_date, $date_format );
 			}
 
 			$html .= self::get_field_label( $label, 'forminator-field-' . $name, $required );
@@ -599,7 +593,7 @@ class Forminator_Date extends Forminator_Field {
 
 					case 'dd':
 						$day   = self::get_subfield_id( $name, '-day' );
-						$html .= '<div id="' . $day . '" class="forminator-col">';
+						$html .= '<div id="' . esc_attr( $day ) . '" class="forminator-col">';
 
 						$html .= '<div class="forminator-field">';
 
@@ -629,7 +623,7 @@ class Forminator_Date extends Forminator_Field {
 
 								$html .= sprintf(
 									'<label for="%s" class="forminator-label">%s %s</label>',
-									$day_data['id'],
+									esc_attr( $day_data['id'] ),
 									self::convert_markdown( esc_html( $label ) ),
 									'<span class="forminator-required">*</span>'
 								);
@@ -660,7 +654,7 @@ class Forminator_Date extends Forminator_Field {
 
 					case 'mm':
 						$month = self::get_subfield_id( $name, '-month' );
-						$html .= '<div id="' . $month . '" class="forminator-col">';
+						$html .= '<div id="' . esc_attr( $month ) . '" class="forminator-col">';
 
 						$html .= '<div class="forminator-field">';
 
@@ -690,7 +684,7 @@ class Forminator_Date extends Forminator_Field {
 
 								$html .= sprintf(
 									'<label for="%s" class="forminator-label">%s %s</label>',
-									$month_data['id'],
+									esc_attr( $month_data['id'] ),
 									self::convert_markdown( esc_html( $label ) ),
 									'<span class="forminator-required">*</span>'
 								);
@@ -719,7 +713,7 @@ class Forminator_Date extends Forminator_Field {
 
 					case 'yy':
 						$year  = self::get_subfield_id( $name, '-year' );
-						$html .= '<div id="' . $year . '" class="forminator-col">';
+						$html .= '<div id="' . esc_attr( $year ) . '" class="forminator-col">';
 
 						$html .= '<div class="forminator-field">';
 
@@ -747,7 +741,7 @@ class Forminator_Date extends Forminator_Field {
 							if ( ! empty( $label ) ) {
 								$html .= sprintf(
 									'<label for="%s" class="forminator-label">%s %s</label>',
-									$year_data['id'],
+									esc_attr( $year_data['id'] ),
 									self::convert_markdown( esc_html( $label ) ),
 									'<span class="forminator-required">*</span>'
 								);
@@ -795,6 +789,56 @@ class Forminator_Date extends Forminator_Field {
 		}
 
 		return apply_filters( 'forminator_field_date_markup', $html, $field, $this );
+	}
+
+	/**
+	 * Get parsed default date parts for split date inputs.
+	 *
+	 * @since 1.54.0
+	 *
+	 * @param array  $field       Field settings.
+	 * @param string $default_date Default date setting.
+	 * @param string $date_format Current date format.
+	 *
+	 * @return array
+	 */
+	private function get_default_date_parts( $field, $default_date, $date_format ) {
+		$default_date_value = esc_html( self::get_property( 'date', $field, '' ) );
+
+		if ( 'today' === $default_date ) {
+			return explode( ' ', current_time( 'j n Y' ) );
+		}
+
+		if ( empty( $default_date_value ) ) {
+			return array( '', '', '' );
+		}
+
+		$parsed = self::parse_date( $default_date_value, $date_format );
+		if ( ! $this->check_date( $parsed['month'], $parsed['day'], $parsed['year'] ) ) {
+			if ( false !== strpos( $default_date_value, '.' ) ) {
+				$fallback_formats = array( 'mm.dd.yy', 'dd.mm.yy', 'yy.mm.dd' );
+			} elseif ( false !== strpos( $default_date_value, '/' ) ) {
+				$fallback_formats = array( 'mm/dd/yy', 'dd/mm/yy', 'yy/mm/dd' );
+			} else {
+				$fallback_formats = array( 'mm-dd-yy', 'dd-mm-yy', 'yy-mm-dd' );
+			}
+			foreach ( $fallback_formats as $fallback_fmt ) {
+				$parsed = self::parse_date( $default_date_value, $fallback_fmt );
+				if ( $this->check_date( $parsed['month'], $parsed['day'], $parsed['year'] ) ) {
+					break;
+				}
+			}
+		}
+
+		if ( ! $this->check_date( $parsed['month'], $parsed['day'], $parsed['year'] ) ) {
+			return array( '', '', '' );
+		}
+
+		return array(
+			$parsed['day'],
+			$parsed['month'],
+			$parsed['year'],
+		);
 	}
 
 	/**
@@ -1198,7 +1242,7 @@ class Forminator_Date extends Forminator_Field {
 		$year        = $date['year'];
 
 		// strtotime does not recognize all of our date formats so we need to convert all dates to 1 accepted format before processing.
-		if ( 'Y-m-d' !== datepicker_default_format( $date_format ) && ! is_array( $data ) ) {
+		if ( ! is_array( $data ) ) {
 			$format_date = date_create_from_format( datepicker_default_format( $date_format ), $data );
 			if ( $format_date ) {
 				$data = date_format( $format_date, 'Y-m-d' );
@@ -1361,8 +1405,7 @@ class Forminator_Date extends Forminator_Field {
 						if ( 'today' === $start_date_type ) {
 							$start_date = date_i18n( 'Y-m-d', strtotime( $start_offset_operator . $start_offset_value . ' ' . $start_offset_duration, current_time( 'U' ) ) ); // phpcs:ignore WordPress.DateTime.CurrentTimeTimestamp.Requested -- We are using the current timestamp based on the site's timezone.
 						} else {
-							$start_date_value = isset( Forminator_CForm_Front_Action::$prepared_data[ $start_date_type ] )
-								? Forminator_CForm_Front_Action::$prepared_data[ $start_date_type ] : '';
+							$start_date_value = $this->get_grouped_date_limit_value( $field, $id, $start_date_type, $custom_form );
 							$start_date       = '';
 							if ( ! empty( $start_date_value ) ) {
 								$start_date_field  = $custom_form->get_field( $start_date_type, true );
@@ -1390,8 +1433,7 @@ class Forminator_Date extends Forminator_Field {
 						if ( 'today' === $end_date_type ) {
 							$end_date = date_i18n( 'Y-m-d', strtotime( $end_offset_operator . $end_offset_value . ' ' . $end_offset_duration, current_time( 'U' ) ) ); // phpcs:ignore WordPress.DateTime.CurrentTimeTimestamp.Requested -- We are using the current timestamp based on the site's timezone.
 						} else {
-							$end_date_value = isset( Forminator_CForm_Front_Action::$prepared_data[ $end_date_type ] )
-								? Forminator_CForm_Front_Action::$prepared_data[ $end_date_type ] : '';
+							$end_date_value = $this->get_grouped_date_limit_value( $field, $id, $end_date_type, $custom_form );
 							$end_date       = '';
 							if ( ! empty( $end_date_value ) ) {
 								$end_date_field  = $custom_form->get_field( $end_date_type, true );
@@ -1465,6 +1507,34 @@ class Forminator_Date extends Forminator_Field {
 		}
 
 		return apply_filters( 'forminator_field_date_sanitize', $data, $field, $original_data );
+	}
+
+	/**
+	 * Resolve a dependent date field value for the current group row when possible.
+	 *
+	 * @param array                 $field              Current field settings.
+	 * @param string                $current_field_id   Current field ID.
+	 * @param string                $dependent_field_id Dependent date field ID.
+	 * @param Forminator_Form_Model $custom_form        Form model.
+	 *
+	 * @return string
+	 */
+	private function get_grouped_date_limit_value( $field, $current_field_id, $dependent_field_id, $custom_form ) {
+		$group_suffix = '';
+		$parent_group = $field['parent_group'] ?? '';
+
+		if ( ! empty( $parent_group ) ) {
+			$grouped_fields = $custom_form->get_grouped_fields_slugs( $parent_group );
+
+			foreach ( $grouped_fields as $grouped_field_id ) {
+				if ( preg_match( '/^' . preg_quote( $grouped_field_id, '/' ) . '(-.+)$/', $current_field_id, $matches ) ) {
+					$group_suffix = $matches[1];
+					break;
+				}
+			}
+		}
+
+		return Forminator_CForm_Front_Action::$prepared_data[ $dependent_field_id . $group_suffix ] ?? ( Forminator_CForm_Front_Action::$prepared_data[ $dependent_field_id ] ?? '' );
 	}
 
 	/**

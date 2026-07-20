@@ -211,13 +211,23 @@ class Forminator_Poll_Front_Mail extends Forminator_Mail {
 		$reply_to_address = apply_filters( 'forminator_poll_mail_admin_reply_to', $reply_to_address, $poll, $data, $entry, $this );
 
 		$cc_addresses = array();
-		if ( isset( $setting['admin-email-cc-address'] ) && ! empty( $setting['admin-email-cc-address'] ) && is_array( $setting['admin-email-cc-address'] ) ) {
-			$setting_cc_addresses = $setting['admin-email-cc-address'];
+		if ( isset( $setting['admin-email-cc-address'] ) && ! empty( $setting['admin-email-cc-address'] ) ) {
+			if ( is_array( $setting['admin-email-cc-address'] ) ) {
+				$setting_cc_addresses = $setting['admin-email-cc-address'];
 
-			foreach ( $setting_cc_addresses as $key => $setting_cc_address ) {
-				$setting_cc_address = $this->replace_placeholders( $setting_cc_addresses, $key, $poll, $entry );
-				if ( is_email( $setting_cc_address ) ) {
-					$cc_addresses[] = $setting_cc_address;
+				foreach ( $setting_cc_addresses as $key => $setting_cc_address ) {
+					$setting_cc_address = $this->replace_placeholders( $setting_cc_addresses, $key, $poll, $entry );
+					if ( is_email( $setting_cc_address ) ) {
+						$cc_addresses[] = $setting_cc_address;
+					}
+				}
+			} else {
+				$cc_string = $this->replace_placeholders( $setting, 'admin-email-cc-address', $poll, $entry );
+				$cc_parts  = array_map( 'trim', explode( ',', $cc_string ) );
+				foreach ( $cc_parts as $cc_part ) {
+					if ( is_email( $cc_part ) ) {
+						$cc_addresses[] = $cc_part;
+					}
 				}
 			}
 		}
@@ -235,13 +245,23 @@ class Forminator_Poll_Front_Mail extends Forminator_Mail {
 		$cc_addresses = apply_filters( 'forminator_poll_mail_admin_cc_addresses', $cc_addresses, $poll, $data, $entry, $this );
 
 		$bcc_addresses = array();
-		if ( isset( $setting['admin-email-bcc-address'] ) && ! empty( $setting['admin-email-bcc-address'] ) && is_array( $setting['admin-email-bcc-address'] ) ) {
-			$setting_bcc_addresses = $setting['admin-email-bcc-address'];
+		if ( isset( $setting['admin-email-bcc-address'] ) && ! empty( $setting['admin-email-bcc-address'] ) ) {
+			if ( is_array( $setting['admin-email-bcc-address'] ) ) {
+				$setting_bcc_addresses = $setting['admin-email-bcc-address'];
 
-			foreach ( $setting_bcc_addresses as $key => $setting_bcc_address ) {
-				$setting_bcc_address = $this->replace_placeholders( $setting_bcc_addresses, $key, $poll, $entry );
-				if ( is_email( $setting_bcc_address ) ) {
-					$bcc_addresses[] = $setting_bcc_address;
+				foreach ( $setting_bcc_addresses as $key => $setting_bcc_address ) {
+					$setting_bcc_address = $this->replace_placeholders( $setting_bcc_addresses, $key, $poll, $entry );
+					if ( is_email( $setting_bcc_address ) ) {
+						$bcc_addresses[] = $setting_bcc_address;
+					}
+				}
+			} else {
+				$bcc_string = $this->replace_placeholders( $setting, 'admin-email-bcc-address', $poll, $entry );
+				$bcc_parts  = array_map( 'trim', explode( ',', $bcc_string ) );
+				foreach ( $bcc_parts as $bcc_part ) {
+					if ( is_email( $bcc_part ) ) {
+						$bcc_addresses[] = $bcc_part;
+					}
 				}
 			}
 		}
@@ -321,19 +341,41 @@ class Forminator_Poll_Front_Mail extends Forminator_Mail {
 	 * @param Forminator_Poll_Model       $poll Poll Model.
 	 * @param Forminator_Form_Entry_Model $entry Form entry model.
 	 * @param array                       $lead_model Lead model.
+	 * @param string                      $result_slug Result slug.
 	 *
 	 * @return array
 	 */
-	public function get_admin_email_recipients( $setting, $poll = null, $entry = null, $lead_model = array() ) {
+	public function get_admin_email_recipients( $setting, $poll = null, $entry = null, $lead_model = array(), $result_slug = '' ) {
 
 		// use settings from model if applicable.
 		if ( $poll instanceof Forminator_Poll_Model ) {
 			$setting = $poll->settings;
 		}
-		$email = array();
+		$email      = array();
+		$recipients = array();
 		if ( isset( $setting['admin-email-recipients'] ) && ! empty( $setting['admin-email-recipients'] ) ) {
 			if ( is_array( $setting['admin-email-recipients'] ) ) {
-				$email = $setting['admin-email-recipients'];
+				$recipients = $setting['admin-email-recipients'];
+			} else {
+				$recipients = array_map( 'trim', explode( ',', $setting['admin-email-recipients'] ) );
+				$recipients = array_filter( $recipients );
+			}
+		}
+
+		if ( ! empty( $recipients ) ) {
+			foreach ( $recipients as $recipient ) {
+				$recipient = forminator_replace_variables( $recipient, $poll ? $poll->id : 0, $entry );
+				$recipient = forminator_replace_poll_form_data( $recipient, $poll, Forminator_Front_Action::$prepared_data, $entry );
+				if ( false !== strpos( $recipient, ',' ) ) {
+					$parts = array_map( 'trim', explode( ',', $recipient ) );
+					foreach ( $parts as $part ) {
+						if ( is_email( $part ) ) {
+							$email[] = $part;
+						}
+					}
+				} elseif ( is_email( $recipient ) ) {
+					$email[] = $recipient;
+				}
 			}
 		}
 

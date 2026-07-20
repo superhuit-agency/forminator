@@ -246,6 +246,7 @@ class Forminator_Mixpanel_Modules extends Events {
 		$property['List of fields']      = self::fields_list( $fields );
 		$property['Design Style']        = $form_style;
 		$property['Save and Continue']   = self::settings_value( $settings, 'use_save_and_continue', false );
+		$property['Form Abandonment']    = self::settings_value( $settings, 'abandonment', false );
 		$property['Email Notifications'] = self::settings_value( $settings, 'notification_count', 0 );
 		$property['CAPTCHA Type']        = self::captcha_type( $fields );
 

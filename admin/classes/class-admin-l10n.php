@@ -351,7 +351,8 @@ class Forminator_Admin_L10n {
 				'display_name'          => esc_html__( 'User Display Name', 'forminator' ),
 				'user_email'            => esc_html__( 'User Email', 'forminator' ),
 				'user_login'            => esc_html__( 'User Login', 'forminator' ),
-				'shortcode_copied'      => esc_html__( 'Shortcode has been copied successfully.', 'forminator' ),
+				// translators: %s: Shortcode string, e.g. [forminator_form id="276"].
+				'shortcode_copied'      => esc_html__( 'Shortcode %s has been copied successfully.', 'forminator' ),
 				'uri_copied'            => esc_html__( 'URI has been copied successfully.', 'forminator' ),
 			),
 			'commons'       => array(
@@ -433,6 +434,7 @@ class Forminator_Admin_L10n {
 				'approve_user_unsuccessfull'     => esc_html__( 'Error! User was not approved.', 'forminator' ),
 				/* translators: %s - error code(s) */
 				'turnstile_error'                => esc_html__( 'Turnstile error code(s): %s', 'forminator' ),
+				'draft_link_copied'              => esc_html__( 'Draft link copied to clipboard.', 'forminator' ),
 			),
 			'social'        => array(
 				'facebook'    => esc_html__( 'Facebook', 'forminator' ),
@@ -445,7 +447,7 @@ class Forminator_Admin_L10n {
 				'month_names'   => self::get_months_names(),
 			),
 			'exporter'      => array(
-				'export_nonce' => wp_create_nonce( 'forminator_export' ),
+				'export_nonce' => forminator_is_user_allowed( 'forminator-entries' ) ? wp_create_nonce( 'forminator_export' ) : '',
 				'form_id'      => forminator_get_form_id_helper(),
 				'form_type'    => forminator_get_form_type_helper(),
 				'enabled'      => filter_var( forminator_get_exporter_info( 'enabled', forminator_get_form_id_helper() . forminator_get_form_type_helper() ), FILTER_VALIDATE_BOOLEAN ),
@@ -486,7 +488,7 @@ class Forminator_Admin_L10n {
 				'install_dashboard' => esc_html__( 'You don\'t have the WPMU DEV Dashboard plugin, which you\'ll need to access Pro preset templates. Install and log in to the dashboard to unlock the complete list of preset templates.', 'forminator' ),
 				'install_button'    => esc_html__( 'Install Plugin', 'forminator' ),
 				'no_templates'      => esc_html__( 'No saved templates yet', 'forminator' ),
-				'no_templates_desc' => esc_html__( 'Save any of your forms as cloud templates to reuse them across your sites connected to the Hub – no need to start from scratch. Your saved templates will appear here. ', 'forminator' ),
+				'no_templates_desc' => esc_html__( 'Save any of your forms as cloud templates to reuse them across your sites connected to The Hub – no need to start from scratch. Your saved templates will appear here. ', 'forminator' ),
 				'no_templates_link' => sprintf(
 					/* translators: %1$s - opening anchor tag, %2$s - closing anchor tag */
 					esc_html__( '%1$sLearn how to save forms as cloud templates%2$s.', 'forminator' ),

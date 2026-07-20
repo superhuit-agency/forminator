@@ -116,11 +116,18 @@ class Forminator_Hidden extends Forminator_Field {
 	 */
 	public function markup( $field, $views_obj ) {
 
-		$id    = self::get_property( 'element_id', $field );
-		$name  = $id;
-		$value = esc_html( $this->get_value( $field, true ) );
+		$id           = self::get_property( 'element_id', $field );
+		$name         = $id;
+		$value        = esc_html( $this->get_value( $field, true ) );
+		$custom_class = self::get_property( 'custom-class', $field, '' );
 
-		return sprintf( '<input type="hidden" id="%s" name="%s" value="%s" />', $id . '_' . Forminator_CForm_Front::$uid, $name, $value );
+		// Build class attribute if custom class is set.
+		$class_attr = '';
+		if ( ! empty( $custom_class ) ) {
+			$class_attr = sprintf( ' class="%s"', esc_attr( $custom_class ) );
+		}
+
+		return sprintf( '<input type="hidden" id="%s"%s name="%s" value="%s" />', esc_attr( $id . '_' . Forminator_CForm_Front::$uid ), $class_attr, esc_attr( $name ), $value );
 	}
 
 	/**

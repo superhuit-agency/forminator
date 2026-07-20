@@ -6,6 +6,7 @@ namespace Forminator\Stripe\Service\Tax;
 /**
  * Service factory class for API resources in the Tax namespace.
  *
+ * @property AssociationService $associations
  * @property CalculationService $calculations
  * @property RegistrationService $registrations
  * @property SettingsService $settings
@@ -16,7 +17,7 @@ class TaxServiceFactory extends \Forminator\Stripe\Service\AbstractServiceFactor
     /**
      * @var array<string, string>
      */
-    private static $classMap = ['calculations' => CalculationService::class, 'registrations' => RegistrationService::class, 'settings' => SettingsService::class, 'transactions' => TransactionService::class];
+    private static $classMap = ['associations' => AssociationService::class, 'calculations' => CalculationService::class, 'registrations' => RegistrationService::class, 'settings' => SettingsService::class, 'transactions' => TransactionService::class];
     protected function getServiceClass($name)
     {
         return \array_key_exists($name, self::$classMap) ? self::$classMap[$name] : null;

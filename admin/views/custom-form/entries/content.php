@@ -93,6 +93,7 @@ if ( $this->total_entries() > 0 ) :
 					$entry_id    = $entries['id'];
 					$db_entry_id = isset( $entries['entry_id'] ) ? $entries['entry_id'] : '';
 					$draft_id    = isset( $entries['draft_id'] ) ? $entries['draft_id'] : '';
+					$draft_link  = isset( $entries['draft_link'] ) ? $entries['draft_link'] : '';
 
 					$summary       = $entries['summary'];
 					$summary_items = $summary['items'];
@@ -193,7 +194,7 @@ if ( $this->total_entries() > 0 ) :
 
 								echo '<td>';
 
-								echo '<div class="forminator-submissions-column-ellipsis">' . esc_html( $summary_item['value'] ) . '</div>';
+								echo '<div class="forminator-submissions-column-ellipsis">' . esc_html( wp_strip_all_tags( $summary_item['value'] ) ) . '</div>';
 
 								echo '<span class="sui-accordion-open-indicator fui-mobile-only" aria-hidden="true">';
 								echo '<i class="sui-icon-chevron-down"></i>';
@@ -241,7 +242,24 @@ if ( $this->total_entries() > 0 ) :
 												<span class="sui-settings-label"><?php esc_html_e( 'Draft ID', 'forminator' ); ?></span>
 											</div>
 											<div class="sui-box-settings-col-2">
-												<span class="sui-settings-label"><strong><?php echo esc_html( $draft_id ); ?></strong></span>
+												<?php if ( $draft_link ) { ?>
+													<span class="sui-settings-label" style="display: inline-flex; align-items: center; gap: 8px;">
+														<strong>
+															<a href="<?php echo esc_url( $draft_link ); ?>" target="_blank"><?php echo esc_html( $draft_id ); ?></a>
+														</strong>
+														<button
+															type="button"
+															class="sui-button-icon sui-tooltip forminator-copy-draft-link"
+															data-clipboard-text="<?php echo esc_url( $draft_link ); ?>"
+															data-tooltip="<?php esc_attr_e( 'Copy draft link', 'forminator' ); ?>"
+														>
+															<span class="sui-icon-copy" aria-hidden="true"></span>
+															<span class="sui-screen-reader-text"><?php esc_html_e( 'Copy draft link', 'forminator' ); ?></span>
+														</button>
+													</span>
+												<?php } else { ?>
+													<span class="sui-settings-label"><strong><?php echo esc_html( $draft_id ); ?></strong></span>
+												<?php } ?>
 											</div>
 										</div>
 									<?php } ?>
@@ -325,6 +343,20 @@ if ( $this->total_entries() > 0 ) :
 											}
 										}
 
+										if ( 'draft' === $entries['status'] && ! empty( $draft_id ) && ! empty( $draft_link ) ) {
+											?>
+											<button
+												role="button"
+												class="sui-button sui-button-ghost forminator-resend-draft-email"
+												data-entry-id="<?php echo esc_attr( $db_entry_id ); ?>"
+												data-nonce="<?php echo esc_attr( wp_create_nonce( 'forminatorResendDraftEmail' ) ); ?>"
+											>
+												<span class="sui-icon-send" aria-hidden="true"></span>
+												<?php esc_html_e( 'Resend Draft Email', 'forminator' ); ?>
+											</button>
+											<?php
+										}
+
 										if ( ( isset( $entries['activation_method'] ) && 'email' === $entries['activation_method'] ) && isset( $entries['activation_key'] ) ) {
 											?>
 
@@ -375,3 +407,60 @@ if ( $this->total_entries() > 0 ) :
 	<?php include_once forminator_plugin_dir() . 'admin/views/common/entries/content-none.php'; ?>
 	<?php
 endif;
+?>
+
+<div class="sui-modal sui-modal-sm">
+	<div
+		role="dialog"
+		id="forminator-resend-draft-email-modal"
+		class="sui-modal-content"
+		aria-modal="true"
+		aria-labelledby="forminator-resend-draft-email-modal__title"
+		aria-describedby="forminator-resend-draft-email-modal__desc"
+	>
+		<div class="sui-box">
+
+			<div class="sui-box-header sui-flatten sui-content-center sui-spacing-top--60">
+
+				<button class="sui-button-icon sui-button-float--right" data-modal-close>
+					<span class="sui-icon-close sui-md" aria-hidden="true"></span>
+					<span class="sui-screen-reader-text"><?php esc_html_e( 'Close this dialog window', 'forminator' ); ?></span>
+				</button>
+
+				<h3 id="forminator-resend-draft-email-modal__title" class="sui-box-title sui-lg"><?php esc_html_e( 'Resend Draft Email', 'forminator' ); ?></h3>
+
+				<p id="forminator-resend-draft-email-modal__desc" class="sui-description"><?php esc_html_e( 'Enter the email address to send the draft link to:', 'forminator' ); ?></p>
+
+			</div>
+
+			<div class="sui-box-body">
+
+				<div class="sui-form-field" id="forminator-draft-email-field">
+					<label for="forminator-draft-email-input" class="sui-label"><?php esc_html_e( 'Email Address', 'forminator' ); ?></label>
+					<input
+						id="forminator-draft-email-input"
+						type="email"
+						class="sui-form-control"
+						placeholder="<?php esc_attr_e( 'E.g., john@doe.com', 'forminator' ); ?>"
+					/>
+					<span class="sui-error-message" id="forminator-draft-email-error" style="display: none;"><?php esc_html_e( 'Please enter a valid email address.', 'forminator' ); ?></span>
+				</div>
+
+			</div>
+
+			<div class="sui-box-footer sui-flatten sui-content-center">
+
+				<button class="sui-button sui-button-ghost" data-modal-close>
+					<?php esc_html_e( 'Cancel', 'forminator' ); ?>
+				</button>
+
+				<button id="forminator-resend-draft-email-submit" class="sui-button sui-button-blue">
+					<span class="sui-loading-text"><?php esc_html_e( 'Send', 'forminator' ); ?></span>
+					<span class="sui-icon-loader sui-loading" aria-hidden="true"></span>
+				</button>
+
+			</div>
+
+		</div>
+	</div>
+</div>

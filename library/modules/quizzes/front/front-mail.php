@@ -65,10 +65,9 @@ class Forminator_Quiz_Front_Mail extends Forminator_Mail {
 			$result_slug   = isset( $final_res['slug'] ) ? $final_res['slug'] : '';
 			$has_lead      = isset( $setting['hasLeads'] ) ? $setting['hasLeads'] : false;
 			if ( $has_lead ) {
-				$lead_id     = isset( $setting['leadsId'] ) ? $setting['leadsId'] : 0;
-				$lead_model  = Forminator_Base_Form_Model::get_model( $lead_id );
-				$form_fields = forminator_addon_format_form_fields( $lead_model );
-				$lead_data   = forminator_addons_lead_submitted_data( $form_fields, $entry );
+				$lead_id    = isset( $setting['leadsId'] ) ? $setting['leadsId'] : 0;
+				$lead_model = Forminator_Base_Form_Model::get_model( $lead_id );
+				$lead_data  = recreate_prepared_data( $lead_model, $entry );
 				// If lead data was missing and we have a lead entry id, try to reconstruct the lead data from the transient.
 				if ( empty( $lead_data ) && isset( Forminator_Front_Action::$prepared_data['lead_entry_id'] ) ) {
 					$lead_entry_id = Forminator_Front_Action::$prepared_data['lead_entry_id'];
@@ -78,7 +77,7 @@ class Forminator_Quiz_Front_Mail extends Forminator_Mail {
 					if ( $lead_entry instanceof Forminator_Form_Entry_Model && $lead_entry->entry_id === $lead_entry_id ) {
 						$lead_entry->entry_id = 0;
 						$entry                = $lead_entry;
-						$lead_data            = forminator_addons_lead_submitted_data( $form_fields, $entry );
+						$lead_data            = recreate_prepared_data( $lead_model, $entry );
 						delete_transient( $transient_key );
 					}
 				}
@@ -129,7 +128,7 @@ class Forminator_Quiz_Front_Mail extends Forminator_Mail {
 						continue;
 					}
 
-					$recipients = $this->get_admin_email_recipients( $notification, $quiz, $entry, $lead_model );
+					$recipients = $this->get_admin_email_recipients( $notification, $quiz, $entry, $lead_model, $result_slug );
 
 					if ( ! empty( $recipients ) ) {
 						$subject = $this->replace_placeholders( $notification, 'email-subject', $quiz, $entry, $lead_model );
@@ -417,10 +416,11 @@ class Forminator_Quiz_Front_Mail extends Forminator_Mail {
 	 *
 	 * @param array  $routing Routing.
 	 * @param object $quiz_model Quiz model.
+	 * @param string $result_slug Result slug.
 	 *
 	 * @return bool
 	 */
-	public function is_routing( $routing, $quiz_model ) {
+	public function is_routing( $routing, $quiz_model, $result_slug = '' ) {
 		// empty conditions.
 		if ( empty( $routing ) ) {
 			return false;
@@ -450,6 +450,8 @@ class Forminator_Quiz_Front_Mail extends Forminator_Mail {
 		} elseif ( stripos( $element_id, 'question-' ) !== false ) {
 			$is_correct = self::is_correct_answer( $element_id, $form_data['answers'][ $element_id ], $quiz_model );
 			return self::is_condition_fulfilled( $is_correct, $routing );
+		} elseif ( stripos( $element_id, 'result-' ) !== false ) {
+			return self::is_condition_fulfilled( $result_slug, $routing );
 		} elseif ( 'final_result' === $element_id ) {
 			return self::is_condition_fulfilled( $form_data[ $element_id ], $routing );
 		} elseif ( ! isset( $form_data[ $element_id ] ) ) {
@@ -467,10 +469,11 @@ class Forminator_Quiz_Front_Mail extends Forminator_Mail {
 	 * @param array  $notification Notification.
 	 * @param array  $form_data Form data.
 	 * @param object $quiz_model Quiz model.
+	 * @param string $result_slug Result slug for personality quiz.
 	 *
 	 * @return bool
 	 */
-	public function is_condition( $notification, $form_data, $quiz_model ) {
+	public function is_condition( $notification, $form_data, $quiz_model, $result_slug = '' ) {
 		// empty conditions.
 		if ( empty( $notification['conditions'] ) ) {
 			return false;
@@ -519,8 +522,7 @@ class Forminator_Quiz_Front_Mail extends Forminator_Mail {
 				$is_condition_fulfilled = self::is_condition_fulfilled( $is_correct, $condition );
 
 			} elseif ( stripos( $element_id, 'result-' ) !== false ) {
-				$result_id              = self::get_result_slug( $form_data );
-				$is_condition_fulfilled = self::is_condition_fulfilled( $result_id, $condition );
+				$is_condition_fulfilled = self::is_condition_fulfilled( $result_slug, $condition );
 			} elseif ( 'final_result' === $element_id ) {
 				$is_condition_fulfilled = self::is_condition_fulfilled( $form_data[ $element_id ], $condition );
 			} elseif ( ! isset( $form_data[ $element_id ] ) ) {

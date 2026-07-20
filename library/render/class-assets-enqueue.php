@@ -124,14 +124,16 @@ abstract class Forminator_Assets_Enqueue {
 
 	/**
 	 * Load relevant module CSS
+	 *
+	 * @param bool $force Force loading module CSS in special rendering contexts.
 	 */
-	protected function load_module_css() {
-		if ( ! empty( $this->model->id ) && ! is_admin() ) {
+	public function load_module_css( $force = false ) {
+
+		if ( ! empty( $this->model->id ) && ( ! is_admin() || $force ) ) {
 			$id        = $this->model->id;
 			$timestamp = ! empty( $this->model->raw->post_modified_gmt )
-					? strtotime( $this->model->raw->post_modified_gmt )
+				? strtotime( $this->model->raw->post_modified_gmt )
 					: wp_unique_id();
-
 			// Module styles.
 			wp_enqueue_style(
 				'forminator-module-css-' . $id,

@@ -4,7 +4,7 @@
 namespace Forminator\Stripe\Treasury;
 
 /**
- * TransactionEntries represent individual units of money movements within a single <a href="https://stripe.com/docs/api#transactions">Transaction</a>.
+ * TransactionEntries represent individual units of money movements within a single <a href="https://api.stripe.com#transactions">Transaction</a>.
  *
  * @property string $id Unique identifier for the object.
  * @property string $object String representing the object's type. Objects of the same type share the same value.

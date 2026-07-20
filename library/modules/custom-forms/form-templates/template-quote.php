@@ -147,7 +147,7 @@ class Forminator_Template_Quote extends Forminator_Template {
 		return array(
 			'form-type'                         => 'default',
 			'submission-behaviour'              => 'behaviour-thankyou',
-			'thankyou-message'                  => esc_html__( 'Thank you for contacting us, we will be in touch shortly.', 'forminator' ),
+			'thankyou-message'                  => esc_html__( 'Thanks! We’ve received your request and will send your quote shortly.', 'forminator' ),
 			'submitData'                        => array(
 				'custom-submit-text'          => esc_html__( 'Request Quote', 'forminator' ),
 				'custom-invalid-form-message' => esc_html__( 'Error: Your form is not valid, please fix the errors!', 'forminator' ),

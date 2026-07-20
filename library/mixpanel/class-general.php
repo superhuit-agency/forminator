@@ -184,7 +184,7 @@ class Forminator_Mixpanel_General extends Events {
 		}
 
 		self::track_event(
-			'for_rating_notice',
+			'Rating Notice',
 			array(
 				'Action'      => $action,
 				'Notice Type' => $notice_type,

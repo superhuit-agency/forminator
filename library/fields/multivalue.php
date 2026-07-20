@@ -183,7 +183,7 @@ class Forminator_MultiValue extends Forminator_Field {
 			$label .= $required ? ' ' . forminator_get_required_icon() : '';
 			$html  .= sprintf(
 				'<span id="%s" class="forminator-label">%s</span>',
-				'forminator-checkbox-group-' . $id . '-' . $uniq_id . '-label',
+				esc_attr( 'forminator-checkbox-group-' . $id . '-' . $uniq_id . '-label' ),
 				$label
 			);
 		}
@@ -274,11 +274,11 @@ class Forminator_MultiValue extends Forminator_Field {
 
 				$html .= sprintf(
 					'<input type="checkbox" name="%s" value="%s" id="%s" aria-labelledby="%s" data-calculation="%s" %s %s%s/>',
-					$name,
+					esc_attr( $name ),
 					esc_html( $value ),
-					$input_id,
-					$label_id,
-					$calculation_value,
+					esc_attr( $input_id ),
+					esc_attr( $label_id ),
+					esc_attr( $calculation_value ),
 					$selected,
 					$hidden_calc_behavior,
 					( ! empty( $description ) ? ' aria-describedby="' . esc_attr( $id . '-' . $uniq_id . '-description' ) . '"' : '' )
@@ -521,7 +521,7 @@ class Forminator_MultiValue extends Forminator_Field {
 			}
 		}
 
-		return floatval( $sums );
+		return self::get_calculable_number_format( $field_settings, $sums );
 	}
 
 	/**

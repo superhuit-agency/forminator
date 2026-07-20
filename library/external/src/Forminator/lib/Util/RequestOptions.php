@@ -3,16 +3,16 @@
 namespace Forminator\Stripe\Util;
 
 /**
- * @phpstan-type RequestOptionsArray array{api_key?: string, idempotency_key?: string, stripe_account?: string, stripe_context?: string, stripe_version?: string, api_base?: string, max_network_retries?: int }
+ * @phpstan-type RequestOptionsArray array{api_key?: string, idempotency_key?: string, stripe_account?: string, stripe_context?: string|\Stripe\StripeContext, stripe_version?: string, api_base?: string, max_network_retries?: int }
  *
- * @psalm-type RequestOptionsArray = array{api_key?: string, idempotency_key?: string, stripe_account?: string, stripe_context?: string, stripe_version?: string, api_base?: string, max_network_retries?: int }
+ * @psalm-type RequestOptionsArray = array{api_key?: string, idempotency_key?: string, stripe_account?: string, stripe_context?: string|\Stripe\StripeContext, stripe_version?: string, api_base?: string, max_network_retries?: int }
  */
 class RequestOptions
 {
     /**
      * @var array<string> a list of headers that should be persisted across requests
      */
-    public static $HEADERS_TO_PERSIST = ['Stripe-Account', 'Stripe-Version'];
+    public static $HEADERS_TO_PERSIST = ['Stripe-Account', 'Stripe-Context', 'Stripe-Version'];
     /** @var array<string, string> */
     public $headers;
     /** @var null|string */
@@ -63,6 +63,11 @@ class RequestOptions
             $other_options->maxNetworkRetries = $this->maxNetworkRetries;
         }
         $other_options->headers = \array_merge($this->headers, $other_options->headers);
+        // special handling for stripe_context
+        // if other sent an empty string, then we should unset
+        if (\array_key_exists('Stripe-Context', $other_options->headers) && '' === $other_options->headers['Stripe-Context']) {
+            unset($other_options->headers['Stripe-Context']);
+        }
         return $other_options;
     }
     /**
@@ -122,7 +127,7 @@ class RequestOptions
             }
             if (\array_key_exists('stripe_context', $options)) {
                 if (null !== $options['stripe_context']) {
-                    $headers['Stripe-Context'] = $options['stripe_context'];
+                    $headers['Stripe-Context'] = (string) $options['stripe_context'];
                 }
                 unset($options['stripe_context']);
             }

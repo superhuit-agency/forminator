@@ -163,8 +163,7 @@ class Forminator_Textarea extends Forminator_Field {
 			'placeholder' => $placeholder,
 			'id'          => $id,
 			'class'       => 'forminator-textarea',
-			'rows'        => 6,
-			'style'       => 'min-height:' . $default_height . 'px;',
+			'style'       => '--forminator-textarea-min-height:' . $default_height . 'px;',
 		);
 
 		// Add maxlength attribute if limit_type is characters.
@@ -209,7 +208,7 @@ class Forminator_Textarea extends Forminator_Field {
 
 			// Counter.
 			if ( ( ! empty( $limit ) && ! empty( $limit_type ) ) ) {
-				$description_block .= sprintf( '<span data-limit="%s" data-type="%s" data-editor="%s">0 / %s</span>', $limit, $limit_type, $editor_type, $limit );
+				$description_block .= sprintf( '<span data-limit="%s" data-type="%s" data-editor="%s">0 / %s</span>', esc_attr( $limit ), esc_attr( $limit_type ), esc_attr( $editor_type ), esc_html( $limit ) );
 			}
 			$description_block .= '</span>';
 		}
@@ -228,8 +227,7 @@ class Forminator_Textarea extends Forminator_Field {
 		} else {
 			$html .= self::create_textarea( $textarea, '', '', $required );
 			if ( true === $editor_type && $use_ajax_load ) {
-				$args   = self::get_tinymce_args( $id );
-				$script = '<script>wp.editor.initialize("' . esc_attr( $id ) . '", ' . $args . ');</script>';
+				$script = $this->get_richtext_editor_script( $id );
 				// if it's inside group field and 'Load form using AJAX' option is disabled.
 				if ( empty( $settings['use_ajax_load'] ) && ! empty( $field['parent_group'] ) ) {
 					// wrap into document ready.
@@ -413,6 +411,9 @@ class Forminator_Textarea extends Forminator_Field {
 		} else {
 			$data = forminator_sanitize_textarea( $data );
 		}
+
+		// Balance tags to ensure that user-added HTML tags are properly closed.
+		$data = force_balance_tags( $data );
 
 		return apply_filters( 'forminator_field_text_sanitize', $data, $field, $original_data );
 	}

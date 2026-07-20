@@ -74,7 +74,7 @@ foreach ( $template_vars as $key => $val ) {
 			<input type="text" id="auth-redirect-uri" class="sui-form-control" value="<?php echo esc_html( ! empty( $vars['redirect_url'] ) ? $vars['redirect_url'] : '' ); ?>">
 			<a class="sui-button-icon copy-clipboard-integration" data-shortcode="<?php echo esc_html( ! empty( $vars['redirect_url'] ) ? $vars['redirect_url'] : '' ); ?>">
 				<span aria-hidden="true" class="sui-icon-copy"></span>
-				<span class="sui-screen-reader-text"><?php esc_html_e( 'Copy shortcode', 'forminator' ); ?></span>
+				<span class="sui-screen-reader-text"><?php esc_html_e( 'Copy redirect URI', 'forminator' ); ?></span>
 			</a>
 		</div>
 

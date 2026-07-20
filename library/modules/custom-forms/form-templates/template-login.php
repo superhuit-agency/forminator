@@ -25,7 +25,7 @@ class Forminator_Template_Login extends Forminator_Template {
 	public function defaults() {
 		return array(
 			'id'          => 'login',
-			'name'        => esc_html__( 'Login', 'forminator' ),
+			'name'        => esc_html__( 'User Login', 'forminator' ),
 			'description' => esc_html__( 'Standard login form for returning users with fields for username/email and password, and links for account recovery or registration.', 'forminator' ),
 			'icon'        => 'profile-male',
 			'priority'    => 6,
@@ -82,7 +82,7 @@ class Forminator_Template_Login extends Forminator_Template {
 		return array(
 			'form-type'                         => 'login',
 			'submission-behaviour'              => 'behaviour-redirect',
-			'thankyou-message'                  => esc_html__( 'Thank you for contacting us, we will be in touch shortly.', 'forminator' ),
+			'thankyou-message'                  => esc_html__( 'Welcome back! You’re now logged in.', 'forminator' ),
 			'redirect-url'                      => admin_url(),
 			'submitData'                        => array(
 				'custom-submit-text'          => esc_html__( 'Login', 'forminator' ),

@@ -86,6 +86,39 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 	}
 
 	/**
+	 * Render Breakdance SSR preview in the required order.
+	 *
+	 * Order matters here: enqueue assets first so we can capture style handles,
+	 * print the collected styles and inline styles next, then output the HTML.
+	 *
+	 * @param bool $hide If true, display: none will be added on the form markup.
+	 * @param bool $is_preview Is preview.
+	 * @param int  $render_id Render ID.
+	 *
+	 * @return void
+	 */
+	private function render_breakdance_ssr_preview( $hide, $is_preview, $render_id ) {
+		$this->enqueue_breakdance_ssr_preview_assets( $is_preview );
+		$this->render_breakdance_ssr_preview_markup( $this->get_html( $hide, $is_preview, $render_id ), $is_preview );
+	}
+
+	/**
+	 * Enqueue Breakdance SSR preview assets and collect the generated style handles.
+	 *
+	 * @param bool $is_preview Is preview.
+	 *
+	 * @return void
+	 */
+	private function enqueue_breakdance_ssr_preview_assets( $is_preview ) {
+
+		$before_style_handles = wp_styles()->queue;
+		$assets               = $this->enqueue_form_assets( $is_preview, false );
+		$assets->load_module_css( true );
+
+		$this->set_breakdance_preview_style_handles( $before_style_handles );
+	}
+
+	/**
 	 * Whether font key should be applied to the current form or not.
 	 *
 	 * @param string $font_setting_key Font settings key.
@@ -183,6 +216,7 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 			return;
 		}
 
+		$this->set_breakdance_ssr_preview( $is_preview );
 		$is_ajax_load = $this->is_ajax_load( $is_preview );
 
 		if ( $quiz_model ) {
@@ -229,6 +263,11 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 			}
 			$this->enqueue_form_scripts( $is_preview, $is_ajax_load );
 
+			return;
+		}
+
+		if ( $this->is_breakdance_ssr_preview ) {
+			$this->render_breakdance_ssr_preview( $hide, $is_preview, self::$render_ids[ $id ] );
 			return;
 		}
 
@@ -370,6 +409,18 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 	public function enqueue_form_scripts( $is_preview, $is_ajax_load = false ) {
 		$is_ajax_load = $is_preview || $is_ajax_load;
 
+		$this->enqueue_form_assets( $is_preview, $is_ajax_load );
+	}
+
+	/**
+	 * Enqueue form assets for the current rendering mode.
+	 *
+	 * @param bool $is_preview Is preview.
+	 * @param bool $is_ajax_load Is ajax load.
+	 *
+	 * @return Forminator_Assets_Enqueue_Form
+	 */
+	private function enqueue_form_assets( $is_preview, $is_ajax_load ) {
 		// Load assets conditionally.
 		$assets = new Forminator_Assets_Enqueue_Form( $this->model, $is_ajax_load );
 		$assets->enqueue_styles( $this );
@@ -546,6 +597,19 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 					&& function_exists( 'wp_enqueue_editor' ) ) {
 				wp_enqueue_editor();
 			}
+
+			if ( $this->has_field_type_with_setting_value( 'postdata', 'post_content_media', true )
+					&& function_exists( 'wp_enqueue_media' )
+					&& current_user_can( 'upload_files' ) ) {
+				wp_enqueue_media();
+			}
+
+			// Ensure TinyMCE toolbar and WP link dialog appear above
+			// modal/popup overlays by setting a high z-index.
+			wp_add_inline_style(
+				'buttons',
+				'div.mce-inline-toolbar-grp, #wp-link-wrap { z-index: 999991 !important; }'
+			);
 		}
 
 		// Load selected google font.
@@ -614,6 +678,8 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 		}
 
 		add_action( 'admin_footer', array( $this, 'forminator_render_front_scripts' ), 9999 );
+
+		return $assets;
 	}
 
 	/**
@@ -634,7 +700,7 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 			return;
 		}
 
-		$src                 = apply_filters( 'forminator_jquery_ui_css', 'https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.min.css' );
+		$src                 = apply_filters( 'forminator_jquery_ui_css', forminator_plugin_url() . 'assets/jquery-ui/css/jquery-ui.min.css' );
 		$version             = apply_filters( 'forminator_jquery_ui_css_version', '1' );
 		$src_slider_divi     = apply_filters( 'forminator_jquery_ui_slider_css', forminator_plugin_url() . 'assets/css/jquery-ui-slider.builder_divi.min.css' );
 		$version_slider_divi = apply_filters( 'forminator_jquery_ui__slider_css_version', '1' );
@@ -830,16 +896,15 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 	 */
 	public function render_wrapper_before( $wrapper ) {
 		$class = 'forminator-row';
-
+		$style = '';
 		if ( $this->is_only_hidden( $wrapper ) ) {
 			$class .= ' forminator-hidden';
-
-			if ( isset( $wrapper['fields'] ) && isset( $wrapper['fields'][0]['custom-class'] ) ) {
-				$class .= ' ' . $wrapper['fields'][0]['custom-class'];
-			}
+		} elseif ( isset( $wrapper['fields'] ) && $this->is_only_invisible_field( $wrapper['fields'] ) ) {
+			// Remove margin for wrappers with only invisible fields.
+			$style = ' style="margin: 0;"';
 		}
 
-		$html = sprintf( '<div class="%1$s">', esc_attr( $class ) );
+		$html = sprintf( '<div class="%1$s"%2$s>', esc_attr( $class ), $style );
 
 		return apply_filters( 'forminator_before_wrapper_markup', $html, $wrapper );
 	}
@@ -1003,6 +1068,14 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 			}
 
 			$has_pagination = false;
+
+			// Avoid rendering an empty row when a Field Group has no child fields.
+			if ( $this->is_single_field( $wrapper )
+				&& isset( $wrapper['fields'][0]['type'], $wrapper['fields'][0]['element_id'] )
+				&& 'group' === $wrapper['fields'][0]['type']
+				&& empty( self::get_grouped_wrappers( $wrapper['fields'][0]['element_id'] ) ) ) {
+				continue;
+			}
 
 			// Skip row markup if pagination field.
 			if ( ! $this->is_pagination_row( $wrapper ) ) {
@@ -1435,23 +1508,60 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 		}
 
 		if ( $field_object->is_available( $field ) ) {
-			if ( ! self::is_hidden( $field ) ) {
-				// Render before field markup.
-				$html .= $this->render_field_before( $field );
-			}
+
+			// Render before field markup.
+			$html .= $this->render_field_before( $field );
 
 			// Render field.
 			$html .= $this->render_field( $field );
 
-			if ( ! self::is_hidden( $field ) ) {
-				// Render after field markup.
-				$html .= $this->render_field_after( $field );
-			}
+			// Render after field markup.
+			$html .= $this->render_field_after( $field );
 		}
 
 		do_action( 'forminator_after_field_render', $field );
 
 		return $html;
+	}
+
+	/**
+	 * Check if field is invisible
+	 *
+	 * @param mixed $field Form Field.
+	 * @return bool
+	 */
+	private function is_invisible_field( $field ) {
+		if ( self::is_hidden( $field ) || 'paypal' === $field['type'] ) {
+			return true;
+		} elseif ( 'captcha' === $field['type'] && ! empty( $field['captcha_provider'] ) ) {
+			if ( ( ! empty( $field['captcha_type'] ) && 'recaptcha' === $field['captcha_provider'] && in_array( $field['captcha_type'], array( 'v2_invisible', 'v3_recaptcha' ), true )
+			&& ( ! empty( $field['captcha_badge'] ) && 'inline' !== $field['captcha_badge'] ) )
+			|| ( ! empty( $field['hcaptcha_type'] ) && 'hcaptcha' === $field['captcha_provider'] && 'hc_invisible' === $field['hcaptcha_type'] ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Check if all fields are invisible.
+	 *
+	 * @param mixed $fields Form Fields.
+	 * @return bool
+	 */
+	private function is_only_invisible_field( $fields ) {
+		if ( empty( $fields ) ) {
+			return false;
+		}
+
+		foreach ( $fields as $field ) {
+			if ( ! $this->is_invisible_field( $field ) ) {
+				// Found a visible field.
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	/**
@@ -1652,7 +1762,12 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 		$cols  = $this->get_cols( $field );
 		$id    = $this->get_id( $field );
 
-		$html = sprintf( '<div id="%s" class="forminator-field-%s forminator-col forminator-col-%s %s">', esc_attr( $id ), esc_attr( $field['type'] ), esc_attr( $cols ), esc_attr( $class ) );
+		$class_col = '';
+		if ( ! $this->is_invisible_field( $field ) ) {
+			$class_col = 'forminator-col';
+		}
+
+		$html = sprintf( '<div id="%s" class="forminator-field-%s %s forminator-col-%s %s">', esc_attr( $id ), esc_attr( $field['type'] ), esc_attr( $class_col ), esc_attr( $cols ), esc_attr( $class ) );
 
 		return apply_filters( 'forminator_before_field_markup', $html, $class );
 	}
@@ -2596,23 +2711,34 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 						$pagination_config = $options['pagination_config'];
 						unset( $options['pagination_config'] );
 						?>
-				window.Forminator_Cform_Paginations[<?php echo esc_attr( $form_properties['id'] ); ?>] =
-						<?php echo wp_json_encode( $pagination_config ); ?>;
+						window.Forminator_Cform_Paginations[<?php echo esc_attr( $form_properties['id'] ); ?>] =
+								<?php echo wp_json_encode( $pagination_config ); ?>;
 
-				var runForminatorFront = function () {
-					jQuery('#forminator-module-<?php echo esc_attr( $form_properties['id'] ); ?>[data-forminator-render="<?php echo esc_attr( $form_properties['render_id'] ); ?>"]')
-						.forminatorFront(<?php echo wp_json_encode( $options ); ?>);
-				}
+						var runForminatorFront = function ( isElementorCall ) {
+							var $form = jQuery('#forminator-module-<?php echo esc_attr( $form_properties['id'] ); ?>[data-forminator-render="<?php echo esc_attr( $form_properties['render_id'] ); ?>"]');
 
-				if (window.elementorFrontend) {
-					if (typeof elementorFrontend.hooks !== "undefined") {
-						elementorFrontend.hooks.addAction('frontend/element_ready/global', function () {
-							runForminatorFront();
-						});
-					}
-				} else {
-					runForminatorFront();
-				}
+							// Skip direct init for forms inside Elementor popups — they defer to element_ready/global.
+							if ( !isElementorCall && $form.length && $form.closest('[data-elementor-type="popup"]').length > 0 ) {
+								return;
+							}
+
+							// Prevent duplicate initialization
+							if ( $form.length && !$form.hasClass('forminator-initialized') ) {
+								$form.addClass('forminator-initialized');
+								$form.forminatorFront(<?php echo wp_json_encode( $options ); ?>);
+							}
+						}
+
+						if (window.elementorFrontend && typeof elementorFrontend.hooks !== "undefined") {
+							elementorFrontend.hooks.addAction('frontend/element_ready/global', function ( $scope ) {
+								if ( $scope.find('#forminator-module-<?php echo esc_attr( $form_properties['id'] ); ?>').length > 0 ) {
+									// Add small delay to ensure DOM is ready
+									setTimeout(function () { runForminatorFront(true); }, 100);
+								}
+							});
+						}
+
+						runForminatorFront(false);
 
 						<?php
 					}
@@ -3120,16 +3246,19 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 			$this->set_forms_properties( $render_id );
 		} else {
 			$form_settings = $this->get_form_settings();
-			?>
-			<div class="forminator-custom-form">
+			$form_expired  = $this->model->check_form_expired( $form_settings );
+			if ( true === $form_expired['expired'] ) {
+				?>
+				<div class="forminator-custom-form">
+					<?php
+					if ( isset( $form_settings['expire_message'] ) && '' !== $form_settings['expire_message'] ) {
+						$message = $form_settings['expire_message'];
+						?>
+						<label class="forminator-label--info"><span><?php echo esc_html( $message ); ?></span></label>
+					<?php } ?>
+				</div>
 				<?php
-				if ( isset( $form_settings['expire_message'] ) && '' !== $form_settings['expire_message'] ) {
-					$message = $form_settings['expire_message'];
-					?>
-					<label class="forminator-label--info"><span><?php echo esc_html( $message ); ?></span></label>
-				<?php } ?>
-			</div>
-			<?php
+			}
 		}
 
 		$html = ob_get_clean();

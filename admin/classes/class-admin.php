@@ -199,9 +199,7 @@ class Forminator_Admin {
 	 */
 	public function add_dashboard_page() {
 		$title = esc_html__( 'Forminator', 'forminator' );
-		if ( FORMINATOR_PRO ) {
-			$title = esc_html__( 'Forminator Pro', 'forminator' );
-		}
+		
 
 		$this->pages['forminator']           = new Forminator_Dashboard_Page( 'forminator', 'dashboard', $title, $title, false, false );
 		$this->pages['forminator-dashboard'] = new Forminator_Dashboard_Page( 'forminator', 'dashboard', esc_html__( 'Forminator Dashboard', 'forminator' ), esc_html__( 'Dashboard', 'forminator' ), 'forminator' );
@@ -487,7 +485,7 @@ class Forminator_Admin {
 		$min_stripe_addon_version = '1.3.0';
 		// Show the notice only if Stripe Addon is active and its version is less than 1.0.4.
 		if ( ! defined( 'FORMINATOR_STRIPE_ADDON' ) || ! class_exists( 'Forminator_Stripe_Addon' )
-			|| version_compare( FORMINATOR_STRIPE_ADDON, $min_stripe_addon_version, '>=' ) ) {
+			|| version_compare( FORMINATOR_STRIPE_ADDON, $min_stripe_addon_version . '-alpha', '>=' ) ) {
 			return;
 		}
 
@@ -707,16 +705,22 @@ class Forminator_Admin {
 			data-nonce="<?php echo esc_attr( wp_create_nonce( 'forminator_dismiss_notification' ) ); ?>">
 			<p style="color: #72777C; line-height: 22px;">
 				<?php
-				$stripe_link = admin_url( 'admin.php?page=forminator-settings&section=payments' );
+				$learn_more = '';
+				if ( forminator_is_show_documentation_link() ) {
+					$learn_more = sprintf(
+						' <a href="%1$s" target="_blank">%2$s</a>.',
+						esc_url( 'https://wpmudev.com/docs/wpmu-dev-plugins/forminator/#connect-to-stripe' ),
+						esc_html__( 'Learn More', 'forminator' )
+					);
+				}
 				printf(
-					/* Translators: 1. Opening <b> tag, 2. closing <b> tag, 3. Opening <a> tag with link to payments settings section, 4. closing <a> tag, 5. Opening <a> tag with link Stripe API key, 6. closing <a> tag. */
-					esc_html__( '%1$sStripe API Notice:%2$s You are currently using the deprecated Stripe Secret key in your %3$sForminator Stripe integration%4$s. We recommend switching to the Restricted API key (RAK) instead. %5$sLearn More%6$s.', 'forminator' ),
+				/* Translators: 1. Opening <b> tag, 2. closing <b> tag, 3. Opening <a> tag with link to payments settings section, 4. closing <a> tag, 5. Learn More with link (optional, already formatted HTML, may be empty). */
+					esc_html__( '%1$sStripe API Notice:%2$s You are currently using the deprecated Stripe Secret key in your %3$sForminator Stripe integration%4$s. We recommend switching to the Restricted API key (RAK) instead.%5$s', 'forminator' ),
 					'<b>',
 					'</b>',
-					'<a href="' . esc_url( $stripe_link ) . '" target="_blank">',
+					'<a href="' . esc_url( admin_url( 'admin.php?page=forminator-settings&section=payments' ) ) . '" target="_blank">',
 					'</a>',
-					'<a href="https://wpmudev.com/docs/wpmu-dev-plugins/forminator/#connect-to-stripe" target="_blank">',
-					'</a>'
+					wp_kses_post( $learn_more )
 				);
 				?>
 			</p>
@@ -883,10 +887,7 @@ class Forminator_Admin {
 	 * @since 1.10
 	 */
 	public function show_rating_notice() {
-
-		if ( FORMINATOR_PRO ) {
-			return;
-		}
+		
 
 		$notice_success   = get_option( 'forminator_rating_success', false );
 		$notice_dismissed = get_option( 'forminator_rating_dismissed', false );
@@ -1047,7 +1048,7 @@ class Forminator_Admin {
 
 			// Change AuthorURI link.
 			if ( isset( $links[1] ) ) {
-				$author_uri = FORMINATOR_PRO ? 'https://wpmudev.com/' : 'https://profiles.wordpress.org/wpmudev/';
+				$author_uri = 'https://profiles.wordpress.org/wpmudev/';
 				$author_uri = sprintf(
 					'<a href="%s" target="_blank">%s</a>',
 					$author_uri,
@@ -1079,16 +1080,6 @@ class Forminator_Admin {
 				}
 				$row_meta['rate']    = '<a href="' . esc_url( forminator_get_link( 'rate' ) ) . '" aria-label="' . esc_attr__( 'Rate Forminator', 'forminator' ) . '" target="_blank">' . esc_html__( 'Rate Forminator', 'forminator' ) . '</a>';
 				$row_meta['support'] = '<a href="' . esc_url( forminator_get_link( 'support' ) ) . '" aria-label="' . esc_attr__( 'Support', 'forminator' ) . '" target="_blank">' . esc_html__( 'Support', 'forminator' ) . '</a>';
-			} else {
-				// Change 'Visit plugins' link to 'View details'.
-				if ( isset( $links[2] ) && false !== strpos( $links[2], 'project/forminator' ) ) {
-					$links[2] = sprintf(
-						'<a href="%s" target="_blank">%s</a>',
-						esc_url( forminator_get_link( 'pro_link', '', 'project/forminator-pro/' ) ),
-						esc_html__( 'View details', 'forminator' )
-					);
-				}
-				$row_meta['support'] = '<a href="' . esc_url( forminator_get_link( 'support' ) ) . '" aria-label="' . esc_attr__( 'Premium Support', 'forminator' ) . '" target="_blank">' . esc_html__( 'Premium Support', 'forminator' ) . '</a>';
 			}
 			$row_meta['roadmap'] = '<a href="' . esc_url( forminator_get_link( 'roadmap' ) ) . '" aria-label="' . esc_attr__( 'Roadmap', 'forminator' ) . '" target="_blank">' . esc_html__( 'Roadmap', 'forminator' ) . '</a>';
 
@@ -1102,79 +1093,7 @@ class Forminator_Admin {
 	 * Show addons update notice
 	 */
 	public function show_addons_update_notice() {
-		if ( ! FORMINATOR_PRO || 'forminator-addons' === filter_input( INPUT_GET, 'page' ) || empty( $this->pages ) ) {
-			return;
-		}
-
-		$version = '';
-		$addons  = $this->pages['forminator-addons']->get_addons_by_action();
-		if ( empty( $addons['update'] ) ) {
-			return;
-		}
-		foreach ( $addons['update'] as $update ) {
-			$version .= $update->version_latest . '_';
-		}
-
-		$notice_dismissed = get_option( 'forminator_addons_update_' . $version . 'dismiss', false );
-		if ( $notice_dismissed ) {
-			return;
-		}
-
-		$notice_later = get_option( 'forminator_addons_update_' . $version . 'later', false );
-		if ( $notice_later && current_time( 'timestamp' ) < strtotime( '+7 days', $notice_later ) ) { // phpcs:ignore WordPress.DateTime.CurrentTimeTimestamp.Requested -- We are using the current timestamp based on the site's timezone.
-			return;
-		}
-		?>
-
-		<div id="forminator-addons-update-notice"
-			class="forminator-update-notice notice notice-info fui-wordpress-notice is-dismissible"
-			data-nonce="<?php echo esc_attr( wp_create_nonce( 'forminator_dismiss_notification' ) ); ?>">
-			<p style="color: #72777C; line-height: 22px;">
-				<strong>
-					<?php echo esc_html__( 'New update available for one or more Add-ons.', 'forminator' ); ?>
-				</strong>
-			</p>
-			<p style="color: #72777C; line-height: 22px;">
-				<?php esc_html_e( 'A new update is available for one or more of your Forminator Add-ons. Click on the button below to check and update the required Add-on.', 'forminator' ); ?>
-			</p>
-			<p><a type="button"
-					href="<?php echo esc_url( menu_page_url( 'forminator-addons', false ) ); ?>"
-					target="_blank" class="button button-primary button-large"
-				><?php esc_html_e( 'View and Update', 'forminator' ); ?></a>
-				<?php if ( ! $notice_later ) { ?>
-					<a href="#" class="forminator-notice-dismiss"
-						data-prop="forminator_addons_update_<?php echo esc_attr( $version ); ?>later"
-						style="margin-left: 11px; color: #555; line-height: 16px; font-weight: 500; text-decoration: none;"
-						data-prop-value="<?php echo esc_attr( current_time( 'timestamp' ) ); /* phpcs:ignore WordPress.DateTime.CurrentTimeTimestamp.Requested -- We are using the current timestamp based on the site's timezone. */ ?>"><?php esc_html_e( 'Remind me later', 'forminator' ); ?></a>
-				<?php } ?>
-			</p>
-			<button type="button" class="notice-dismiss forminator-notice-dismiss"
-					data-prop="forminator_addons_update_<?php echo esc_attr( $version ); ?>dismiss">
-				<span class="screen-reader-text"></span>
-			</button>
-		</div>
-		<script type="text/javascript">
-			jQuery('.forminator-update-notice .forminator-notice-dismiss').on('click', function (e) {
-				e.preventDefault();
-
-				var $notice = jQuery(e.currentTarget).closest('.forminator-update-notice'),
-					prop = jQuery(this).data('prop'),
-					value = jQuery(this).data('prop-value'),
-					ajaxUrl = '<?php echo esc_url( forminator_ajax_url() ); ?>';
-				jQuery.post(
-					ajaxUrl,
-					{
-						action: 'forminator_dismiss_notification',
-						prop: prop,
-						value: 'undefined' !== typeof value ? value : '',
-						_ajax_nonce: $notice.data('nonce')
-					}
-				).always(function () {
-					$notice.hide();
-				});
-			});
-		</script>
-		<?php
+		
 	}
 
 	/**

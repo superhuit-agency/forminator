@@ -192,7 +192,7 @@ class Forminator_Reports {
 			// Change nl to br.
 			$email_content = stripslashes( $email_content );
 
-			$no_reply_email = 'noreply@' . wp_parse_url( get_site_url(), PHP_URL_HOST );
+			$no_reply_email = get_global_sender_email_address();
 			$headers        = array(
 				'From: Forminator <' . $no_reply_email . '>',
 				'Content-Type: text/html; charset=UTF-8',

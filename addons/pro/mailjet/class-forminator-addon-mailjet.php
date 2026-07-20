@@ -265,7 +265,7 @@ class Forminator_Mailjet extends Forminator_Integration {
 				sanitize_email( $connected_account['email'] )
 			);
 
-			$myaccount = Forminator_Admin::get_red_notice( $notice );
+			$myaccount = Forminator_Admin::get_green_notice( $notice );
 
 		}
 
