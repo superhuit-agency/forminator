@@ -90,6 +90,16 @@ rsync -a --delete "${rsync_quiet_flags[@]}" \
   --exclude '/addons/pro/gutenberg/js/blocks-v3.js' \
   "${TMP_DIR}/upstream/" "${REPO_ROOT}/"
 
+# Stage the freshly-synced tree so the index matches the working tree. The CI
+# checkout starts from a branch that already has the patches applied, so its
+# index holds the *patched* blobs; the rsync above only rewrites the working
+# tree. Without this, `git apply --3way` below reconstructs the pre-image from
+# the stale index and dies with "does not match index", which previously caused
+# every patch to be reported as FAILED and produced a sync PR that merely
+# stripped the fork's customizations. Re-staging makes the index reflect
+# pristine upstream, giving `--3way` a correct base to merge against.
+git -C "${REPO_ROOT}" add -A
+
 # --- Apply all patches from patches/ in sorted order ---
 patch_files=()
 for f in "${PATCHES_DIR}"/*.patch; do
@@ -112,12 +122,12 @@ for patch_file in "${patch_files[@]}"; do
   log "Applying patch: ${patch_name}"
 
   if git -C "${REPO_ROOT}" apply --check "${patch_file}" 2>/dev/null; then
-    # NOTE: `--check` only validates the working tree, but `--3way` also
-    # consults the index. After the rsync above, the index still holds the
-    # previously-committed blobs while the working tree has fresh upstream
-    # content, so `--3way` can fail ("does not match index") even when
-    # `--check` passed. Guard it so a failure is handled gracefully instead
-    # of killing the script under `set -e` (CI must still open a draft PR).
+    # `--3way` reconstructs the pre-image from the index and merges against the
+    # working tree. The `git add -A` after the rsync keeps the index in sync
+    # with the pristine upstream working tree, so this operates on a correct
+    # base. Still guarded so a genuine merge conflict is handled gracefully
+    # instead of killing the script under `set -e` (CI must still open a draft
+    # PR when a patch truly no longer applies).
     if git -C "${REPO_ROOT}" apply --3way "${patch_file}"; then
       PATCH_NOTES+=("${patch_name}: applied successfully.")
       log "  -> applied successfully."
