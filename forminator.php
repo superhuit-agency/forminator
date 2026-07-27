@@ -72,9 +72,6 @@ if ( version_compare( PHP_VERSION, FORMINATOR_MIN_PHP_VERSION, '<' ) ) {
 // Include API.
 require_once plugin_dir_path( __FILE__ ) . 'library/class-api.php';
 
-// Fork-owned customizations, kept out of the upstream sync (see patches/0001).
-require_once plugin_dir_path( __FILE__ ) . 'fork/disable-plugin-update.php';
-
 // Register activation hook.
 register_activation_hook( __FILE__, array( 'Forminator', 'activation_hook' ) );
 // Register deactivation hook.

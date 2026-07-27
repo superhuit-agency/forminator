@@ -88,8 +88,5 @@ class Forminator_Gutenberg {
 	}
 }
 
-// Load Block API v3 overrides (iframe editor compatibility).
-require_once __DIR__ . '/class-forminator-gfblock-v3.php';
-
 // Load Gutenberb functions.
 require_once __DIR__ . '/functions.php';
