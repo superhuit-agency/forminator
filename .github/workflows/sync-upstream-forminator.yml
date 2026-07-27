@@ -61,11 +61,22 @@ jobs:
             patch_note="(no patch note)"
           fi
 
+          sync_skipped="$(echo "${out}" | grep -E '^FORMINATOR_SYNC_SKIPPED=' | tail -n 1 | cut -d= -f2 || true)"
+          if [[ -z "${sync_skipped}" ]]; then
+            sync_skipped="0"
+          fi
+
           echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
           echo "patch_applied=${patch_applied}" >> "${GITHUB_OUTPUT}"
           echo "patch_note=${patch_note}" >> "${GITHUB_OUTPUT}"
+          echo "sync_skipped=${sync_skipped}" >> "${GITHUB_OUTPUT}"
+
+          if [[ "${sync_skipped}" == "1" ]]; then
+            echo "Repo already at upstream tag ${tag}; skipping PR creation." >&2
+          fi
 
       - name: Create Pull Request
+        if: steps.sync.outputs.sync_skipped != '1'
         uses: peter-evans/create-pull-request@v8
         with:
           commit-message: "chore(upstream): sync Forminator ${{ steps.sync.outputs.tag }}"

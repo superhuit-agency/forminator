@@ -61,8 +61,24 @@ fi
 UPSTREAM_URL="${SVN_TAGS_URL%/}/${SVN_TAG}"
 
 log "Using upstream tag: ${SVN_TAG}"
-log "Exporting: ${UPSTREAM_URL}"
 out "FORMINATOR_UPSTREAM_TAG=${SVN_TAG}"
+
+# Skip the whole sync when the repo already tracks this upstream tag. The plugin
+# header carries the upstream version verbatim (patches don't bump it), so an
+# equal tag means there is nothing new to pull. Without this guard the weekly
+# job re-runs against the same tag every week and opens a redundant PR.
+CURRENT_VERSION="$(grep -E '^[[:space:]]*\*[[:space:]]*Version:' "${REPO_ROOT}/forminator.php" \
+  | head -n 1 | sed -E 's/.*Version:[[:space:]]*//' | tr -d '[:space:]')"
+if [[ -n "${CURRENT_VERSION}" && "${SVN_TAG}" == "${CURRENT_VERSION}" ]]; then
+  log "Repo already at upstream tag ${SVN_TAG}; nothing to sync."
+  out "FORMINATOR_SYNC_SKIPPED=1"
+  out "FORMINATOR_PATCH_APPLIED=1"
+  out "FORMINATOR_PATCH_NOTE=No sync needed; repo already at ${SVN_TAG}."
+  exit 0
+fi
+out "FORMINATOR_SYNC_SKIPPED=0"
+
+log "Exporting: ${UPSTREAM_URL}"
 
 TMP_DIR="$(mktemp -d)"
 cleanup() {
