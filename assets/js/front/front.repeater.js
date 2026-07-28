@@ -187,8 +187,8 @@
 	/**
 	 * Prepare block for cloning
 	 */
-	function forminatorPrepareCloningBlock( baseBlock ) {
-		const newSuffix = String( Date.now().toString(32) + Math.random().toString(16) ).replace(/\./g, ''),
+	function forminatorPrepareCloningBlock( baseBlock, fixedSuffix ) {
+		const newSuffix = fixedSuffix || String( Date.now().toString(32) + Math.random().toString(16) ).replace(/\./g, ''),
 				form = baseBlock.closest( 'form.forminator-custom-form' ),
 				grouId = baseBlock.closest( 'div[id^="group-"]' ).prop( 'id' ),
 				formId = form.data( 'form-id' );
@@ -428,5 +428,36 @@
 		}
 
 	}
+
+	// Rebuild repeater copies after returning from Stripe Checkout (see front.stripe.js storeCheckoutFormState).
+	$( document ).on( 'forminator:restore-repeater-copies', function( e, groups ) {
+		const form = $( e.target );
+
+		if ( ! form.is( 'form.forminator-custom-form' ) || ! groups || ! groups.length ) {
+			return;
+		}
+
+		groups.forEach( function( group ) {
+			const groupField = form.find( '#' + group.groupId + ' .forminator-all-group-copies' ),
+				firstBlock = groupField.find( '>.forminator-grouped-fields:first-child' ),
+				fieldOptions = firstBlock.data( 'options' );
+
+			if ( ! groupField.length || ! fieldOptions || ! group.suffixes || ! group.suffixes.length ) {
+				return;
+			}
+
+			groupField.find( '>.forminator-grouped-fields:not(:first-child)' ).remove();
+
+			group.suffixes.forEach( function( suffix ) {
+				const newBlock = forminatorPrepareCloningBlock( firstBlock, suffix );
+				groupField.append( newBlock );
+				newBlock.trigger( 'forminator-clone-group' );
+			} );
+
+			forminatorHideIrrelevantActions( fieldOptions, groupField );
+		} );
+
+		form.trigger( 'forminator.front.condition.restart' );
+	} );
 
 })(jQuery, window, document);

@@ -43,6 +43,23 @@ if ( FORMINATOR_PRO || $connected_free_addon ) {
 
 			// BUTTON: Configure.
 			if ( $addons->has_config ) {
+				$configure_attrs = array(
+					'data-action'         => esc_attr( $addons_slug . '-connect-modal' ),
+					'data-slug'           => esc_attr( $addons_slug ),
+					'data-addon'          => esc_attr( $addons->pid ),
+					'data-nonce'          => esc_attr( wp_create_nonce( 'forminator_' . $addons_slug . '_settings_modal' ) ),
+					'data-modal-nonce'    => esc_attr( wp_create_nonce( 'forminator_' . $addons_slug . '_settings_modal' ) ),
+					'data-modal-image'    => esc_url( forminator_plugin_url() . 'assets/images/' . $addons_slug . '-logo.png' ),
+					'data-modal-image-x2' => esc_url( forminator_plugin_url() . 'assets/images/' . $addons_slug . '-logo@2x.png' ),
+					'data-modal-title'    => /* translators: %s: Add-on slug */ sprintf( esc_html__( 'Connect %s Account', 'forminator' ), ucfirst( $addons_slug ) ),
+				);
+
+				if ( 'stripe' === $addons_slug ) {
+					$configure_attrs = array(
+						'data-action' => 'stripe-payments-settings',
+					);
+				}
+
 				Forminator_Admin_Addons_Page::get_instance()->render_template(
 					'admin/views/addons/action-button',
 					array(
@@ -51,16 +68,7 @@ if ( FORMINATOR_PRO || $connected_free_addon ) {
 						'icon'     => 'wrench-tool',
 						'id'       => 'addons-configure__' . $addons_slug,
 						'class'    => 'addons-configure',
-						'attrs'    => array(
-							'data-action'         => esc_attr( $addons_slug . '-connect-modal' ),
-							'data-slug'           => esc_attr( $addons_slug ),
-							'data-addon'          => esc_attr( $addons->pid ),
-							'data-nonce'          => esc_attr( wp_create_nonce( 'forminator_' . $addons_slug . '_settings_modal' ) ),
-							'data-modal-nonce'    => esc_attr( wp_create_nonce( 'forminator_' . $addons_slug . '_settings_modal' ) ),
-							'data-modal-image'    => esc_url( forminator_plugin_url() . 'assets/images/' . $addons_slug . '-logo.png' ),
-							'data-modal-image-x2' => esc_url( forminator_plugin_url() . 'assets/images/' . $addons_slug . '-logo@2x.png' ),
-							'data-modal-title'    => /* translators: %s: Add-on slug */ sprintf( esc_html__( 'Connect %s Account', 'forminator' ), ucfirst( $addons_slug ) ),
-						),
+						'attrs'    => $configure_attrs,
 					)
 				);
 			}

@@ -114,9 +114,8 @@ class Forminator_Admin_AJAX {
 
 		add_action( 'wp_ajax_forminator_save_dashboard_settings_popup', array( $this, 'save_dashboard_settings' ) );
 
-		add_action( 'wp_ajax_forminator_stripe_settings_modal', array( $this, 'stripe_settings_modal' ) );
-		add_action( 'wp_ajax_forminator_stripe_update_page', array( $this, 'stripe_update_page' ) );
-		add_action( 'wp_ajax_forminator_disconnect_stripe', array( $this, 'stripe_disconnect' ) );
+		add_action( 'wp_ajax_forminator_stripe_oauth_init', array( $this, 'stripe_oauth_init' ) );
+		add_action( 'wp_ajax_forminator_stripe_oauth_disconnect', array( $this, 'stripe_oauth_disconnect' ) );
 		add_action( 'wp_ajax_forminator_set_encryption_key', array( $this, 'set_encryption_key' ) );
 
 		add_action( 'wp_ajax_forminator_paypal_settings_modal', array( $this, 'paypal_settings_modal' ) );
@@ -444,7 +443,19 @@ class Forminator_Admin_AJAX {
 		if ( is_wp_error( $id ) ) {
 			wp_send_json_error( $id );
 		} else {
-			wp_send_json_success( $id );
+			$response = array(
+				'id'                        => $id,
+				'reload_subscription_plans' => false,
+			);
+
+			if (
+				class_exists( 'Forminator_Stripe_Subscription' )
+				&& method_exists( 'Forminator_Stripe_Subscription', 'did_recreate_subscription_product' )
+			) {
+				$response['reload_subscription_plans'] = Forminator_Stripe_Subscription::get_instance()->did_recreate_subscription_product();
+			}
+
+			wp_send_json_success( $response );
 		}
 	}
 
@@ -2131,27 +2142,88 @@ class Forminator_Admin_AJAX {
 	}
 
 	/**
-	 * Disconnect stripe
+	 * Generate the Stripe Connect OAuth authorization URL for the requested
+	 * mode and return it to the browser so the user can be redirected.
 	 *
-	 * @since 1.7
+	 * @since 1.56.0
 	 */
-	public function stripe_disconnect() {
-		// Validate nonce.
-		forminator_validate_ajax( 'forminatorSettingsRequest', false, 'forminator-settings' );
+	public function stripe_oauth_init() {
+		// Validate nonce + capabilities.
+		forminator_validate_ajax( 'forminator_stripe_oauth', false, 'forminator-settings' );
 
-		if ( class_exists( 'Forminator_Gateway_Stripe' ) ) {
-			Forminator_Gateway_Stripe::store_settings( array() );
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Verified in forminator_validate_ajax above.
+		$mode = isset( $_POST['mode'] ) ? sanitize_text_field( wp_unslash( $_POST['mode'] ) ) : '';
+		if ( ! in_array( $mode, array( 'live', 'test' ), true ) ) {
+			wp_send_json_error(
+				array(
+					'message' => esc_html__( 'Invalid Stripe connection mode.', 'forminator' ),
+				)
+			);
 		}
-		$data['notification'] = array(
-			'type'     => 'success',
-			'text'     => esc_html__( 'Stripe account disconnected successfully.', 'forminator' ),
-			'duration' => '4000',
+
+		$url = Forminator_Stripe_Connect::get_instance()->get_oauth_url( $mode );
+
+		if ( is_wp_error( $url ) ) {
+			wp_send_json_error(
+				array(
+					'message' => $url->get_error_message(),
+				)
+			);
+		}
+
+		wp_send_json_success(
+			array(
+				'url' => esc_url_raw( $url ),
+			)
 		);
-		$file                 = forminator_plugin_dir() . 'admin/views/settings/payments/section-stripe.php';
+	}
+
+	/**
+	 * Disconnect one Stripe mode (OAuth or manual) from the OAuth settings table.
+	 *
+	 * @since 1.56.0
+	 */
+	public function stripe_oauth_disconnect() {
+		// Validate nonce + capabilities.
+		forminator_validate_ajax( 'forminator_stripe_oauth', false, 'forminator-settings' );
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Verified in forminator_validate_ajax above.
+		$mode = isset( $_POST['mode'] ) ? sanitize_text_field( wp_unslash( $_POST['mode'] ) ) : '';
+		if ( ! in_array( $mode, array( 'live', 'test' ), true ) ) {
+			wp_send_json_error(
+				array(
+					'message' => esc_html__( 'Invalid Stripe connection mode.', 'forminator' ),
+				)
+			);
+		}
+
+		if ( ! Forminator_Gateway_Stripe::is_mode_configured( $mode ) ) {
+			wp_send_json_error(
+				array(
+					'message' => esc_html__( 'This Stripe mode is not connected.', 'forminator' ),
+				)
+			);
+		}
+
+		Forminator_Stripe_Connect::get_instance()->disconnect( $mode );
+
+		$success_text = 'live' === $mode
+			? esc_html__( 'Live Stripe account disconnected successfully.', 'forminator' )
+			: esc_html__( 'Test Stripe account disconnected successfully.', 'forminator' );
+
+		$data = array(
+			'notifications' => array(
+				array(
+					'type'     => 'success',
+					'text'     => $success_text,
+					'duration' => 4000,
+				),
+			),
+		);
 
 		ob_start();
 		/* @noinspection PhpIncludeInspection */
-		include $file;
+		include forminator_plugin_dir() . 'admin/views/settings/payments/section-stripe.php';
 		$data['html'] = ob_get_clean();
 
 		wp_send_json_success( $data );
@@ -2185,25 +2257,6 @@ class Forminator_Admin_AJAX {
 	}
 
 	/**
-	 * Handle stripe settings
-	 *
-	 * @since 1.7
-	 */
-	public function stripe_update_page() {
-		// Validate nonce.
-		forminator_validate_ajax( 'forminator_stripe_settings_modal', false, 'forminator-settings' );
-
-		$file = forminator_plugin_dir() . 'admin/views/settings/payments/section-stripe.php';
-
-		ob_start();
-		/* @noinspection PhpIncludeInspection */
-		include $file;
-		$html = ob_get_clean();
-
-		wp_send_json_success( $html );
-	}
-
-	/**
 	 * Handle PayPal settings
 	 *
 	 * @since 1.7
@@ -2220,162 +2273,6 @@ class Forminator_Admin_AJAX {
 		$html = ob_get_clean();
 
 		wp_send_json_success( $html );
-	}
-
-	/**
-	 * Handle stripe settings
-	 *
-	 * @since 1.7
-	 * @throws Forminator_Gateway_Exception When connection fails.
-	 */
-	public function stripe_settings_modal() {
-		if ( ! class_exists( 'Forminator_Gateway_Stripe' ) ) {
-			return false;
-		}
-
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Verified in forminator_validate_ajax.
-		$post_data = Forminator_Core::sanitize_array( $_POST );
-
-		// Validate nonce.
-		forminator_validate_ajax( 'forminator_stripe_settings_modal', false, $post_data['page_slug'] );
-
-		$data = array();
-
-		$is_connect_request = isset( $post_data['connect'] ) ? $post_data['connect'] : false;
-		$template_vars      = array();
-		try {
-			$stripe = new Forminator_Gateway_Stripe();
-
-			$test_key         = isset( $post_data['test_key'] ) ? $post_data['test_key'] : $stripe->get_test_key();
-			$test_secret      = isset( $post_data['test_secret'] ) ? $post_data['test_secret'] : $stripe->get_test_secret();
-			$live_key         = isset( $post_data['live_key'] ) ? $post_data['live_key'] : $stripe->get_live_key();
-			$live_secret      = isset( $post_data['live_secret'] ) ? $post_data['live_secret'] : $stripe->get_live_secret();
-			$page_slug        = isset( $post_data['page_slug'] ) ? $post_data['page_slug'] : '';
-			$default_currency = $stripe->get_default_currency();
-
-			$template_vars['test_key']    = $test_key;
-			$template_vars['test_secret'] = $test_secret;
-			$template_vars['live_key']    = $live_key;
-			$template_vars['live_secret'] = $live_secret;
-			if ( ( ! empty( $test_secret ) && 'sk_' === substr( $test_secret, 0, 3 ) ) || ( ! empty( $live_secret ) && 'sk_' === substr( $live_secret, 0, 3 ) ) ) {
-				$template_vars['has_deprecated_secret_key'] = true;
-			}
-			if ( ! empty( $is_connect_request ) ) {
-				if ( empty( $test_key ) ) {
-					throw new Forminator_Gateway_Exception(
-						'',
-						Forminator_Gateway_Stripe::EMPTY_TEST_KEY_EXCEPTION
-					);
-				}
-				if ( empty( $test_secret ) ) {
-					throw new Forminator_Gateway_Exception(
-						'',
-						Forminator_Gateway_Stripe::EMPTY_TEST_SECRET_EXCEPTION
-					);
-				}
-
-				Forminator_Gateway_Stripe::validate_keys( $test_key, $test_secret, Forminator_Gateway_Stripe::INVALID_TEST_SECRET_EXCEPTION );
-
-				if ( empty( $live_key ) ) {
-					throw new Forminator_Gateway_Exception(
-						'',
-						Forminator_Gateway_Stripe::EMPTY_LIVE_KEY_EXCEPTION
-					);
-				}
-				if ( empty( $live_secret ) ) {
-					throw new Forminator_Gateway_Exception(
-						'',
-						Forminator_Gateway_Stripe::EMPTY_LIVE_SECRET_EXCEPTION
-					);
-				}
-
-				Forminator_Gateway_Stripe::validate_keys( $live_key, $live_secret, Forminator_Gateway_Stripe::INVALID_LIVE_SECRET_EXCEPTION );
-
-				/**
-				 * Fires before stripe connected
-				 *
-				 * @since 1.35.0
-				 *
-				 * @param string $test_key Test key.
-				 * @param string $test_secret Test secret.
-				 * @param string $live_key Live key.
-				 * @param string $live_secret Live secret.
-				 * @param string $page_slug Page slug.
-				 */
-				do_action( 'forminator_before_stripe_connected', $test_key, $test_secret, $live_key, $live_secret, $page_slug );
-
-				Forminator_Gateway_Stripe::store_settings(
-					array(
-						'test_key'         => $test_key,
-						'test_secret'      => $test_secret,
-						'live_key'         => $live_key,
-						'live_secret'      => $live_secret,
-						'default_currency' => $default_currency,
-					)
-				);
-
-				$data['notification'] = array(
-					'type'     => 'success',
-					'text'     => esc_html__( 'Stripe account connected successfully. You can now add the Stripe field to your forms and start collecting payments.', 'forminator' ),
-					'duration' => '4000',
-				);
-
-			}
-		} catch ( Forminator_Gateway_Exception $e ) {
-			forminator_maybe_log( __METHOD__, $e->getMessage(), $e->getTrace() );
-			$template_vars['error_message'] = $e->getMessage();
-
-			if ( Forminator_Gateway_Stripe::EMPTY_TEST_KEY_EXCEPTION === $e->getCode() ) {
-				$template_vars['test_key_error'] = esc_html__( 'Please input test publishable key', 'forminator' );
-			}
-			if ( Forminator_Gateway_Stripe::EMPTY_TEST_SECRET_EXCEPTION === $e->getCode() ) {
-				$template_vars['test_secret_error'] = esc_html__( 'Please input test secret key', 'forminator' );
-			}
-			if ( Forminator_Gateway_Stripe::EMPTY_LIVE_KEY_EXCEPTION === $e->getCode() ) {
-				$template_vars['live_key_error'] = esc_html__( 'Please input live publishable key', 'forminator' );
-			}
-			if ( Forminator_Gateway_Stripe::EMPTY_LIVE_SECRET_EXCEPTION === $e->getCode() ) {
-				$template_vars['live_secret_error'] = esc_html__( 'Please input live secret key', 'forminator' );
-			}
-			if ( Forminator_Gateway_Stripe::INVALID_TEST_SECRET_EXCEPTION === $e->getCode() ) {
-				if ( ! empty( $test_secret ) && 'sk_' === substr( $test_secret, 0, 3 ) ) {
-					$template_vars['test_secret_error'] = esc_html__( 'You\'ve entered an invalid test secret key', 'forminator' );
-				} else {
-					$template_vars['test_secret_error'] = esc_html__( 'You\'ve entered an invalid test restricted key', 'forminator' );
-				}
-			}
-			if ( Forminator_Gateway_Stripe::INVALID_LIVE_SECRET_EXCEPTION === $e->getCode() ) {
-				if ( ! empty( $live_secret ) && 'sk_' === substr( $live_secret, 0, 3 ) ) {
-					$template_vars['live_secret_error'] = esc_html__( 'You\'ve entered an invalid live secret key', 'forminator' );
-				} else {
-					$template_vars['live_secret_error'] = esc_html__( 'You\'ve entered an invalid live restricted key', 'forminator' );
-				}
-			}
-			if ( Forminator_Gateway_Stripe::INVALID_TEST_KEY_EXCEPTION === $e->getCode() ) {
-				$template_vars['test_key_error'] = esc_html__( 'You\'ve entered an invalid test publishable key', 'forminator' );
-			}
-			if ( Forminator_Gateway_Stripe::INVALID_LIVE_KEY_EXCEPTION === $e->getCode() ) {
-				$template_vars['live_key_error'] = esc_html__( 'You\'ve entered an invalid live publishable key', 'forminator' );
-			}
-		}
-
-		ob_start();
-		/* @noinspection PhpIncludeInspection */
-		include forminator_plugin_dir() . 'admin/views/settings/payments/stripe.php';
-		$html = ob_get_clean();
-
-		$data['html'] = $html;
-
-		$data['buttons'] = array();
-
-		$data['buttons']['connect']['markup'] = '<div class="sui-actions-right">' .
-												'<button class="sui-button forminator-stripe-connect" type="button" data-nonce="' . wp_create_nonce( 'forminator_stripe_settings_modal' ) . '">' .
-												'<span class="sui-loading-text">' . esc_html__( 'Connect', 'forminator' ) . '</span>' .
-												'<i class="sui-icon-loader sui-loading" aria-hidden="true"></i>' .
-												'</button>' .
-												'</div>';
-
-		wp_send_json_success( $data );
 	}
 
 	/**
@@ -2522,7 +2419,6 @@ class Forminator_Admin_AJAX {
 		$allowed_options = array(
 			'forminator_skip_pro_notice',
 			'forminator_cf7_notice_dismissed',
-			'forminator_stripe_rak_notice_dismissed',
 			'forminator_stripe_notice_dismissed',
 			'forminator_rating_success',
 			'forminator_rating_dismissed',

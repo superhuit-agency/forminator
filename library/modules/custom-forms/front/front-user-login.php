@@ -186,6 +186,10 @@ class Forminator_CForm_Front_User_Login extends Forminator_User {
 
 								return $response;
 							}
+						} else {
+							$response['authentication'] = 'invalid';
+							$response['user']           = $sign_on;
+							return $response;
 						}
 					}
 				}

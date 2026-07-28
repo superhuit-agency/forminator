@@ -40,6 +40,12 @@ class Forminator_Calculator_Symbol_Function_Round extends Forminator_Calculator_
 		$number    = $arguments[0];
 		$precision = isset( $arguments[1] ) ? (int) $arguments[1] : 0;
 
+		// In earlier versions of PHP, round(1.49999999999999994) with precision 0 would return 2 instead of the correct result 1.
+		// Starting from PHP version 8.4, this issue has been fixed.
+		if ( 0 === $precision && version_compare( PHP_VERSION, '8.4', '<' ) ) {
+			return (float) floor( $number + 0.5 );
+		}
+
 		return round( $number, $precision );
 	}
 }

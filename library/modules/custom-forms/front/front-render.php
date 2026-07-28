@@ -478,7 +478,9 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 
 		// Load Stripe scripts.
 		if ( $this->has_stripe() ) {
-			$src = 'https://js.stripe.com/v3/';
+			$src = ( $this->uses_checkout_session_stripe() || $is_preview )
+				? 'https://js.stripe.com/dahlia/stripe.js'
+				: 'https://js.stripe.com/v3/';
 
 			if ( ! $is_ajax_load ) {
 				wp_enqueue_script(
@@ -3082,13 +3084,26 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 		}
 
 		if ( $has_stripe ) {
-			$stripe_settings = $this->get_stripe_settings();
-			if ( ! empty( $stripe_settings['automatic_payment_methods'] ) && 'false' !== $stripe_settings['automatic_payment_methods'] ) {
-				$stripe_field              = Forminator_Core::get_field_object( 'stripe' );
+			$stripe_settings     = $this->get_stripe_settings();
+			$stripe_field        = Forminator_Core::get_field_object( 'stripe' );
+			$is_stripe_field     = $stripe_field instanceof Forminator_Stripe;
+			$is_checkout_session = $is_stripe_field && $stripe_field->is_checkout_session( $stripe_settings );
+			$card_only           = empty( $stripe_settings['automatic_payment_methods'] )
+				|| 'false' === $stripe_settings['automatic_payment_methods'];
+
+			if ( ! $is_checkout_session && $card_only ) {
+				$options['stripe_depends'] = array();
+			} elseif ( $is_stripe_field ) {
 				$options['stripe_depends'] = $stripe_field->get_amount_dependent_fields_all( $stripe_settings );
 			} else {
 				$options['stripe_depends'] = array();
 			}
+
+			$options['stripe_checkout_metadata_depends'] = $is_stripe_field
+				? $stripe_field->get_merge_tag_dependent_fields(
+					Forminator_Field::get_property( 'options', $stripe_settings, array() )
+				)
+				: array();
 		}
 
 		return $options;
@@ -3165,7 +3180,7 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 	 * @param array  $data Data.
 	 * @return object
 	 */
-	protected function set_form_model_data( $form_model, $data ) {
+	public function set_form_model_data( $form_model, $data ) {
 		$fields = array();
 		$title  = '';
 
@@ -3331,9 +3346,39 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 		if ( ! empty( $fields ) ) {
 			foreach ( $fields as $field ) {
 				if ( 'stripe' === $field['type'] || 'stripe-ocs' === $field['type'] ) {
-					$stripe = new Forminator_Gateway_Stripe();
-					return $stripe->is_ready();
+					$field_object = Forminator_Core::get_field_object( $field['type'] );
+					if ( $field_object && $field_object->is_available( $field ) ) {
+						return true;
+					}
 				}
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Check if the form uses the Checkout Sessions API for Stripe.
+	 *
+	 * @since 1.56
+	 *
+	 * @return bool
+	 */
+	public function uses_checkout_session_stripe() {
+		$fields = $this->get_fields();
+
+		if ( empty( $fields ) ) {
+			return false;
+		}
+
+		$stripe_field = Forminator_Core::get_field_object( 'stripe' );
+		if ( ! $stripe_field instanceof Forminator_Stripe ) {
+			return false;
+		}
+
+		foreach ( $fields as $field ) {
+			if ( $stripe_field->is_checkout_session( $field ) ) {
+				return true;
 			}
 		}
 
@@ -3347,9 +3392,8 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 	 */
 	public function get_stripe_settings() {
 		$fields = $this->get_fields();
-		$stripe = new Forminator_Gateway_Stripe();
 
-		if ( empty( $fields ) || ! $stripe->is_ready() ) {
+		if ( empty( $fields ) ) {
 			return false;
 		}
 		// Filter elements where type is 'stripe-ocs'.
@@ -3371,7 +3415,12 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 		}
 
 		if ( ! empty( $stripe_fields ) ) {
-			return array_shift( $stripe_fields );
+			foreach ( $stripe_fields as $stripe_field ) {
+				$field_object = Forminator_Core::get_field_object( $stripe_field['type'] );
+				if ( $field_object && $field_object->is_available( $stripe_field ) ) {
+					return $stripe_field;
+				}
+			}
 		}
 
 		return false;

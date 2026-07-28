@@ -1206,6 +1206,9 @@ class Forminator_QForm_Front extends Forminator_Render_Form {
 		if ( ! empty( $form_properties['settings']['text-previous'] ) ) {
 			$options['text_prev'] = $form_properties['settings']['text-previous'];
 		}
+		if ( ! empty( $form_properties['settings']['text-view-results'] ) ) {
+			$options['text_view_results'] = sanitize_text_field( $form_properties['settings']['text-view-results'] );
+		}
 		if ( ! empty( $form_properties['settings']['submitData']['custom-class'] ) ) {
 			$options['submit_class'] = $form_properties['settings']['submitData']['custom-class'];
 		}

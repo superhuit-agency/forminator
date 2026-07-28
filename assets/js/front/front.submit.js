@@ -100,6 +100,16 @@
 			if (success_available.length) {
 				self.focus_to_element(self.$el.find('.forminator-response-message'));
 			}
+			self.$el.on('forminator:stripe:return:ready', function() {
+				if ( self.$el.data('forminatorStripeReturnSubmitting') ) {
+					return;
+				}
+
+				self.$el.data('forminatorStripeReturnSubmitting', true);
+				window.setTimeout(function() {
+					self.$el.trigger('submit.frontSubmit', 'forminator:submit:stripe:return');
+				}, 200);
+			});
 			$('.def-ajaxloader').hide();
 			var isSent = false;
 			$('body').on('click', '#lostPhone', function (e) {

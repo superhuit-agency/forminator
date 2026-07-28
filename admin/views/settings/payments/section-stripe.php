@@ -5,11 +5,23 @@
  * @package Forminator
  */
 
-$plugin_url              = forminator_plugin_url();
 $stripe_loaded           = forminator_payment_lib_stripe_version_loaded();
 $stripe_is_configured    = false;
 $forminator_currencies   = forminator_currency_list();
 $stripe_default_currency = 'USD';
+
+$stripe_oauth_available = $stripe_loaded && class_exists( 'Forminator_Stripe_Connect' );
+$stripe_site_has_ssl    = $stripe_oauth_available ? Forminator_Stripe_Connect::site_has_ssl() : false;
+$stripe_live_via_oauth  = $stripe_oauth_available && Forminator_Gateway_Stripe::is_oauth_connected( 'live' );
+$stripe_test_via_oauth  = $stripe_oauth_available && Forminator_Gateway_Stripe::is_oauth_connected( 'test' );
+$stripe_oauth_nonce     = $stripe_oauth_available ? wp_create_nonce( 'forminator_stripe_oauth' ) : '';
+
+// Per-mode credential state used by the OAuth settings UI.
+$stripe_live_configured = $stripe_oauth_available && Forminator_Gateway_Stripe::is_mode_configured( 'live' );
+$stripe_test_configured = $stripe_oauth_available && Forminator_Gateway_Stripe::is_mode_configured( 'test' );
+
+// OAuth UI uses stored credentials only; constants must not switch to the connected table.
+$stripe_oauth_is_configured = $stripe_live_configured || $stripe_test_configured;
 
 if ( $stripe_loaded ) {
 
@@ -61,108 +73,160 @@ if ( $stripe_loaded ) {
 
 	<?php else : ?>
 
-		<span class="sui-settings-label"><?php esc_html_e( 'Authorization', 'forminator' ); ?></span>
+		<?php if ( $stripe_oauth_available ) : ?>
 
-		<span class="sui-description"><?php esc_html_e( 'Connect your Stripe account with Forminator to use Stripe field for processing payments in your forms.', 'forminator' ); ?></span>
+			<span class="sui-settings-label"><?php esc_html_e( 'Stripe Connect (OAuth)', 'forminator' ); ?></span>
 
-		<?php if ( ! $stripe_is_configured ) { ?>
-
-			<div class="sui-form-field" style="margin-top: 10px;">
-
-					<button
-						class="sui-button stripe-connect-modal"
-						type="button"
-						data-modal-image="<?php echo esc_url( $plugin_url . 'assets/images/stripe-logo.png' ); ?>"
-						data-modal-image-x2="<?php echo esc_url( $plugin_url . 'assets/images/stripe-logo@2x.png' ); ?>"
-						data-modal-title="<?php esc_html_e( 'Connect Stripe Account', 'forminator' ); ?>"
-						data-modal-nonce="<?php echo esc_html( wp_create_nonce( 'forminator_stripe_settings_modal' ) ); ?>"
-					>
-						<?php esc_html_e( 'Connect To Stripe', 'forminator' ); ?>
-					</button>
-
-			</div>
-
-		<?php } else { ?>
+			<span class="sui-description">
+				<?php esc_html_e( 'Connect securely to Stripe in just a few clicks and start accepting payments with ease.', 'forminator' ); ?>
+			</span>
 
 			<?php
-			// SETTINGS: Authorization.
+			$stripe_oauth_modes = array(
+				'test' => array(
+					'label'        => esc_html__( 'Test', 'forminator' ),
+					'configured'   => $stripe_test_configured,
+					'via_oauth'    => $stripe_test_via_oauth,
+					'connect_text' => esc_html__( 'Connect Test', 'forminator' ),
+					'disabled'     => false,
+				),
+				'live' => array(
+					'label'        => esc_html__( 'Live', 'forminator' ),
+					'configured'   => $stripe_live_configured,
+					'via_oauth'    => $stripe_live_via_oauth,
+					'connect_text' => esc_html__( 'Connect Live', 'forminator' ),
+					'disabled'     => ! $stripe_site_has_ssl,
+				),
+			);
 			?>
-			<table class="sui-table" style="margin-top: 10px;">
 
-				<thead>
+			<?php if ( $stripe_oauth_is_configured ) : ?>
 
-					<tr>
-						<th><?php esc_html_e( 'Key Type', 'forminator' ); ?></th>
-						<th colspan="2"><?php esc_html_e( 'Publishable Key', 'forminator' ); ?></th>
-					</tr>
+				<table class="sui-table" style="margin-top: 10px;">
 
-				</thead>
+					<thead>
+						<tr>
+							<th><?php esc_html_e( 'Mode', 'forminator' ); ?></th>
+							<th><?php esc_html_e( 'Status', 'forminator' ); ?></th>
+							<th><?php esc_html_e( 'Account', 'forminator' ); ?></th>
+							<th><?php esc_html_e( 'Action', 'forminator' ); ?></th>
+						</tr>
+					</thead>
 
-				<tbody>
+					<tbody>
 
-					<tr>
-						<td class="sui-table-title"><?php esc_html_e( 'Test', 'forminator' ); ?></td>
-						<td colspan="2"><span style="display: block; word-break: break-all;"><?php echo esc_html( $stripe->get_test_key() ); ?></span></td>
-					</tr>
+						<?php foreach ( $stripe_oauth_modes as $stripe_mode => $stripe_mode_data ) : ?>
 
-					<tr>
-						<td class="sui-table-title"><?php esc_html_e( 'Live', 'forminator' ); ?></td>
-						<td colspan="2"><span style="display: block; word-break: break-all;"><?php echo esc_html( $stripe->get_live_key() ); ?></span></td>
-					</tr>
+							<tr>
+								<td class="sui-table-title"><?php echo esc_html( $stripe_mode_data['label'] ); ?></td>
+								<td>
+									<?php if ( $stripe_mode_data['configured'] ) : ?>
+										<span class="sui-tag sui-tag-green"><?php esc_html_e( 'Connected', 'forminator' ); ?></span>
+									<?php else : ?>
+										<span class="sui-tag"><?php esc_html_e( 'Disconnected', 'forminator' ); ?></span>
+									<?php endif; ?>
+								</td>
+								<td>
+									<span style="display: block; word-break: break-word;">
+										<?php
+										if ( $stripe_mode_data['via_oauth'] ) {
+											echo esc_html( Forminator_Gateway_Stripe::get_oauth_account_name( $stripe_mode ) );
+										} elseif ( $stripe_mode_data['configured'] ) {
+											esc_html_e( 'Configured manually', 'forminator' );
+										}
+										?>
+									</span>
+								</td>
+								<td>
+									<?php if ( $stripe_mode_data['configured'] ) : ?>
 
-				</tbody>
+										<button
+											class="sui-button sui-button-ghost wpmudev-open-modal"
+											type="button"
+											data-modal="disconnect-stripe"
+											data-mode="<?php echo esc_attr( $stripe_mode ); ?>"
+											data-modal-title="<?php esc_attr_e( 'Disconnect Stripe Account', 'forminator' ); ?>"
+											data-modal-content="<?php esc_attr_e( 'Are you sure you want to disconnect this Stripe account? This will affect the forms using the Stripe field.', 'forminator' ); ?>"
+											data-nonce="<?php echo esc_attr( $stripe_oauth_nonce ); ?>"
+										>
+											<span class="sui-loading-text"><?php esc_html_e( 'Disconnect', 'forminator' ); ?></span>
+											<i class="sui-icon-loader sui-loading" aria-hidden="true"></i>
+										</button>
 
-				<tfoot>
+									<?php else : ?>
 
-					<tr>
+										<button
+											class="sui-button forminator-stripe-oauth-connect"
+											type="button"
+											data-mode="<?php echo esc_attr( $stripe_mode ); ?>"
+											data-nonce="<?php echo esc_attr( $stripe_oauth_nonce ); ?>"
+											<?php disabled( 'live' === $stripe_mode && ! $stripe_site_has_ssl ); ?>
+										>
+											<span class="sui-loading-text"><?php esc_html_e( 'Connect', 'forminator' ); ?></span>
+											<i class="sui-icon-loader sui-loading" aria-hidden="true"></i>
+										</button>
 
-						<td colspan="3">
+									<?php endif; ?>
+								</td>
+							</tr>
 
-							<div class="fui-buttons-alignment">
+						<?php endforeach; ?>
 
-								<form class="forminator-settings-save">
+					</tbody>
 
-									<button
-										class="sui-button sui-button-ghost wpmudev-open-modal"
-										data-modal="disconnect-stripe"
-										data-modal-title="<?php esc_attr_e( 'Disconnect Stripe Account', 'forminator' ); ?>"
-										data-modal-content="<?php esc_attr_e( 'Are you sure you want to disconnect your Stripe Account? This will affect the forms using the Stripe field.', 'forminator' ); ?>"
-										data-nonce="<?php echo esc_attr( wp_create_nonce( 'forminatorSettingsRequest' ) ); ?>"
-									>
+				</table>
 
-										<span class="sui-loading-text">
-											<?php esc_html_e( 'Disconnect', 'forminator' ); ?>
-										</span>
+			<?php else : ?>
 
-										<i class="sui-icon-loader sui-loading" aria-hidden="true"></i>
+				<div class="sui-form-field">
+					<?php foreach ( $stripe_oauth_modes as $stripe_mode => $stripe_mode_data ) : ?>
+						<button
+							class="sui-button forminator-stripe-oauth-connect"
+							type="button"
+							data-mode="<?php echo esc_attr( $stripe_mode ); ?>"
+							data-nonce="<?php echo esc_attr( $stripe_oauth_nonce ); ?>"
+							<?php disabled( $stripe_mode_data['disabled'] ); ?>
+						>
+							<span class="sui-loading-text">
+								<?php echo esc_html( $stripe_mode_data['connect_text'] ); ?>
+							</span>
+							<i class="sui-icon-loader sui-loading" aria-hidden="true"></i>
+						</button>
+					<?php endforeach; ?>
+				</div>
 
-									</button>
+			<?php endif; ?>
 
-								</form>
+			<?php if ( ! $stripe_site_has_ssl ) : ?>
 
-								<button
-									class="sui-button stripe-connect-modal"
-									type="button"
-									data-modal-image="<?php echo esc_url( $plugin_url . 'assets/images/stripe-logo.png' ); ?>"
-									data-modal-image-x2="<?php echo esc_url( $plugin_url . 'assets/images/stripe-logo@2x.png' ); ?>"
-									data-modal-title="<?php esc_html_e( 'Connect Stripe Account', 'forminator' ); ?>"
-									data-modal-nonce="<?php echo esc_html( wp_create_nonce( 'forminator_stripe_settings_modal' ) ); ?>"
-								>
-									<?php esc_html_e( 'Configure', 'forminator' ); ?>
-								</button>
+				<div
+					role="alert"
+					class="sui-notice sui-notice-blue sui-active"
+					style="display: block; text-align: left; margin-top: 10px;"
+					aria-live="assertive"
+				>
 
-							</div>
+					<div class="sui-notice-content">
 
-						</td>
+						<div class="sui-notice-message">
 
-					</tr>
+							<span class="sui-notice-icon sui-icon-info" aria-hidden="true"></span>
 
-				</tfoot>
+							<p><?php esc_html_e( 'Live mode requires a valid SSL certificate. Please enable SSL on your site to connect a live Stripe account.', 'forminator' ); ?></p>
 
-			</table>
+						</div>
 
-			<?php // SETTINGS: Default Charge Currency. ?>
-			<div class="sui-form-field">
+					</div>
+
+				</div>
+
+			<?php endif; ?>
+
+		<?php endif; ?>
+
+		<?php if ( $stripe_is_configured || $stripe_live_configured || $stripe_test_configured ) : ?>
+
+			<div class="sui-form-field" style="margin-top: 30px;">
 
 				<label for="forminator-stripe-currency" class="sui-settings-label"><?php esc_html_e( 'Default charge currency', 'forminator' ); ?></label>
 
@@ -180,7 +244,7 @@ if ( $stripe_loaded ) {
 
 			</div>
 
-		<?php } ?>
+		<?php endif; ?>
 
 	<?php endif; ?>
 

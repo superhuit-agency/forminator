@@ -222,6 +222,13 @@ class Forminator_Migration {
 		$field = self::migrate_payment_plan_field( $field );
 
 		/**
+		 * Migrate Stripe Checkout Sessions API safely.
+		 *
+		 * @since 1.56
+		 */
+		$field = self::migrate_stripe_checkout_session_payment_api( $field );
+
+		/**
 		 * Migrate captcha provider field
 		 *
 		 * @since 1.15.8
@@ -229,6 +236,85 @@ class Forminator_Migration {
 		$field = self::migrate_captcha_provider_field( $field );
 
 		return $field;
+	}
+
+	/**
+	 * Migrate Stripe OCS fields to Checkout Sessions.
+	 *
+	 * All stripe-ocs fields are updated to use the Checkout Sessions API during
+	 * migration from Standard checkout flow. Legacy fields that were missing payment_api, or still saved as
+	 * Payment Element, also get their contact mappings copied to the Checkout
+	 * Sessions fields.
+	 *
+	 * @since 1.56
+	 *
+	 * @param array $field Field.
+	 * @return array
+	 */
+	public static function migrate_stripe_checkout_session_payment_api( $field ) {
+		if ( ! isset( $field['type'] ) || 'stripe-ocs' !== $field['type'] ) {
+			return $field;
+		}
+
+		$was_legacy           = empty( $field['payment_api'] ) || 'payment_element' === $field['payment_api'];
+		$field['payment_api'] = 'checkout_session';
+
+		if ( $was_legacy ) {
+			unset( $field['checkout_session_review_required'], $field['checkout_session_review_reasons'] );
+			$field['adaptive_pricing'] = 'false';
+			$field                     = self::migrate_stripe_checkout_session_contact_mappings( $field );
+		}
+
+		return $field;
+	}
+
+	/**
+	 * Copy existing billing contact mappings to Checkout Sessions contact fields.
+	 *
+	 * @since 1.56
+	 *
+	 * @param array $field Field.
+	 * @return array
+	 */
+	private static function migrate_stripe_checkout_session_contact_mappings( $field ) {
+		if ( ! filter_var( $field['billing'] ?? false, FILTER_VALIDATE_BOOLEAN ) ) {
+			return $field;
+		}
+
+		if ( ! empty( $field['billing_email'] ) && empty( $field['checkout_email'] ) ) {
+			$field['checkout_email_enabled'] = 'true';
+			$field['checkout_email']         = self::get_stripe_checkout_session_field_variable( $field['billing_email'] );
+		}
+
+		if ( ! empty( $field['billing_phone'] ) && empty( $field['checkout_phone'] ) ) {
+			$field['checkout_phone_enabled'] = 'true';
+			$field['checkout_phone']         = self::get_stripe_checkout_session_field_variable( $field['billing_phone'] );
+		}
+
+		if ( empty( $field['billing_name'] ) && empty( $field['billing_address'] ) ) {
+			$field['billing'] = 'false';
+		}
+
+		return $field;
+	}
+
+	/**
+	 * Normalize a mapped field ID to the variable format used by Checkout Sessions.
+	 *
+	 * @since 1.56
+	 *
+	 * @param mixed $field_id Field ID.
+	 * @return string
+	 */
+	private static function get_stripe_checkout_session_field_variable( $field_id ): string {
+		if ( ! is_string( $field_id ) ) {
+			return '';
+		}
+
+		$field_id = trim( $field_id );
+		$field_id = trim( $field_id, '{}' );
+
+		return '' !== $field_id ? '{' . $field_id . '}' : '';
 	}
 
 	/**

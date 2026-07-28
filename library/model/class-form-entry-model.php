@@ -1198,6 +1198,54 @@ class Forminator_Form_Entry_Model {
 	}
 
 	/**
+	 * Get active entry ID by payment identifier.
+	 *
+	 * @since 1.56
+	 *
+	 * @param int    $form_id Form ID.
+	 * @param string $meta_key Payment field meta key.
+	 * @param string $identifier_key Payment identifier key.
+	 * @param string $identifier_value Payment identifier value.
+	 * @param int    $excluded_entry_id Entry ID to exclude from lookup.
+	 * @return int
+	 */
+	public static function get_active_entry_id_by_payment_identifier( $form_id, $meta_key, $identifier_key, $identifier_value, $excluded_entry_id = 0 ) {
+		if ( empty( $form_id ) || empty( $meta_key ) || empty( $identifier_key ) || empty( $identifier_value ) ) {
+			return 0;
+		}
+
+		global $wpdb;
+
+		$table_name       = Forminator_Database_Tables::get_table_name( Forminator_Database_Tables::FORM_ENTRY_META );
+		$entry_table_name = Forminator_Database_Tables::get_table_name( Forminator_Database_Tables::FORM_ENTRY );
+		// Payment fields are stored as serialized meta arrays, so match the exact identifier key/value pair.
+		$identifier_like = '%' . $wpdb->esc_like( ':"' . $identifier_key . '";s:' ) . '%' . $wpdb->esc_like( ':"' . $identifier_value . '"' ) . '%';
+
+		$sql = "SELECT m.`entry_id`
+			FROM {$table_name} m
+			LEFT JOIN {$entry_table_name} e
+			ON ( e.`entry_id` = m.`entry_id` )
+			WHERE e.`form_id` = %d
+			AND e.`status` = 'active'
+			AND e.`entry_id` != %d
+			AND m.`meta_key` = %s
+			AND m.`meta_value` LIKE %s
+			LIMIT 1";
+
+		$entry_id = $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+			$wpdb->prepare(
+				$sql, // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+				$form_id,
+				$excluded_entry_id,
+				$meta_key,
+				$identifier_like
+			)
+		);
+
+		return (int) $entry_id;
+	}
+
+	/**
 	 * Bulk delete form entries
 	 *
 	 * @param int   $form_id - the form id.
@@ -1367,8 +1415,7 @@ class Forminator_Form_Entry_Model {
 					$file_path = is_array( $meta_value['file']['file_path'] ) ? $meta_value['file']['file_path'] : array( $meta_value['file']['file_path'] );
 					if ( ! empty( $file_path ) ) {
 						foreach ( $file_path as $key => $path ) {
-							$path = realpath( $path );
-							if ( ! $path || ! file_exists( $path ) ) {
+							if ( ! is_string( $path ) || '' === $path ) {
 								continue;
 							}
 
@@ -1382,12 +1429,16 @@ class Forminator_Form_Entry_Model {
 								continue;
 							}
 
-							wp_delete_file( $path );
+							$delete_attachment = false;
 							if ( isset( $meta_value['file']['file_url'][ $key ] ) ) {
 								$attachment_id = attachment_url_to_postid( $meta_value['file']['file_url'][ $key ] );
 								if ( $attachment_id ) {
-									wp_delete_attachment( $attachment_id );
+									$delete_attachment = wp_delete_attachment( $attachment_id );
 								}
+							}
+
+							if ( ! $delete_attachment ) {
+								wp_delete_file_from_directory( $path, $upload_root );
 							}
 						}
 					}
@@ -2877,7 +2928,13 @@ class Forminator_Form_Entry_Model {
 		if ( empty( $option['limit'] ) ) {
 			return false;
 		}
-		$entries = self::select_count_entries_by_meta_field( $module_id, $field_name, $option['value'], $option['label'], $field_type );
+		$entries = self::select_count_entries_by_meta_field(
+			$module_id,
+			$field_name,
+			forminator_normalize_choice_option_value( $option['value'] ),
+			forminator_normalize_choice_option_value( $option['label'] ),
+			$field_type
+		);
 
 		if ( $option['limit'] <= $entries ) {
 			return true;
@@ -2946,12 +3003,13 @@ class Forminator_Form_Entry_Model {
 		$field_label_encoded = htmlspecialchars( $field_label, ENT_QUOTES );
 
 		if ( 'single' === $option_type ) {
+			// Do not pre-escape with esc_sql(); $wpdb->prepare() escapes %s and combining both double-escapes special characters like '.
 			$condition = $wpdb->prepare(
 				' AND m.`meta_value` IN (%s, %s, %s, %s)',
-				esc_sql( $field_value ),
-				esc_sql( $field_label ),
-				esc_sql( $field_value_encoded ),
-				esc_sql( $field_label_encoded )
+				$field_value,
+				$field_label,
+				$field_value_encoded,
+				$field_label_encoded
 			);
 		} else {
 			// todo: change this condition to check if it's multiple one - do this, otherwise do the previous code block.

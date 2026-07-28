@@ -26,6 +26,14 @@ class Forminator_Encryption {
 		foreach ( $keys as $key ) {
 			if ( ! empty( $settings[ $key ] ) ) {
 				$original_key = $settings[ $key ];
+
+				// Already-masked placeholder (e.g. "sk_test_**********ABCD"): the real
+				// value lives in "{$key}_encrypted". Re-encrypting the mask would make
+				// it decrypt back to the masked string and break API calls, so skip it.
+				if ( false !== strpos( $original_key, '**********' ) ) {
+					continue;
+				}
+
 				// save relevant symbols from the beginning and end of the key.
 				$partial_secret = substr( $original_key, 0, $symbols_to_save[0] )
 					. str_repeat( '*', 10 )

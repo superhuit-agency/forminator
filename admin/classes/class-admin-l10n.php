@@ -464,6 +464,14 @@ class Forminator_Admin_L10n {
 			'geolocation'   => array(
 				'configure_title' => esc_html__( 'Configure Geolocation', 'forminator' ),
 			),
+			'stripe_oauth'  => array(
+				'connected_live'          => esc_html__( 'Your live Stripe account has been connected successfully.', 'forminator' ),
+				'connected_test'          => esc_html__( 'Your test Stripe account has been connected successfully.', 'forminator' ),
+				'connect_failed'          => esc_html__( 'Could not start Stripe connection. Please try again.', 'forminator' ),
+				'disconnect_failed'       => esc_html__( 'Could not disconnect Stripe account.', 'forminator' ),
+				'invalid_connection_mode' => esc_html__( 'Invalid connection mode. Please refresh the page and try again.', 'forminator' ),
+				'stripe_connect_failed'   => esc_html__( 'Stripe connection failed.', 'forminator' ),
+			),
 			'templates'     => array(
 				'create_form'       => esc_html__( 'Create Form', 'forminator' ),
 				'open_actions'      => esc_html__( 'Open actions', 'forminator' ),

@@ -134,6 +134,7 @@ function forminator_stripslashes_deep( $val ) {
  */
 function forminator_sanitize_field( &$field, $key = null ) {
 	if ( 'question_description' === $key ) {
+		$field = forminator_remove_zero_width_chars( $field );
 		return wp_kses_post( $field );
 	}
 	// If array map all fields.
@@ -142,7 +143,28 @@ function forminator_sanitize_field( &$field, $key = null ) {
 		return $field;
 	}
 
+	$field = forminator_remove_zero_width_chars( $field );
+
 	return sanitize_text_field( $field );
+}
+
+/**
+ * Removes zero-width characters from a string.
+ *
+ * @since 1.56
+ *
+ * @param string $content Content to remove zero width characters from.
+ * @return string
+ */
+function forminator_remove_zero_width_chars( $content ) {
+	if ( ! is_string( $content ) ) {
+		return $content;
+	}
+	return preg_replace(
+		'/[\x{200B}\x{200C}\x{200D}\x{2060}\x{FEFF}]/u',
+		'',
+		$content
+	);
 }
 
 /**
@@ -165,6 +187,9 @@ function forminator_sanitize_array_field( $fields ) {
 	);
 
 	foreach ( $fields as $key => &$value ) {
+		if ( ! is_array( $value ) ) {
+			$value = forminator_remove_zero_width_chars( $value );
+		}
 		if ( is_array( $value ) ) {
 			$value = forminator_sanitize_array_field( $value );
 		} elseif ( in_array( $key, $allow_html, true ) ) {
@@ -199,6 +224,25 @@ function forminator_decode_html_entity( $fields ) {
 	}
 
 	return $fields;
+}
+
+/**
+ * Return choice option value as submitted on the front end.
+ *
+ * Strips HTML tags and decodes entities so builder values match browser POST data.
+ *
+ * @since 1.56.0
+ *
+ * @param mixed $value Option value or label from field settings.
+ *
+ * @return string
+ */
+function forminator_normalize_choice_option_value( $value ) {
+	if ( ! is_scalar( $value ) ) {
+		return '';
+	}
+
+	return htmlspecialchars_decode( wp_strip_all_tags( (string) $value ), ENT_QUOTES );
 }
 
 /**
@@ -252,7 +296,7 @@ function forminator_sort_fields_with_groups( array $fields ): array {
  * @return string
  */
 function forminator_sanitize_textarea( $field ) {
-
+	$field = forminator_remove_zero_width_chars( $field );
 	return sanitize_textarea_field( $field );
 }
 
@@ -2022,6 +2066,29 @@ function forminator_old_field( $element_id, $fields, $form_id ) {
 }
 
 /**
+ * Get a mapped field ID only when it still points to an active form field.
+ * This keeps saved mappings safe when a form field was later deleted or disabled.
+ *
+ * @param string $element_id Field slug.
+ * @param array  $fields Fields.
+ * @param int    $form_id Form id.
+ * @return string
+ */
+function forminator_get_active_mapped_field_id( $element_id, $fields, $form_id ) {
+	$element_id = forminator_clear_field_id( $element_id );
+
+	if ( empty( $element_id ) || empty( $form_id ) ) {
+		return '';
+	}
+
+	if ( forminator_old_field( $element_id, $fields, $form_id ) ) {
+		return '';
+	}
+
+	return $element_id;
+}
+
+/**
  * Remove prefixes from field slug
  *
  * @param string $field_id Field slug.
@@ -3145,25 +3212,53 @@ function forminator_attachment_path_is_allowed( $path ) {
 		return false;
 	}
 
+	/**
+	 * Short-circuit attachment path validation.
+	 *
+	 * @since 1.56.0
+	 *
+	 * @param bool|null    $allowed Null for default checks; bool to override.
+	 * @param string|array $path    File path or list of paths.
+	 */
+	$pre = apply_filters( 'pre_forminator_attachment_path_is_allowed', null, $path );
+	if ( null !== $pre ) {
+		return (bool) $pre;
+	}
+
 	$upload_dir = wp_upload_dir();
 	if ( empty( $upload_dir['basedir'] ) ) {
 		return false;
 	}
 
-	$basedir_real = realpath( $upload_dir['basedir'] );
-	if ( false === $basedir_real ) {
-		return false;
-	}
-
-	$basedir_prefix = trailingslashit( wp_normalize_path( $basedir_real ) );
+	$basedir = $upload_dir['basedir'];
 
 	foreach ( $paths as $single_path ) {
 		if ( ! is_string( $single_path ) || '' === $single_path ) {
 			return false;
 		}
 
-		$path_real = realpath( $single_path );
-		if ( false === $path_real || 0 !== strpos( wp_normalize_path( $path_real ), $basedir_prefix ) ) {
+		// Stream paths (e.g. S3-Uploads): skip realpath().
+		if ( wp_is_stream( $single_path ) ) {
+			$real_file      = wp_normalize_path( $single_path );
+			$real_directory = wp_normalize_path( $basedir );
+
+			// realpath() can't collapse "../" on a stream, so reject traversal explicitly.
+			if ( preg_match( '#(^|/)\.\.(/|$)#', $real_file ) ) {
+				return false;
+			}
+		} else {
+			$real_file      = realpath( $single_path );
+			$real_directory = realpath( $basedir );
+
+			if ( false === $real_file || false === $real_directory ) {
+				return false;
+			}
+
+			$real_file      = wp_normalize_path( $real_file );
+			$real_directory = wp_normalize_path( $real_directory );
+		}
+
+		if ( 0 !== strpos( $real_file, trailingslashit( $real_directory ) ) ) {
 			return false;
 		}
 	}

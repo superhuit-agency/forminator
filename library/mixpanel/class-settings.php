@@ -21,7 +21,6 @@ class Forminator_Mixpanel_Settings extends Events {
 		add_action( 'forminator_before_reset_settings', array( __CLASS__, 'tracking_settings_reset' ) );
 		add_action( 'forminator_before_uninstall', array( __CLASS__, 'tracking_plugin_uninstall' ) );
 		add_action( 'deactivated_plugin', array( __CLASS__, 'tracking_deactivate' ) );
-		add_action( 'forminator_before_stripe_connected', array( __CLASS__, 'tracking_stripe_rak_use' ), 10, 5 );
 		add_action( 'forminator_after_stripe_migrated', array( __CLASS__, 'tracking_stripe_migrated' ) );
 		add_action( 'forminator_auto_save_setting', array( __CLASS__, 'tracking_auto_save' ) );
 	}
@@ -133,45 +132,6 @@ class Forminator_Mixpanel_Settings extends Events {
 		$properties = array( 'Method' => $method );
 
 		self::tracker()->track( $active ? 'Opt In' : 'Opt Out', $properties );
-	}
-
-	/**
-	 * Track stripe RAK use.
-	 *
-	 * @param string $test_key Test API key.
-	 * @param string $test_secret Test Secret/Restricted Key.
-	 * @param string $live_key Live API key.
-	 * @param string $live_secret Live Secret/Restricted Key.
-	 * @param string $page_slug Page slug.
-	 *
-	 * @return void
-	 */
-	public static function tracking_stripe_rak_use( string $test_key, string $test_secret, string $live_key, string $live_secret, $page_slug ) {
-		// Process only if the keys are Restricted API Keys.
-		if ( ( ! empty( $test_secret ) && 'rk_' === substr( $test_secret, 0, 3 ) ) && ( ! empty( $live_secret ) && 'rk_' === substr( $live_secret, 0, 3 ) ) ) {
-			$config             = get_option( 'forminator_stripe_configuration', array() );
-			$config_test_secret = $config['test_secret'] ?? '';
-			$config_live_secret = $config['live_secret'] ?? '';
-
-			// Ignore if already switched to Restricted API Keys.
-			if ( ( ! empty( $config_test_secret ) && 'rk_' === substr( $config_test_secret, 0, 3 ) ) && ( ! empty( $config_live_secret ) && 'rk_' === substr( $config_live_secret, 0, 3 ) ) ) {
-				return;
-			}
-
-			$properties['triggered_from'] = $page_slug;
-			if ( 'forminator-settings' === $page_slug ) {
-				$properties['triggered_from'] = 'Settings';
-			} elseif ( 'forminator-addons' === $page_slug ) {
-				$properties['triggered_from'] = 'Stripe Subscription Add-On';
-			}
-
-			$properties['switch_from_secret_key'] = 'No';
-			if ( ( ! empty( $config_test_secret ) && 'sk_' === substr( $config_test_secret, 0, 3 ) ) || ( ! empty( $config_live_secret ) && 'sk_' === substr( $config_live_secret, 0, 3 ) ) ) {
-				$properties['switch_from_secret_key'] = 'Yes';
-			}
-
-			self::track_event( 'for_stripe_rak_use', $properties );
-		}
 	}
 
 	/**

@@ -347,11 +347,6 @@ class Forminator_Settings_Page extends Forminator_Admin_Page {
 					'forminator_notice' => 'settings_reset',
 				);
 				break;
-			case 'disconnect_stripe':
-				if ( class_exists( 'Forminator_Gateway_Stripe' ) ) {
-					Forminator_Gateway_Stripe::store_settings( array() );
-				}
-				break;
 			case 'disconnect_paypal':
 				if ( class_exists( 'Forminator_PayPal_Express' ) ) {
 					Forminator_PayPal_Express::store_settings( array() );
