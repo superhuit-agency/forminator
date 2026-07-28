@@ -290,13 +290,7 @@ class Forminator_Template_API {
 	 * @return array
 	 */
 	private static function request( string $endpoint, string $method, array $data = array() ): array {
-		$base = 'https://wpmudev.com/';
-
-		// Support custom API base.
-		if ( defined( 'WPMUDEV_CUSTOM_API_SERVER' ) && ! empty( WPMUDEV_CUSTOM_API_SERVER ) ) {
-			$base = trailingslashit( WPMUDEV_CUSTOM_API_SERVER );
-		}
-		$url = $base . $endpoint;
+		$url = forminator_get_server_url( $endpoint );
 
 		$args = array(
 			'method' => $method,

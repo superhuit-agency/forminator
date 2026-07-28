@@ -101,6 +101,36 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 	private static $is_paypal_payment = false;
 
 	/**
+	 * Flag if form has post image field
+	 *
+	 * @var false
+	 */
+	private static $has_post_image = false;
+
+	/**
+	 * Flag add signature from storage
+	 *
+	 * @var false
+	 */
+	private static $add_signature_from_storage = false;
+
+	/**
+	 * Flag is stripe checkout validation
+	 *
+	 * @var false
+	 */
+
+	private static $is_stripe_checkout_validation = false;
+
+	/**
+	 * Flag if form has signature field
+	 *
+	 * @var false
+	 */
+	public static $has_signature_field = false;
+
+
+	/**
 	 * Forminator_CForm_Front_Action constructor
 	 */
 	public function __construct() {
@@ -113,6 +143,9 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 
 			add_action( 'wp_ajax_forminator_multiple_file_upload', array( $this, 'multiple_file_upload' ) );
 			add_action( 'wp_ajax_nopriv_forminator_multiple_file_upload', array( $this, 'multiple_file_upload' ) );
+
+			add_action( 'wp_ajax_forminator_check_stripe_checkout_session_status', array( $this, 'check_stripe_checkout_session_status' ) );
+			add_action( 'wp_ajax_nopriv_forminator_check_stripe_checkout_session_status', array( $this, 'check_stripe_checkout_session_status' ) );
 		}
 
 		add_action( 'wp_ajax_forminator_email_draft_link', array( $this, 'submit_email_draft_link' ) );
@@ -184,13 +217,21 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 
 		// Check if form data is set.
 		if ( isset( $data['form_data'] ) && isset( $data['form_data']['purchase_units'] ) ) {
+			$paypal_field   = self::$info['paypal_field'];
+			$field_object   = Forminator_Core::get_field_object( 'paypal' );
+			$payment_amount = $field_object->get_payment_amount( $paypal_field );
 
 			// Check if payment amount is bigger than zero.
-			if ( floatval( $data['form_data']['purchase_units'][0]['amount']['value'] ) <= 0 ) {
+			if ( floatval( $payment_amount ) <= 0 ) {
 				wp_send_json_error( esc_html__( 'The payment total must be greater than 0.', 'forminator' ) );
 			}
 
-			$data['form_data']['purchase_units'][0]['amount'] = self::prepare_pp_price( $data['form_data']['purchase_units'][0]['amount'] );
+			$data['form_data']['purchase_units'][0]['amount'] = self::prepare_pp_price(
+				array(
+					'value'         => $payment_amount,
+					'currency_code' => Forminator_Field::get_property( 'currency', $paypal_field, 'USD' ),
+				)
+			);
 
 			$data = $this->get_temporary_country_code( $data );
 			$data = $this->get_state_code( $data );
@@ -223,22 +264,64 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 	}
 
 	/**
+	 * Reset the module settings and fields with the preview data if the request is coming from preview mode.
+	 *
+	 * @return void
+	 */
+	private function reset_model_with_preview_data_if_needed() {
+		$is_preview = filter_input( INPUT_POST, 'is_preview', FILTER_VALIDATE_BOOLEAN );
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce is already verified before this function is called.
+		$action = isset( $_POST['action'] ) ? Forminator_Core::sanitize_text_field( 'action' ) : '';
+		// Check if the request is for updating payment amount in preview mode and user has permission to edit the form.
+		if ( 'forminator_update_payment_amount' === $action && $is_preview && current_user_can( forminator_get_permission( 'forminator-cform' ) ) ) {
+			$preview_data = $_POST['preview_data'] ?? array(); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput, WordPress.Security.NonceVerification.Missing -- Nonce is already verified before this function is called.
+			if ( ! empty( $preview_data ) ) {
+				if ( ! is_array( $preview_data ) ) {
+					$preview_data = json_decode( wp_unslash( $preview_data ), true );
+				}
+				$preview_data = Forminator_Core::sanitize_array( $preview_data, 'preview_data', true );
+
+				// Reset the module settings and fields only if the preview data is not empty.
+				if ( empty( $preview_data ) ) {
+					return;
+				}
+
+				if ( ! empty( $preview_data['settings'] ) ) {
+					// Reset the module settings using the preview data.
+					static::$module_object->settings = $preview_data['settings'];
+				}
+
+				// Reset fields to prevent duplicate fields when updating from preview data.
+				static::$module_object->fields = array();
+				$view                          = Forminator_CForm_Front::get_instance();
+				static::$module_object         = $view->set_form_model_data( static::$module_object, $preview_data );
+				self::$module_settings         = static::$module_object->settings;
+			}
+		}
+	}
+
+	/**
 	 * Update payment amount
 	 *
 	 * @since 1.7.3
 	 */
 	public function update_payment_amount() {
 		$form_id = Forminator_Core::sanitize_text_field( 'form_id' );
+
 		if ( empty( $form_id ) || ! $this->validate_ajax( 'forminator_submit_form' . $form_id, 'POST', 'forminator_nonce' ) ) {
 			wp_send_json_error( esc_html__( 'Invalid nonce. Please refresh your browser.', 'forminator' ) );
 		}
 
 		$this->init_properties();
 
+		// Reset the module settings and fields with the preview data if the request is coming from the preview mode.
+		$this->reset_model_with_preview_data_if_needed();
+
 		self::check_fields_visibility();
 
 		$first_intent = ! empty( self::$prepared_data['stripe_first_payment_intent'] );
 		$is_intent    = ! empty( self::$prepared_data['stripe-intent'] );
+		$validate     = ! empty( self::$prepared_data['stripe_validate_submission'] );
 
 		if ( ! $first_intent && empty( self::$info['stripe_field'] ) ) {
 			wp_send_json_error(
@@ -251,11 +334,16 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 		$forminator_stripe_field = Forminator_Core::get_field_object( 'stripe' );
 
 		if ( $forminator_stripe_field instanceof Forminator_Stripe ) {
-			$is_subscription = ! empty( $forminator_stripe_field->payment_plan['payment_method'] )
+			$is_checkout_session = $forminator_stripe_field->is_checkout_session( self::$info['stripe_field'] );
+			$is_subscription     = ! empty( $forminator_stripe_field->payment_plan['payment_method'] )
 				&& 'subscription' === $forminator_stripe_field->payment_plan['payment_method'];
 
+			if ( $validate && $is_checkout_session ) {
+				$this->validate_payment_submission();
+			}
+
 			// Subscription stripe-intent must always reach update_paymentIntent() — amount is returned for wallet preview remounts (variable price/qty).
-			if ( ! $first_intent && $is_intent && ! $is_subscription && isset( self::$prepared_data['paymentPlan'] ) &&
+			if ( ! $is_checkout_session && ! $first_intent && $is_intent && ! $is_subscription && isset( self::$prepared_data['paymentPlan'] ) &&
 				( empty( $forminator_stripe_field->payment_plan )
 					|| self::$prepared_data['paymentPlan'] === $forminator_stripe_field->payment_plan_hash )
 			) {
@@ -263,15 +351,195 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 				// Do not reset the payment plan if it's already set.
 				$new_plan_hash = empty( $forminator_stripe_field->payment_plan_hash ) && ! empty( self::$prepared_data['paymentPlan'] )
 					? self::$prepared_data['paymentPlan'] : $forminator_stripe_field->payment_plan_hash;
-				wp_send_json_success(
+				wp_send_json_success( array( 'paymentPlan' => $new_plan_hash ) );
+			}
+
+			$forminator_stripe_field->update_paymentIntent( self::$prepared_data, self::$info['stripe_field'] );
+		}
+
+		wp_send_json_success();
+	}
+
+	/**
+	 * Check whether a stored Stripe Checkout Session can still be recovered.
+	 *
+	 * @since 1.56
+	 *
+	 * @return void
+	 */
+	public function check_stripe_checkout_session_status() {
+		$form_id    = Forminator_Core::sanitize_text_field( 'form_id' );
+		$payment_id = Forminator_Core::sanitize_text_field( 'paymentid' );
+
+		if ( empty( $form_id ) || ! $this->validate_ajax( 'forminator_submit_form' . $form_id, 'POST', 'forminator_nonce' ) ) {
+			wp_send_json_error(
+				array(
+					'message'     => esc_html__( 'Invalid nonce. Please refresh your browser.', 'forminator' ),
+					'recoverable' => false,
+				)
+			);
+		}
+
+		if ( empty( $payment_id ) ) {
+			wp_send_json_error(
+				array(
+					'message'     => esc_html__( 'Stripe Checkout Session ID does not exist.', 'forminator' ),
+					'recoverable' => false,
+				)
+			);
+		}
+
+		$this->init_properties();
+		self::check_fields_visibility();
+
+		if ( empty( self::$info['stripe_field'] ) ) {
+			wp_send_json_error(
+				array(
+					'message'     => esc_html__( 'Error: Stripe field doesn\'t exist in your form!', 'forminator' ),
+					'recoverable' => false,
+				)
+			);
+		}
+
+		$stripe_field = Forminator_Core::get_field_object( 'stripe' );
+
+		if ( ! $stripe_field instanceof Forminator_Stripe || ! $stripe_field->is_checkout_session( self::$info['stripe_field'] ) ) {
+			wp_send_json_error(
+				array(
+					'message'     => esc_html__( 'Stripe Checkout is not enabled for this form.', 'forminator' ),
+					'recoverable' => false,
+				)
+			);
+		}
+
+		self::$prepared_data['paymentid'] = $payment_id;
+		$session                          = $stripe_field->get_checkout_session( self::$info['stripe_field'] );
+
+		if ( ! Forminator_Stripe::has_pending_checkout_session( $payment_id ) ) {
+			$session_form_id = is_object( $session ) && ! empty( $session->client_reference_id ) ? (string) $session->client_reference_id : '';
+
+			// If local pending state was lost, trust only a Stripe session that still belongs to this form and is recoverable.
+			if ( is_wp_error( $session ) || $session_form_id !== (string) $form_id || ! Forminator_Stripe::is_recoverable_checkout_session( $session ) ) {
+				wp_send_json_error(
 					array(
-						'paymentPlan' => $new_plan_hash,
+						'message'     => esc_html__( 'Checkout Session ID is not valid', 'forminator' ),
+						'recoverable' => false,
 					)
 				);
 			}
-			$forminator_stripe_field->update_paymentIntent(
-				self::$prepared_data,
-				self::$info['stripe_field']
+
+			Forminator_Stripe::restore_pending_checkout_session( $payment_id );
+		}
+
+		if ( is_wp_error( $session ) || ! Forminator_Stripe::is_recoverable_checkout_session( $session ) ) {
+			Forminator_Stripe::remove_pending_checkout_session( $payment_id );
+
+			wp_send_json_error(
+				array(
+					'message'     => esc_html__( 'Payment failed. Please try again.', 'forminator' ),
+					'recoverable' => false,
+				)
+			);
+		}
+
+		wp_send_json_success(
+			array(
+				'recoverable' => true,
+				'paymentid'   => $session->id,
+			)
+		);
+	}
+
+	/**
+	 * Process file uploads for Stripe Checkout sessions.
+	 *
+	 * @return void
+	 */
+	private function process_file_uploads() {
+		if ( ! self::$is_draft && ! empty( self::$info['field_data_array'] )
+			&& ( self::$has_upload || self::$has_post_image || self::$has_signature_field )
+			&& ! empty( self::$prepared_data['paymentid'] ) && ! empty( self::$info['stripe_field'] ) ) {
+			$forminator_stripe_field = Forminator_Core::get_field_object( 'stripe' );
+			// Check if the Stripe Checkout Session is still valid for file uploads.
+			$is_valid = $forminator_stripe_field->is_valid_session_for_file_upload( self::$prepared_data['paymentid'], self::$info['stripe_field'] );
+			if ( $is_valid ) {
+				$uploaded_files = array();
+				$post_images    = array();
+				$signatures     = array();
+				// Check if the form has any file upload fields and process them.
+				if ( self::$has_upload ) {
+					self::process_uploads( 'upload' );
+				}
+				foreach ( self::$info['field_data_array'] as $field ) {
+					if ( ! empty( $field['field_type'] ) && ! empty( $field['value'] ) ) {
+						if ( 'upload' === $field['field_type'] ) {
+							$uploaded_files[ $field['name'] ] = $field['value'];
+						} elseif ( 'postdata' === $field['field_type'] && ! empty( $field['value']['post-image'] ) ) {
+							$post_images[ $field['name'] ] = $field['value']['post-image'];
+						} elseif ( 'signature' === $field['field_type'] && ! empty( $field['value']['file'] ) ) {
+							$signatures[ $field['name'] ] = $field['value']['file'];
+						}
+					}
+				}
+				// Add the uploaded files, post images, and signatures to the options table for the Stripe Checkout Session to retrieve later upon payment completion.
+				if ( self::$has_upload ) {
+					$forminator_stripe_field->add_uploaded_files_on_checkout_session( self::$prepared_data['paymentid'], $uploaded_files );
+				}
+				if ( self::$has_post_image ) {
+					$forminator_stripe_field->add_uploaded_files_on_checkout_session( self::$prepared_data['paymentid'], $post_images, 'postdata' );
+				}
+				if ( self::$has_signature_field ) {
+					$forminator_stripe_field->add_uploaded_files_on_checkout_session( self::$prepared_data['paymentid'], $signatures, 'signature' );
+				}
+			}
+		}
+	}
+
+	/**
+	 * Check if the current request is a Stripe Checkout validation request.
+	 *
+	 * @return bool
+	 */
+	public static function is_stripe_checkout_validation() {
+		return self::$is_stripe_checkout_validation;
+	}
+
+	/**
+	 * Check if the signature should be added from storage for Stripe Checkout sessions.
+	 *
+	 * @return bool
+	 */
+	public static function should_add_signature_from_storage() {
+		return self::$add_signature_from_storage;
+	}
+
+	/**
+	 * Validate submitted fields before handing off to Stripe Checkout.
+	 *
+	 * @throws Exception When validation fails.
+	 *
+	 * @return void
+	 */
+	private function validate_payment_submission() {
+		// Set the flag to indicate that this is a Stripe Checkout validation request, allowing the signature field to be added to storage if necessary.
+		self::$is_stripe_checkout_validation = true;
+		try {
+			$response = self::prepare_fields_info();
+			if ( is_array( $response ) && isset( $response['success'] ) && ! $response['success'] ) {
+				wp_send_json_error(
+					array(
+						'message' => $response['message'],
+						'errors'  => $response['errors'] ?? self::$submit_errors,
+					)
+				);
+			}
+			self::process_file_uploads();
+		} catch ( Exception $e ) {
+			wp_send_json_error(
+				array(
+					'message' => $e->getMessage(),
+					'errors'  => self::$submit_errors,
+				)
 			);
 		}
 
@@ -575,16 +843,92 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 	}
 
 	/**
-	 * Prepare fields info
+	 * Does the form have files in the temporary storage for Stripe Checkout sessions?
+	 *
+	 * @param string $type Field type.
+	 *
+	 * @return bool
 	 */
-	private static function prepare_fields_info() {
+	private static function has_files_in_temp_storage( $type = 'upload' ) {
+		if ( empty( self::$info['stripe_field'] ) || empty( self::$prepared_data['paymentid'] ) ) {
+			return false;
+		}
+		$forminator_stripe_field = Forminator_Core::get_field_object( 'stripe' );
+		$is_checkout_session     = $forminator_stripe_field->is_checkout_session( self::$info['stripe_field'] );
+		if ( $is_checkout_session ) {
+			$files = $forminator_stripe_field->get_uploaded_files_on_checkout_session( self::$prepared_data['paymentid'], $type );
+			if ( ! empty( $files ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Maybe set data from storage for Stripe Checkout sessions.
+	 *
+	 * @return array Stored fields.
+	 */
+	private static function maybe_set_data_from_storage() {
+		$stored_fields = array();
+		// If the form is submitted and there are files in the session, process them.
+		if ( ! self::$is_draft && ! empty( self::$prepared_data['paymentid'] )
+			&& ! empty( self::$info['stripe_field'] ) ) {
+			$forminator_stripe_field = Forminator_Core::get_field_object( 'stripe' );
+			$is_checkout_session     = $forminator_stripe_field->is_checkout_session( self::$info['stripe_field'] );
+			if ( ! $is_checkout_session ) {
+				return $stored_fields;
+			}
+			// Check if there are files for upload field and process them.
+			if ( self::has_files_in_temp_storage() ) {
+				$files = $forminator_stripe_field->get_uploaded_files_on_checkout_session( self::$prepared_data['paymentid'] );
+				foreach ( $files as $key => $value ) {
+					$stored_fields[]             = $key;
+					self::$prepared_data[ $key ] = $value;
+					self::$has_upload            = true;
+				}
+			}
+			// Check if there are files for post image field and process them.
+			if ( self::has_files_in_temp_storage( 'postdata' ) ) {
+				$post_images = $forminator_stripe_field->get_uploaded_files_on_checkout_session( self::$prepared_data['paymentid'], 'postdata' );
+				foreach ( $post_images as $key => $post_image ) {
+					self::$prepared_data[ $key ]['post-image'] = $post_image;
+				}
+			}
+			if ( self::has_files_in_temp_storage( 'signature' ) ) {
+				// Flag to indicate that the signature field should be added from storage for Stripe Checkout sessions.
+				self::$add_signature_from_storage = true;
+			}
+		}
+		return $stored_fields;
+	}
+
+	/**
+	 * Prepare fields info
+	 *
+	 * @param bool $is_form_submission Whether the form is being submitted or not.
+	 */
+	private static function prepare_fields_info( $is_form_submission = false ) {
 		self::check_fields_visibility();
+
+		$stored_fields = array();
+		if ( $is_form_submission ) {
+			$stored_fields = self::maybe_set_data_from_storage();
+		}
+
 		self::$is_leads    = isset( self::$module_settings['form-type'] ) && 'leads' === self::$module_settings['form-type'];
 		self::$has_payment = empty( self::$info['stripe_field'] ) && empty( self::$info['paypal_field'] ) ? false : true;
 
 		$fields = self::get_fields();
 		foreach ( $fields as $field_index => $field ) {
-			self::set_field_data_array( $field_index, $field );
+			self::set_field_data_array( $field_index, $field, $stored_fields );
+		}
+
+		if ( ! empty( self::$info['stripe_field'] ) ) {
+			$stripe_field = Forminator_Core::get_field_object( 'stripe' );
+			if ( $stripe_field instanceof Forminator_Stripe ) {
+				$stripe_field->validate( self::$info['stripe_field'], array() );
+			}
 		}
 
 		// Validate User Registration first before any payments.
@@ -616,9 +960,12 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 	 *
 	 * @param int    $field_index Int key.
 	 * @param object $field Forminator_Form_Field_Model.
+	 *
+	 * @since 1.56.0
+	 * @param array  $stored_fields Fields that are stored in temp folder (uploaded files) for Stripe Checkout sessions.
 	 * @return null
 	 */
-	private static function set_field_data_array( $field_index, $field ) {
+	private static function set_field_data_array( $field_index, $field, $stored_fields = array() ) {
 		$field_array = $field->to_formatted_array();
 		$field_type  = $field_array['type'];
 		$element_id  = Forminator_Field::get_property( 'element_id', $field_array );
@@ -672,7 +1019,7 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 			}
 			self::maybe_handle_custom_option( $clonned_field );
 
-			self::set_field_data( $field_id, $clonned_field, $field_index, $clonned_field['original_id'] ?? null );
+			self::set_field_data( $field_id, $clonned_field, $field_index, $clonned_field['original_id'] ?? null, $stored_fields );
 		}
 	}
 
@@ -707,9 +1054,12 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 	 * @param int         $field_index Field index.
 	 * @param string|null $original_id Original field ID.
 	 *
+	 * @since 1.56.0
+	 * @param array       $stored_fields Fields that are stored in temp folder (uploaded files) for Stripe Checkout sessions.
+	 *
 	 * @return null
 	 */
-	private static function set_field_data( $field_id, $field_array, $field_index, $original_id = null ) {
+	private static function set_field_data( $field_id, $field_array, $field_index, $original_id = null, $stored_fields = array() ) {
 		$field_type     = $field_array['type'];
 		$form_field_obj = Forminator_Core::get_field_object( $field_type );
 		// Skip if field object is not found.
@@ -753,7 +1103,8 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 		$field_data = $form_field_obj->sanitize( $field_array, $field_data );
 
 		// Legitimate file_path is added in process_uploads(); clearing request values here is intentional.
-		if ( 'upload' === $field_type && ! empty( $field_data['file']['file_path'] ) ) {
+		// Ignore this check if the field is already stored in the temp folder for Stripe Checkout sessions as it is already processed through this function.
+		if ( 'upload' === $field_type && ! empty( $field_data['file']['file_path'] ) && ! in_array( $field_id, $stored_fields, true ) ) {
 			$field_data = array();
 			unset( self::$prepared_data[ $field_id ] );
 		}
@@ -763,8 +1114,19 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 		}
 		$form_field_obj->is_valid_entry();
 
-		if ( isset( $form_field_obj->validation_message[ $field_id ] ) ) {
-			self::$submit_errors[] = array( $original_id ?? $field_id => $form_field_obj->validation_message[ $field_id ] );
+		// Keep validation errors for the current field and its multi-input subfields.
+		foreach ( $form_field_obj->validation_message as $validation_id => $validation_message ) {
+			if ( $field_id !== $validation_id && 0 !== strpos( $validation_id, $field_id . '-' ) ) {
+				continue;
+			}
+
+			// Preserve the subfield suffix when the stored field ID differs from the rendered field ID.
+			$error_id = $validation_id;
+			if ( $original_id ) {
+				$error_id = $original_id . substr( $validation_id, strlen( $field_id ) );
+			}
+
+			self::$submit_errors[] = array( $error_id => $validation_message );
 		}
 
 		if ( ! self::is_empty_field( $field_array, $field_data ) ) {
@@ -922,7 +1284,7 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 			$amount       = $payment_plan['subscription_amount'] ?? 0.0;
 
 			if ( 'fixed' === $amount_type && empty( $amount ) ) {
-				return; // Payment amount should be larger than 0.
+				return; // Payment amount should be greater than 0.
 			}
 
 			return $stripe_addon->create_payment_intent( $field_object, self::$module_object, self::$prepared_data, $field, $payment_plan );
@@ -952,7 +1314,7 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 				$amount       = isset( $payment_plan['subscription_amount'] ) ? $payment_plan['subscription_amount'] : 0.0;
 
 				if ( 'fixed' === $amount_type && empty( $amount ) ) {
-					throw new Exception( esc_html__( 'Payment amount should be larger than 0.', 'forminator' ) );
+					throw new Exception( esc_html__( 'Payment amount should be greater than 0.', 'forminator' ) );
 				}
 
 				$entry_data = $stripe_addon->handle_subscription( $field_object, self::$module_object, self::$prepared_data, $field, $entry, $payment_plan );
@@ -1036,9 +1398,12 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 		 * @return array
 		 */
 		$stripe_entry_data = apply_filters( 'forminator_custom_form_stripe_entry_data', $stripe_entry_data, self::$module_object, $field, self::$info['field_data_array'] );
-
 		forminator_maybe_log( __METHOD__, $stripe_entry_data['value'] );
 		if ( is_wp_error( $stripe_entry_data['value'] ) ) {
+			$error_data = $stripe_entry_data['value']->get_error_data();
+			if ( is_array( $error_data ) ) {
+				self::$response_attrs = array_merge( self::$response_attrs, $error_data );
+			}
 			throw new Exception( esc_html( $stripe_entry_data['value']->get_error_message() ) );
 		}
 
@@ -1054,6 +1419,10 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 		 * @param array $field_data_array
 		 */
 		do_action( 'forminator_custom_form_after_stripe_charge', self::$module_object, $field, $stripe_entry_data, self::$prepared_data, self::$info['field_data_array'] );
+
+		if ( $field_object->is_checkout_session( $field ) ) {
+			return $stripe_entry_data;
+		}
 
 		// Try to get Payment Intent from submitted date.
 		try {
@@ -1135,20 +1504,68 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 	 * Handle stripe payments
 	 *
 	 * @param object $entry Entry.
-	 * @return array
+	 * @return array|void
 	 */
 	private static function handle_stripe( $entry ) {
 		if ( self::$is_draft || self::$is_spam ) {
 			return;
 		}
 
-		$stripe = new Forminator_Gateway_Stripe();
-
-		if ( ! $stripe->is_ready() || ! self::$info['stripe_field'] || ! self::$is_stripe_payment ) {
+		if ( ! self::$info['stripe_field'] || ! self::$is_stripe_payment ) {
 			return;
 		}
 
-		self::stripe_field_to_entry_data_array( $entry );
+		$stripe_mode = isset( self::$info['stripe_field']['mode'] ) ? self::$info['stripe_field']['mode'] : 'test';
+		if ( ! forminator_is_stripe_mode_ready( $stripe_mode ) ) {
+			return;
+		}
+
+		$stripe_field_data = self::stripe_field_to_entry_data_array( $entry );
+
+		if ( ! empty( $stripe_field_data ) && self::is_duplicate_stripe_submission( $entry, $stripe_field_data ) ) {
+			$response = self::get_response( $entry );
+			$entry->delete();
+
+			return $response;
+		}
+	}
+
+	/**
+	 * Check if the current Stripe payment already has an active submission.
+	 *
+	 * @since 1.56
+	 *
+	 * @param Forminator_Form_Entry_Model $entry Entry.
+	 * @param array                       $stripe_field_data Stripe field data.
+	 * @return bool
+	 */
+	private static function is_duplicate_stripe_submission( $entry, $stripe_field_data ) {
+		if ( empty( self::$info['stripe_field']['element_id'] ) || empty( $entry->entry_id ) ) {
+			return false;
+		}
+
+		$identifier_key   = 'transaction_id';
+		$identifier_value = $stripe_field_data['value']['transaction_id'] ?? '';
+
+		// Trialing subscriptions do not always have an initial transaction ID, so use the subscription ID instead.
+		if ( ( empty( $identifier_value ) || 'None' === $identifier_value ) && ! empty( $stripe_field_data['value']['subscription_id'] ) ) {
+			$identifier_key   = 'subscription_id';
+			$identifier_value = $stripe_field_data['value']['subscription_id'];
+		}
+
+		if ( empty( $identifier_value ) || 'None' === $identifier_value ) {
+			return false;
+		}
+
+		$duplicate_entry_id = Forminator_Form_Entry_Model::get_active_entry_id_by_payment_identifier(
+			self::$module_id,
+			self::$info['stripe_field']['element_id'],
+			$identifier_key,
+			(string) $identifier_value,
+			$entry->entry_id
+		);
+
+		return ! empty( $duplicate_entry_id );
 	}
 
 	/**
@@ -1199,7 +1616,7 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 
 		try {
 			self::can_submit();
-			self::prepare_fields_info();
+			self::prepare_fields_info( true );
 			self::check_submit_visibility();
 			self::check_captcha();
 
@@ -1251,9 +1668,14 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 			// Delete submission if payment or file upload fails.
 			$delete_submission = true;
 
-			self::process_uploads( 'upload' );
+			if ( ! self::has_files_in_temp_storage() ) {
+				self::process_uploads( 'upload' );
+			}
 
-			self::handle_stripe( $entry );
+			$stripe_response = self::handle_stripe( $entry );
+			if ( ! empty( $stripe_response ) ) {
+				return $stripe_response;
+			}
 			self::handle_paypal( $entry );
 			unset( $delete_submission );
 
@@ -2052,7 +2474,7 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 	 * @since 1.7
 	 * @param object $entry Entry.
 	 *
-	 * @return array
+	 * @return array|void
 	 * @throws Exception When there is an error.
 	 */
 	private static function stripe_field_to_entry_data_array( $entry ) {
@@ -2090,6 +2512,8 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 
 		if ( ! empty( $plan_data_array ) ) {
 			self::$info['field_data_array'][] = $plan_data_array;
+
+			return $plan_data_array;
 		}
 	}
 
@@ -2191,6 +2615,7 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 		$visible_fields = array(); // Visible fields with calculable values.
 		$unspecified    = array(); // it's not clear these fields are hidden or visible.
 		$field_slugs    = wp_list_pluck( $fields, 'slug' );
+
 		do { // We do it recursevely because sometimes fields on which visibility depends are placed in the array after dependent fields.
 			$previous_unspecified = $unspecified;
 			$unspecified          = array();
@@ -2273,8 +2698,7 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 							}
 							self::$prepared_data[ $field_id ] = $amount;
 							// Save 'stripe_field' and 'paypal_field'.
-							$payment_key = str_replace( '-ocs', '', $field_type ) . '_field';
-
+							$payment_key                = str_replace( '-ocs', '', $field_type ) . '_field';
 							self::$info[ $payment_key ] = $field_settings;
 						} else {
 							$not_calculable                              = $calculable_value === $field_object::FIELD_NOT_CALCULABLE;
@@ -2443,6 +2867,7 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 				if ( is_array( $post_image ) && $post_image['attachment_id'] > 0 ) {
 					self::$prepared_data[ $field_id ]['post-image'] = $post_image;
 					self::$prepared_data[ $mod_field_id ]           = $post_image;
+					self::$has_post_image                           = true;
 				} else {
 					self::$prepared_data[ $field_id ]['post-image'] = '';
 					self::$prepared_data[ $mod_field_id ]           = '';
@@ -2866,11 +3291,13 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 		$options      = Forminator_Field::get_property( 'options', $field_settings );
 		$value_type   = Forminator_Field::get_property( 'value_type', $field_settings );
 		$select_array = (array) ( self::$prepared_data[ $field_id ] ?? array() );
+		$select_array = array_map( 'forminator_normalize_choice_option_value', $select_array );
 		foreach ( $options as $o => $option ) {
-			if ( in_array( strval( $option['value'] ), array_map( 'strval', $select_array ), true ) ) {
+			$option_value = forminator_normalize_choice_option_value( $option['value'] );
+			if ( in_array( $option_value, $select_array, true ) ) {
 				self::$info['select_field_value'][ $field_id ][ $o ] = array(
 					'limit' => $option['limit'],
-					'value' => $option['value'],
+					'value' => $option_value,
 					'label' => $option['label'],
 					'type'  => $value_type,
 				);

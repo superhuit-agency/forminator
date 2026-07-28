@@ -37,7 +37,6 @@ class Forminator_Poll_View_Page extends Forminator_Admin_View_Page {
 			parent::before_render();
 			if ( Forminator_Form_Entry_Model::count_entries( $this->form_id ) ) {
 				add_action( 'admin_footer', array( $this, 'render_pie_chart' ), 100 );
-				add_action( 'admin_footer', array( $this, 'chart_style_override' ), 100 );
 			}
 
 			++$this->total_fields;
@@ -125,7 +124,6 @@ class Forminator_Poll_View_Page extends Forminator_Admin_View_Page {
 
 	/**
 	 * Render the chart
-	 * Generate the google charts js for the chart
 	 *
 	 * @since 1.0
 	 */
@@ -193,41 +191,5 @@ class Forminator_Poll_View_Page extends Forminator_Admin_View_Page {
 
 		</script>
 		<?php
-	}
-
-	/**
-	 * Override style used for displayed chart
-	 *
-	 * @since 1.5.4
-	 *
-	 * @return void
-	 */
-	public function chart_style_override() {
-		ob_start();
-		?>
-		<style>
-			.forminator-poll--chart svg > g:last-child > g:last-child {
-				pointer-events: none;
-			}
-
-			.forminator-poll--chart .google-visualization-tooltip {
-				pointer-events: none;
-			}
-
-			.forminator-poll--chart .google-visualization-tooltip-item {
-				white-space: nowrap;
-			}
-		</style>
-		<?php
-		$style = ob_get_clean();
-		/**
-		 * Filter styles to be attached in poll submissions page
-		 *
-		 * @since 1.5.4
-		 *
-		 * @param string $style
-		 */
-		$style = apply_filters( 'forminator_admin_poll_chart_style_override', $style );
-		echo $style; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 	}
 }

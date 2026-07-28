@@ -360,6 +360,17 @@ class Forminator_Core {
 		if ( file_exists( forminator_plugin_dir() . 'library/gateways/class-stripe.php' ) ) {
 			/* @noinspection PhpIncludeInspection */
 			include_once forminator_plugin_dir() . 'library/gateways/class-stripe.php';
+
+			$stripe_connect = forminator_plugin_dir() . 'library/gateways/class-stripe-connect.php';
+
+			if ( file_exists( $stripe_connect ) ) {
+				/* @noinspection PhpIncludeInspection */
+				include_once $stripe_connect;
+
+				if ( is_admin() ) {
+					Forminator_Stripe_Connect::get_instance();
+				}
+			}
 		}
 
 		/* @noinspection PhpIncludeInspection */
@@ -588,6 +599,10 @@ class Forminator_Core {
 	 */
 	public static function sanitize_array( $data, $current_key = '', $force = false ) {
 		$data = wp_unslash( $data );
+
+		if ( ! is_array( $data ) ) {
+			$data = forminator_remove_zero_width_chars( $data );
+		}
 
 		// TODO: Should skip fields that has its own sanitize function.
 		if (

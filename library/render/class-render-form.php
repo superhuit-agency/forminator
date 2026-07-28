@@ -1941,10 +1941,6 @@ abstract class Forminator_Render_Form {
 	 * @return string
 	 */
 	protected function nonce_field( $action, $name, $referer_url = '' ) {
-		// Don't generate nonce field when it's preview, as preview is only for admin and it doesn't have real form action.
-		if ( $this->is_preview ) {
-			return '';
-		}
 		if ( $referer_url ) {
 			$referer = $referer_url;
 		} elseif ( ! empty( $this->_wp_http_referer ) ) {

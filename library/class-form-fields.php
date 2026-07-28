@@ -123,6 +123,22 @@ class Forminator_Fields {
 	 */
 	public function cron_init() {
 		$this->schedule_delete_temp_files();
+		$this->cleanup_stripe_checkout_sessions();
+	}
+
+	/**
+	 * Cleanup abandoned Stripe Checkout Session markers.
+	 *
+	 * @since 1.56
+	 *
+	 * @return void
+	 */
+	public function cleanup_stripe_checkout_sessions() {
+		$stripe_field = Forminator_Core::get_field_object( 'stripe' );
+
+		if ( is_object( $stripe_field ) && method_exists( $stripe_field, 'cleanup_checkout_sessions' ) ) {
+			$stripe_field->cleanup_checkout_sessions();
+		}
 	}
 
 	/**

@@ -752,8 +752,10 @@
 					nextBtn = this.$el.find('.forminator-button-next'),
 					submitButton = this.$el.find( '.forminator-button-submit' );
 
+				var viewResultsLabel = this.settings.view_results_text || window.ForminatorFront.quiz.view_results;
+
 				if ( this.$form.hasClass('forminator-quiz') && ! display_submit_button_text && hasSubmitRightAway ) {
-					submit_button_text = window.ForminatorFront.quiz.view_results;
+					submit_button_text = viewResultsLabel;
 				}
 
 				if ( this.$form.hasClass('forminator-design--material') ) {
@@ -798,9 +800,9 @@
 
 							if ( hasSubmitRightAway ) {
 								if ( self.$form.hasClass('forminator-design--material') ) {
-									submitButton.find( '.forminator-button--text' ).html( window.ForminatorFront.quiz.view_results );
+									submitButton.find( '.forminator-button--text' ).html( viewResultsLabel );
 								} else {
-									submitButton.html( window.ForminatorFront.quiz.view_results );
+									submitButton.html( viewResultsLabel );
 								}
 							}
 						}
@@ -839,7 +841,7 @@
 					this.next_button_txt = this.next_button;
 				}
 				if ( this.actualStep === ( this.totalActiveSteps - 1 ) && this.finished ) {
-					this.next_button_txt = window.ForminatorFront.quiz.view_results;
+					this.next_button_txt = this.settings.view_results_text || window.ForminatorFront.quiz.view_results;
 				}
 				if ( this.$form.hasClass('forminator-design--material') ) {
 					this.$el.find( '#forminator-submit' )

@@ -589,16 +589,16 @@ class Forminator_Select extends Forminator_Field {
 		$field_type = self::get_property( 'value_type', $field );
 		$form_id    = Forminator_CForm_Front_Action::$module_id;
 
-		// Decode HTML entities from submitted values to match against raw option values.
-		$selected_options = array_map( 'htmlspecialchars_decode', $selected_options );
+		// Normalize submitted values the same way as stored option values.
+		$selected_options = array_map( 'forminator_normalize_choice_option_value', $selected_options );
 
 		if ( isset( Forminator_CForm_Front_Action::$prepared_data['lead_quiz'] ) ) {
 			$form_id = Forminator_CForm_Front_Action::$prepared_data['lead_quiz'];
 		}
 
 		foreach ( $field['options'] as $option ) {
-			// Apply same transformation as rendering (wp_strip_all_tags + esc_html) for comparison.
-			$option_value = esc_html( wp_strip_all_tags( $option['value'] ) );
+			// Match the value submitted by the browser after tags are stripped during rendering.
+			$option_value = forminator_normalize_choice_option_value( $option['value'] );
 			// Skip if this option was not selected.
 			if ( ! in_array( $option_value, $selected_options, true ) ) {
 				continue;
@@ -624,22 +624,22 @@ class Forminator_Select extends Forminator_Field {
 		$id           = self::get_property( 'element_id', $field );
 		$value_exists = true;
 
-		// Get option values with same transformation applied during rendering (wp_strip_all_tags + esc_html).
+		// Get option values as submitted by the browser after tags are stripped during rendering.
 		$option_values = array_map(
 			function ( $option ) {
-				return strval( esc_html( wp_strip_all_tags( $option['value'] ) ) );
+				return forminator_normalize_choice_option_value( $option['value'] );
 			},
 			$field['options']
 		);
 
 		if ( is_array( $data ) ) {
 			foreach ( $data as $value ) {
-				if ( false === array_search( strval( htmlspecialchars_decode( $value ) ), $option_values, true ) ) {
+				if ( false === array_search( forminator_normalize_choice_option_value( $value ), $option_values, true ) ) {
 					$value_exists = false;
 					break;
 				}
 			}
-		} elseif ( ! empty( $data ) && false === array_search( strval( htmlspecialchars_decode( $data ) ), $option_values, true ) ) {
+		} elseif ( ! empty( $data ) && false === array_search( forminator_normalize_choice_option_value( $data ), $option_values, true ) ) {
 			$value_exists = false;
 		}
 

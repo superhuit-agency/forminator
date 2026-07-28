@@ -407,6 +407,7 @@ class Forminator_Textarea extends Forminator_Field {
 		$editor_type   = self::get_property( 'editor-type', $field, false, 'bool' );
 		// Sanitize.
 		if ( true === $editor_type ) {
+			$data = forminator_remove_zero_width_chars( $data );
 			$data = wp_kses_post( $data );
 		} else {
 			$data = forminator_sanitize_textarea( $data );

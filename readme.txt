@@ -3,7 +3,7 @@ Contributors: WPMUDEV
 Tags: contact form, custom form, forms, payment form, WordPress form plugin
 Requires at least: 6.4
 Tested up to: 7.0
-Stable tag: 1.55.0
+Stable tag: 1.55.1
 Requires PHP: 7.4
 License: GPL v3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
@@ -231,6 +231,31 @@ We take plugin security incredibly seriously; if you have a bug or vulnerability
 
 == Changelog ==
 
+= 1.56.0 ( 2026-07-21 ) =
+
+- New: Added Stripe Connect (OAuth) authorization for connecting Stripe accounts
+- New: Added Stripe Checkout Sessions payment flow
+- New: Added Adaptive Pricing support
+- Enhancement: Automatically migrate existing forms to the Stripe Checkout Sessions API
+- Enhancement: Separated Live and Test Stripe API key configurations
+- Enhancement: Removed the manual Stripe authorization section to simplify connecting accounts
+- Enhancement: Improved S3 and cloud storage compatibility for attachment path validation
+- Enhancement: Strip zero-width Unicode characters during input sanitization
+- Enhancement: Added the ability to change the View Results button text for paginated quizzes
+- Enhancement: Security improvements
+- Fix: Preview now loads in the site editor when a form is added through Blocks > Form
+- Fix: Corrected invalid payment amounts when using the round() function in Calculation fields
+- Fix: Improved CSV export escaping for leading control characters
+- Fix: Select field submission limit no longer breaks with AJAX-loaded HTML options
+- Fix: Select fields with HTML tags and apostrophes in option values now validate correctly
+- Fix: HTML tags are now stripped from select option values when counting limits
+- Fix: Prevented a fatal error on form save when an outdated Stripe add-on is active
+- Fix: Corrected the Stripe payment mode warning on the forms list page
+- Fix: Removed the legacy Google Charts CDN enqueue from admin and poll front-end
+- Fix: Disconnect modal no longer strips punctuation from its text
+- Fix: Fixed PHP warning in logs when the scheduled export function is triggered
+
+
 = 1.55.1 ( 2026-07-02 ) =
 
 - Fix: Security improvements
@@ -441,34 +466,6 @@ We take plugin security incredibly seriously; if you have a bug or vulnerability
 - Fix: Forms could be published with an empty name after autosave
 - Fix: Translation issue with the "Select" string
 - Fix: PDF output font weight adjusted to allow proper HTML formatting in textareas
-
-
-= 1.51.1 ( 2026-02-27 ) =
-
-- Fix: Security improvements
-
-
-= 1.51.0 ( 2026-02-16 ) =
-
-- Enhancement: Migrate the Geolocation autocomplete feature to the "Google Places API (NEW)"
-- Enhancement: Add the ability to save forms as Cloud Templates during import
-- Enhancement: Improve field order handling when sending data to the Google Sheets integration
-- Enhancement: Add a filter to allow modifying fields before sending data to the Google Sheets integration
-- Enhancement: Review the use of external resources for GDPR compliance
-- Fix: PayPal payment fails when Visibility Conditions are applied to the submit button
-- Fix: Conflict between PayPal and Group fields
-- Fix: Error in the Calculation field when re-sending email notifications
-- Fix: Signature field does not work correctly when used in Visibility Conditions for other fields
-- Fix: Conflict between Avada theme, SmartCrawl, and Forminator
-- Fix: Custom user meta gets mixed up during drag & drop in the Registration form
-- Fix: Strange behavior when dragging & dropping custom fields in the Post Data field
-- Fix: Extra space when ReCAPTCHA or Page Break fields are in the same row as other fields
-- Fix: JS error in the console when a signature is drawn in Preview mode
-- Fix: Issue with Pro template buttons for additional site administrators when White Label is enabled
-- Fix: HubSpot fatal error when the account no longer exists
-- Fix: Incorrect column order for cloned Group sub-fields in the Google Sheets integration
-- Fix: "Open in New Tab" is not working in the HTML field
-- Fix: Offset calculation for the Datepicker is affected by the visitor's timezone
 
 
 **Full changelog can be found here – [Forminator changelog](https://wpmudev.com/project/forminator-pro/#changelog_all?utm_source=wordpress.org&utm_medium=readme&utm_campaign=forminator-readme&utm_content=wpmu_dev_changelog_link).**

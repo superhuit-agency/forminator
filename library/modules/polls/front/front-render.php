@@ -63,7 +63,6 @@ class Forminator_Poll_Front extends Forminator_Render_Form {
 		$assets->enqueue_styles( $this );
 		$assets->enqueue_scripts();
 		$assets->load_module_css( true );
-		wp_enqueue_script( 'google-charts', 'https://www.gstatic.com/charts/loader.js', array( 'jquery' ), '1.0', false );
 		$this->set_breakdance_preview_style_handles( $before_style_handles );
 	}
 	/**
@@ -118,8 +117,6 @@ class Forminator_Poll_Front extends Forminator_Render_Form {
 			$this->generate_render_id( $id );
 			$this->get_form_placeholder( esc_attr( $id ), true );
 
-			wp_enqueue_script( 'google-charts', 'https://www.gstatic.com/charts/loader.js', array( 'jquery' ), '1.0', false );
-
 			return;
 		}
 
@@ -137,8 +134,6 @@ class Forminator_Poll_Front extends Forminator_Render_Form {
 			if ( is_admin() || $is_preview ) {
 				$this->print_styles();
 			}
-
-			wp_enqueue_script( 'google-charts', 'https://www.gstatic.com/charts/loader.js', array( 'jquery' ), '1.0', false );
 
 			add_action( 'wp_footer', array( $this, 'forminator_render_front_scripts' ), 9999 );
 			add_action( 'wp_footer', array( $this, 'graph_scripts' ), 100 );

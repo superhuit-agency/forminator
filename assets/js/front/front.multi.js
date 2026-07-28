@@ -432,6 +432,9 @@
 				if ( self.settings.text_prev ) {
 					args.prev_button = self.settings.text_prev;
 				}
+				if ( self.settings.text_view_results ) {
+					args.view_results_text = self.settings.text_view_results;
+				}
 				if ( self.settings.submit_class ) {
 					args.submitButtonClass = self.settings.submit_class;
 				}
@@ -1622,6 +1625,9 @@
 						has_loader: form.settings.has_loader,
 						loader_label: form.settings.loader_label,
 						stripe_depends: form.settings.stripe_depends,
+						stripe_checkout_metadata_depends: form.settings.stripe_checkout_metadata_depends || [],
+						is_preview: form.settings.is_preview,
+						preview_data: form.settings.preview_data,
 					};
 
 					if ( stripe_payment.data('is-ocs') ) {

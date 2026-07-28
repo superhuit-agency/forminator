@@ -174,21 +174,35 @@ abstract class Forminator_Admin_Module_Edit_Page extends Forminator_Admin_Page {
 	 * Has error on payment field
 	 *
 	 * @param mixed $module Module.
-	 * @param bool  $is_stripe_connected Is stripe connected.
 	 * @return bool
 	 */
-	public static function has_payment_field_error( $module, $is_stripe_connected ) {
+	public static function has_payment_field_error( $module ) {
 		if ( ! empty( $module['model'] ) && method_exists( $module['model'], 'has_stripe_field' ) ) {
 			$stripe_field = $module['model']->has_stripe_field();
 			if ( ! empty( $stripe_field ) ) {
-				if ( false === $is_stripe_connected ) {
+				$stripe_mode     = $stripe_field->mode;
+				$stripe_payments = $stripe_field->payments;
+				if ( empty( $stripe_mode ) || ! in_array( $stripe_mode, array( 'test', 'live' ), true ) ) {
+					$stripe_mode = 'test';
+				}
+				$test_ready = forminator_is_stripe_mode_ready( 'test' );
+				$live_ready = forminator_is_stripe_mode_ready( 'live' );
+
+				if ( ! $test_ready && ! $live_ready ) {
 					return true;
 				}
-				$stripe_field->mode;
-				$plan_id_key = 'live' === $stripe_field->mode ? 'live_plan_id' : 'test_plan_id';
-				foreach ( $stripe_field->payments as $plan ) {
-					if ( 'subscription' === $plan['payment_method'] && empty( $plan[ $plan_id_key ] ) ) {
-						return true;
+
+				$selected_mode_ready = ( 'live' === $stripe_mode ) ? $live_ready : $test_ready;
+				if ( ! $selected_mode_ready ) {
+					return true;
+				}
+
+				$plan_id_key = 'live' === $stripe_mode ? 'live_plan_id' : 'test_plan_id';
+				if ( ! empty( $stripe_payments ) ) {
+					foreach ( $stripe_payments as $plan ) {
+						if ( 'subscription' === $plan['payment_method'] && empty( $plan[ $plan_id_key ] ) ) {
+							return true;
+						}
 					}
 				}
 			}
@@ -271,11 +285,9 @@ abstract class Forminator_Admin_Module_Edit_Page extends Forminator_Admin_Page {
 			require_once forminator_plugin_dir() . 'admin/views/common/list/empty_content.php';
 		}
 
-		$is_stripe_connected = false;
-		$page                = $module_slug;
+		$page = $module_slug;
 		if ( 'form' === $page ) {
-			$page                = 'cform';
-			$is_stripe_connected = forminator_has_stripe_connected();
+			$page = 'cform';
 		}
 
 		foreach ( $modules as $module ) {
@@ -297,7 +309,7 @@ abstract class Forminator_Admin_Module_Edit_Page extends Forminator_Admin_Page {
 				$opened_class = ' sui-accordion-item--open forminator-scroll-to';
 				$opened_chart = ' sui-chartjs-loaded';
 			}
-			$display_warning_icon         = self::has_payment_field_error( $module, $is_stripe_connected );
+			$display_warning_icon         = self::has_payment_field_error( $module );
 			$display_registration_warning = self::has_error_on_registration_form( $module );
 			$is_module_editable           = self::is_module_editable( $module );
 			if ( $display_warning_icon || $display_registration_warning ) {

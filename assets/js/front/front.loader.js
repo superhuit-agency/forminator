@@ -366,6 +366,8 @@
 			}
 
 			if (options) {
+				options.is_preview = this.settings.is_preview;
+				options.preview_data = this.settings.preview_data;
 				$module.forminatorFront(options);
 			}
 			if ( 'undefined' !== typeof this.settings.has_lead && lead_options) {

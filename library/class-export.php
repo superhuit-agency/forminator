@@ -490,7 +490,7 @@ class Forminator_Export {
 					if ( is_object( $form_model ) ) {
 						$mappers = $this->get_custom_form_export_mappers( $form_model );
 						foreach ( $mappers as $mapper ) {
-							if ( 'entry_time_created' === $mapper['type'] ) {
+							if ( in_array( $mapper['type'], array( 'entry_time_created', 'entry_id' ), true ) ) {
 								continue;
 							}
 							if ( ! isset( $mapper['sub_metas'] ) ) {
@@ -1617,7 +1617,7 @@ class Forminator_Export {
 	 * @return string
 	 */
 	public static function escape_csv_data( $data ) {
-		$active_content_triggers = array( '=', '+', '-', '@' );
+		$active_content_triggers = array( '=', '+', '-', '@', "\t", "\r", "\n" );
 		if ( in_array( mb_substr( $data, 0, 1 ), $active_content_triggers, true ) ) {
 			$data = "'" . $data . "'";
 		}
@@ -1886,7 +1886,7 @@ class Forminator_Export {
 		if ( ! empty( $mappers ) ) {
 			// traverse from fields to be correctly mapped with updated form fields.
 			foreach ( $mappers as $mapper ) {
-				if ( 'entry_time_created' === $mapper['type'] ) {
+				if ( in_array( $mapper['type'], array( 'entry_time_created', 'entry_id' ), true ) ) {
 					continue;
 				}
 				// its from model's property.

@@ -77,7 +77,7 @@ class Forminator_Stripe_Payment_Element extends Forminator_Field {
 
 		try {
 			$stripe = new Forminator_Gateway_Stripe();
-			if ( $stripe->is_test_ready() && $stripe->is_live_ready() ) {
+			if ( $stripe->is_test_ready() || $stripe->is_live_ready() ) {
 				$this->is_connected = true;
 			}
 		} catch ( Forminator_Gateway_Exception $e ) {
@@ -107,6 +107,10 @@ class Forminator_Stripe_Payment_Element extends Forminator_Field {
 			'company_name'              => '',
 			'product_description'       => '',
 			'customer_email'            => '',
+			'checkout_email_enabled'    => '',
+			'checkout_email'            => '',
+			'checkout_phone_enabled'    => '',
+			'checkout_phone'            => '',
 			'receipt'                   => '',
 			'billing'                   => '',
 			'language'                  => 'auto',
@@ -128,6 +132,8 @@ class Forminator_Stripe_Payment_Element extends Forminator_Field {
 			'text_color'                => '#30313D',
 			'error'                     => '#DF1B41',
 			'automatic_payment_methods' => 'true',
+			'payment_api'               => 'checkout_session',
+			'adaptive_pricing'          => true,
 		);
 	}
 
@@ -147,6 +153,7 @@ class Forminator_Stripe_Payment_Element extends Forminator_Field {
 		$new_stripe_field['element_id']                = 'stripe-ocs-1';
 		$new_stripe_field['type']                      = 'stripe-ocs';
 		$new_stripe_field['automatic_payment_methods'] = 'false';
+		$new_stripe_field['adaptive_pricing']          = 'false';
 		$new_stripe_field['form_id']                   = 'wrapper-0000-0000';
 		$new_stripe_field['wrapper_id']                = 'wrapper-0000-0000';
 		$new_stripe_field['receipt']                   = 'true' === $new_stripe_field['receipt'] ? '1' : '';

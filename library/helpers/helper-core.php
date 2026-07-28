@@ -299,7 +299,6 @@ function forminator_common_admin_enqueue_scripts( $is_new_page = false ) {
 		false
 	);
 	wp_enqueue_script( 'ace-editor', forminator_plugin_url() . 'assets/js/library/ace/ace.js', array( 'jquery' ), FORMINATOR_VERSION, false );
-	wp_enqueue_script( 'google-charts', 'https://www.gstatic.com/charts/loader.js', array( 'jquery' ), FORMINATOR_VERSION, false );
 
 	if ( function_exists( 'wp_enqueue_editor' ) ) {
 		wp_enqueue_editor();
@@ -487,24 +486,26 @@ function forminator_localize_data() {
 	$data = array(
 		'ajaxUrl' => forminator_ajax_url(),
 		'cform'   => array(
-			'processing'                => esc_html__( 'Submitting form, please wait', 'forminator' ),
-			'error'                     => esc_html__( 'An error occurred while processing the form. Please try again', 'forminator' ),
-			'upload_error'              => esc_html__( 'An upload error occurred while processing the form. Please try again', 'forminator' ),
-			'pagination_prev'           => esc_html__( 'Previous', 'forminator' ),
-			'pagination_next'           => esc_html__( 'Next', 'forminator' ),
-			'pagination_go'             => esc_html__( 'Submit', 'forminator' ),
-			'gateway'                   => array(
+			'processing'                     => esc_html__( 'Submitting form, please wait', 'forminator' ),
+			'error'                          => esc_html__( 'An error occurred while processing the form. Please try again', 'forminator' ),
+			'upload_error'                   => esc_html__( 'An upload error occurred while processing the form. Please try again', 'forminator' ),
+			'pagination_prev'                => esc_html__( 'Previous', 'forminator' ),
+			'pagination_next'                => esc_html__( 'Next', 'forminator' ),
+			'pagination_go'                  => esc_html__( 'Submit', 'forminator' ),
+			'gateway'                        => array(
 				'processing' => esc_html__( 'Processing payment, please wait', 'forminator' ),
 				'paid'       => esc_html__( 'Success! Payment confirmed. Submitting form, please wait', 'forminator' ),
 				'error'      => esc_html__( 'Error! Something went wrong when verifying the payment', 'forminator' ),
 			),
-			'captcha_error'             => esc_html__( 'Invalid CAPTCHA', 'forminator' ),
-			'no_file_chosen'            => esc_html__( 'No file chosen', 'forminator' ),
+			'captcha_error'                  => esc_html__( 'Invalid CAPTCHA', 'forminator' ),
+			'no_file_chosen'                 => esc_html__( 'No file chosen', 'forminator' ),
 			// This is the file "/build/js/utils.js" found into intlTelInput plugin. Renamed so it makes sense within the "js/library" directory context.
-			'intlTelInput_utils_script' => forminator_plugin_url() . 'assets/js/library/intlTelInputUtils.js',
-			'process_error'             => esc_html__( 'Please try again', 'forminator' ),
-			'payment_failed'            => esc_html__( 'Payment failed. Please try again.', 'forminator' ),
-			'payment_cancelled'         => esc_html__( 'Payment was cancelled', 'forminator' ),
+			'intlTelInput_utils_script'      => forminator_plugin_url() . 'assets/js/library/intlTelInputUtils.js',
+			'process_error'                  => esc_html__( 'Please try again', 'forminator' ),
+			'payment_failed'                 => esc_html__( 'Payment failed. Please try again.', 'forminator' ),
+			'payment_cancelled'              => esc_html__( 'Payment was canceled', 'forminator' ),
+			'checkout_session_invalid'       => esc_html__( 'Your payment session was updated. Please try again.', 'forminator' ),
+			'payment_session_refresh_failed' => esc_html__( 'We could not refresh your payment session. Please refresh the page and try again.', 'forminator' ),
 		),
 		'poll'    => array(
 			'processing' => esc_html__( 'Submitting vote, please wait', 'forminator' ),
@@ -696,18 +697,23 @@ function forminator_has_turnstile_settings(): bool {
 }
 
 /**
- * Return if Stripe is is_connected
+ * Return if Stripe mode is configured
  *
- * @since 1.7
+ * @since 1.56.0
+ *
+ * @param string $mode Payment mode (test|live).
  * @return bool
  */
-function forminator_has_stripe_connected() {
+function forminator_is_stripe_mode_ready( $mode ) {
 	if ( class_exists( 'Forminator_Gateway_Stripe' ) ) {
 		try {
 			$stripe = new Forminator_Gateway_Stripe();
-			if ( $stripe->is_test_ready() && $stripe->is_live_ready() ) {
-				return true;
+
+			if ( 'live' === $mode ) {
+				return $stripe->is_live_ready();
 			}
+
+			return $stripe->is_test_ready();
 		} catch ( Forminator_Gateway_Exception $e ) {
 			return false;
 		}
@@ -715,6 +721,42 @@ function forminator_has_stripe_connected() {
 
 	return false;
 }
+
+/**
+ * Whether to show the Stripe developer widget for Enhanced Checkout in test mode.
+ *
+ * @since 1.56.0
+ *
+ * @param string $mode Stripe mode (test|live).
+ *
+ * @return bool
+ */
+function forminator_show_stripe_developer_widget( $mode = 'test' ) {
+	if ( 'test' !== $mode ) {
+		return false;
+	}
+
+	if (
+		filter_input( INPUT_POST, 'is_preview', FILTER_VALIDATE_BOOLEAN )
+		|| filter_input( INPUT_POST, 'is_block_editor', FILTER_VALIDATE_BOOLEAN )
+		|| ( is_admin() && ! wp_doing_ajax() )
+	) {
+		return false;
+	}
+
+	$show_widget = current_user_can( forminator_get_admin_cap() );
+
+	/**
+	 * Filter whether to show the Stripe developer widget in test mode on the frontend.
+	 *
+	 * @since 1.56.0
+	 *
+	 * @param bool   $show_widget Whether to show the widget.
+	 * @param string $mode        Stripe mode (test|live).
+	 */
+	return (bool) apply_filters( 'forminator_show_stripe_developer_widget', $show_widget, $mode );
+}
+
 /**
  * Return form ID
  *
@@ -1420,6 +1462,7 @@ function forminator_reset_settings() {
 	delete_option( 'forminator_custom_upload_root' );
 	delete_option( 'forminator_stripe_configuration' );
 	delete_option( 'forminator_stripe_payment_intents' );
+	delete_option( 'forminator_stripe_checkout_sessions' );
 	delete_option( 'forminator_paypal_configuration' );
 	delete_option( 'forminator_usage_tracking' );
 	delete_option( 'forminator_auto_saving' );
@@ -2224,4 +2267,25 @@ function forminator_is_site_registration_enabled() {
 		}
 	}
 	return false;
+}
+
+/**
+ * Get the WPMU DEV server base URL with an optional path appended.
+ *
+ * Respects the WPMUDEV_CUSTOM_API_SERVER constant for staging/testing overrides.
+ *
+ * @since 1.56.0
+ *
+ * @param string $path Optional path to append to the base URL.
+ *
+ * @return string Full URL.
+ */
+function forminator_get_server_url( string $path = '' ): string {
+	$base = 'https://wpmudev.com/';
+
+	if ( defined( 'WPMUDEV_CUSTOM_API_SERVER' ) && ! empty( WPMUDEV_CUSTOM_API_SERVER ) ) {
+		$base = trailingslashit( WPMUDEV_CUSTOM_API_SERVER );
+	}
+
+	return $base . $path;
 }
