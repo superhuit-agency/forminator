@@ -382,7 +382,7 @@ abstract class Forminator_Admin_Module_Edit_Page extends Forminator_Admin_Page {
 									data-form-id="<?php echo esc_attr( $module['id'] ); ?>"
 									data-has-leads="<?php echo esc_attr( $has_leads ); ?>"
 									data-leads-id="<?php echo esc_attr( $leads_id ); ?>"
-									data-nonce-preview="<?php echo esc_attr( wp_create_nonce( 'forminator_load_module' ) ); ?>"
+									data-nonce-preview="<?php echo esc_attr( wp_create_nonce( 'forminator_load_module_preview' ) ); ?>"
 									data-nonce="<?php echo esc_attr( wp_create_nonce( 'forminator_popup_' . $preview_dialog ) ); ?>">
 									<i class="sui-icon-eye" aria-hidden="true"></i> <?php esc_html_e( 'Preview', 'forminator' ); ?>
 								</a></li>
@@ -1229,7 +1229,7 @@ abstract class Forminator_Admin_Module_Edit_Page extends Forminator_Admin_Page {
 		}
 
 		$nonce = Forminator_Core::sanitize_text_field( 'preview_nonce' );
-		if ( ! $nonce || ! wp_verify_nonce( $nonce, 'forminator_load_module' ) ) {
+		if ( ! $nonce || ! wp_verify_nonce( $nonce, 'forminator_load_module_preview' ) ) {
 			return;
 		}
 

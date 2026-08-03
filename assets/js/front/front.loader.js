@@ -54,25 +54,64 @@
 	// Avoid Plugin.prototype conflicts
 	$.extend(ForminatorLoader.prototype, {
 		init: function () {
-			const param = (decodeURI(document.location.search)).replace(/(^\?)/, '').split("&").map(function (n) {
-				return n = n.split("="), this[n[0].replace(/[.]/g, '_')] = n[1], this
-			}.bind({}))[0];
-			var saved_render_id = param.render_id;
+			// Blocked URL param keys that must never be forwarded from the URL into
+			// the AJAX POST body. PHP normalises spaces and dots in POST key names to
+			// underscores, so both "is preview" (space) and "is.preview" (dot) would
+			// collide with is_preview and enable unauthenticated preview injection.
+			// Prefix checks also catch array-style keys such as preview_data[settings][...].
+			var BLOCKED_PARAMS = [
+				'is_preview',
+				'instant_preview'
+			];
+			var BLOCKED_PARAM_PREFIXES = [
+				'preview_data',
+				'lead_preview_data'
+			];
 
-			param.action           = this.settings.action;
-			param.type             = this.settings.type;
-			param.id               = this.settings.id;
-			param.render_id        = this.settings.render_id;
-			param.is_preview       = this.settings.is_preview;
-			param.instant_preview  = this.settings.instant_preview;
-			param.preview_data     = JSON.stringify(this.settings.preview_data);
-			param.last_submit_data = this.settings.last_submit_data;
-			param.extra            = this.settings.extra;
-			param.nonce				  = this.settings.nonce;
+			var isBlockedParam = function( key ) {
+				var normalised = String( key ).replace( /[\s.]/g, '_' ).toLowerCase();
+				if ( BLOCKED_PARAMS.indexOf( normalised ) !== -1 ) {
+					return true;
+				}
+				for ( var i = 0; i < BLOCKED_PARAM_PREFIXES.length; i++ ) {
+					if ( normalised.indexOf( BLOCKED_PARAM_PREFIXES[ i ] ) === 0 ) {
+						return true;
+					}
+				}
+				return false;
+			};
 
-			if ( 'undefined' !== typeof saved_render_id ) {
+			var param = {
+				action:           this.settings.action,
+				type:             this.settings.type,
+				id:               this.settings.id,
+				render_id:        this.settings.render_id,
+				is_preview:       this.settings.is_preview,
+				instant_preview:  this.settings.instant_preview,
+				preview_data:     JSON.stringify(this.settings.preview_data),
+				last_submit_data: this.settings.last_submit_data,
+				extra:            this.settings.extra,
+				nonce:            this.settings.nonce
+			};
+
+			// Forward URL query params so PHP's $_REQUEST contains them for
+			// pre-populate and other server-side features. Blocked keys are stripped
+			// to prevent preview-injection via parameter-name collisions.
+			try {
+				var urlParams = new URLSearchParams(decodeURI(window.location.search));
+				urlParams.forEach( function( value, key ) {
+					var normalised = key.replace( /[\s.]/g, '_' );
+					if ( ! isBlockedParam( key ) && ! isBlockedParam( normalised ) ) {
+						param[ normalised ] = value;
+					}
+				} );
+			} catch (e) {}
+
+			var saved_render_id = param.render_id || null;
+			if ( null !== saved_render_id && '' !== saved_render_id ) {
 				param.saved_render_id = saved_render_id;
 			}
+
 			if ( 'undefined' !== typeof this.settings.has_lead ) {
 				param.has_lead         = this.settings.has_lead;
 				param.leads_id         = this.settings.leads_id;

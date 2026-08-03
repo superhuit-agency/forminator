@@ -3522,11 +3522,17 @@ function forminator_allowed_mime_types( $mimes = array(), $allow = true ) {
 		$mimes = get_allowed_mime_types();
 	}
 	if ( ! $allow ) {
-		$filters = array( 'htm|html', 'js', 'jse', 'jar', 'php', 'php3', 'php4', 'php5', 'phtml', 'svg', 'swf', 'exe', 'html', 'htm', 'shtml', 'xhtml', 'xml', 'css', 'asp', 'aspx', 'jsp', 'sql', 'hta', 'dll', 'bat', 'com', 'sh', 'bash', 'py', 'pl', 'dfxp', 'rar' );
+		$blocked_extensions = array( 'htm', 'html', 'js', 'jse', 'jar', 'php', 'php3', 'php4', 'php5', 'phtml', 'svg', 'swf', 'exe', 'shtml', 'xhtml', 'xml', 'css', 'asp', 'aspx', 'jsp', 'sql', 'hta', 'dll', 'bat', 'com', 'sh', 'bash', 'py', 'pl', 'dfxp', 'rar' );
+
 		foreach ( array_keys( $mimes ) as $mime_key ) {
-			$key = strtolower( $mime_key );
-			if ( in_array( $key, $filters, true ) ) {
-				unset( $mimes[ $mime_key ] );
+			$alternatives = explode( '|', strtolower( (string) $mime_key ) );
+			foreach ( $alternatives as $alternative ) {
+				// Normalize pattern-style keys to a plain extension.
+				$extension = preg_replace( '/[^a-z0-9]/', '', $alternative );
+				if ( ( '' !== $alternative && '' === $extension ) || in_array( $extension, $blocked_extensions, true ) ) {
+					unset( $mimes[ $mime_key ] );
+					break;
+				}
 			}
 		}
 	}

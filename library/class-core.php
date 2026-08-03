@@ -166,6 +166,89 @@ class Forminator_Core {
 		if ( ! is_admin() ) {
 			add_filter( 'render_block', array( $this, 'maybe_process_forminator_shortcodes' ), 10, 2 );
 		}
+
+		// Validate XML-RPC calls for Forminator forms.
+		add_action( 'xmlrpc_call', array( $this, 'validate_xmlrpc' ), 10, 3 );
+	}
+
+	/**
+	 * Validate XML-RPC calls for Forminator forms.
+	 *
+	 * @param string           $method The XML-RPC method that was called.
+	 * @param array            $args Method arguments.
+	 * @param wp_xmlrpc_server $server WordPress XMLRPC server.
+	 * @return void
+	 */
+	public function validate_xmlrpc( $method, $args = array(), $server = null ) {
+		// Only validate for newPost and editPost methods, and ensure server and post data are present.
+		if ( ! in_array( $method, array( 'wp.newPost', 'wp.editPost' ), true ) || is_null( $server ) || empty( $args[3] ) ) {
+			return;
+		}
+
+		$post = null;
+		if ( 'wp.editPost' === $method ) {
+			$post_id   = (int) $args[3];
+			$post_data = $args[4] ?? array();
+			$post      = get_post( $post_id );
+		} else {
+			$post_data = $args[3];
+		}
+
+		$post_type = $post_data['post_type'] ?? '';
+		// If the post object is available, use its post type instead of the one from post data.
+		if ( ! empty( $post->post_type ) ) {
+			$post_type = $post->post_type;
+		}
+		// If the post type is not one of the Forminator post types, return early.
+		if ( empty( $post_type ) || ! in_array( $post_type, array( 'forminator_forms', 'forminator_quizzes', 'forminator_polls' ), true ) ) {
+			return;
+		}
+
+		// Check if the current user has the required permissions to create or edit Forminator forms.
+		if ( ! forminator_is_user_allowed( 'forminator-cform' ) ) {
+			$server->error( 401, esc_html__( 'Unfortunately, you do not have the required permissions to perform this action.', 'forminator' ) );
+		}
+
+		if ( 'forminator_forms' === $post_type ) {
+			// If the post object is available, validate it first with the existing post's custom fields.
+			if ( ! empty( $post->ID ) && method_exists( $server, 'get_custom_fields' ) ) {
+				$custom_fields = $server->get_custom_fields( $post->ID );
+				// Check if the current user has the required permissions to edit Forminator registration forms.
+				$result = $this->allow_xmlrpc_for_registration_forms( $custom_fields );
+				if ( is_wp_error( $result ) ) {
+					$server->error( 401, $result->get_error_message() );
+				}
+			}
+
+			// Validate with the new custom fields from the post data.
+			if ( ! empty( $post_data['custom_fields'] ) ) {
+				$result = $this->allow_xmlrpc_for_registration_forms( $post_data['custom_fields'] );
+				if ( is_wp_error( $result ) ) {
+					$server->error( 401, $result->get_error_message() );
+				}
+			}
+		}
+	}
+
+	/**
+	 * Check if the XML-RPC request is allowed for Forminator registration forms.
+	 *
+	 * @param array $form_meta Form meta data.
+	 * @return bool|WP_Error
+	 */
+	private function allow_xmlrpc_for_registration_forms( $form_meta ) {
+		if ( ! empty( $form_meta ) ) {
+			foreach ( $form_meta as $meta ) {
+				if ( ! empty( $meta['key'] ) && 'forminator_form_meta' === $meta['key']
+					&& ! empty( $meta['value'] ) ) {
+					$value         = maybe_unserialize( $meta['value'] );
+					$form_settings = $value['settings'] ?? array();
+					// Check if the current user has the required permissions to create or edit Forminator registration forms.
+					return forminator_check_registration_form_permissions( $form_settings );
+				}
+			}
+		}
+		return true;
 	}
 
 	/**

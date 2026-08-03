@@ -1133,6 +1133,10 @@ class Forminator_Poll_Front extends Forminator_Render_Form {
 			$chart_design = $form_settings['results-style'];
 		}
 
+		if ( ! in_array( $chart_design, array( 'bar', 'pie' ), true ) ) {
+			$chart_design = 'bar';
+		}
+
 		$number_votes_enabled = (bool) false;
 
 		if ( isset( $form_settings['show-votes-count'] ) && $form_settings['show-votes-count'] ) {
@@ -1170,23 +1174,23 @@ class Forminator_Poll_Front extends Forminator_Render_Form {
 				$(function() {
 
 					var chartExtras = [
-						'<?php echo esc_html_e( 'vote(s)', 'forminator' ); ?>',
-						<?php echo esc_html( $votes_count ); ?>,
+						<?php echo wp_json_encode( esc_html__( 'vote(s)', 'forminator' ) ); ?>,
+						<?php echo wp_json_encode( filter_var( $votes_count, FILTER_VALIDATE_BOOLEAN ) ); ?>,
 						[
-							'<?php echo esc_html( $grids_color ); ?>',
-							'<?php echo esc_html( $labels_color ); ?>',
-							'<?php echo esc_html( $onchart_label ); ?>'
+							<?php echo wp_json_encode( $grids_color ); ?>,
+							<?php echo wp_json_encode( $labels_color ); ?>,
+							<?php echo wp_json_encode( $onchart_label ); ?>
 						],
 						[
-							'<?php echo esc_html( $tooltips_bg ); ?>',
-							'<?php echo esc_html( $tooltips_color ); ?>'
+							<?php echo wp_json_encode( $tooltips_bg ); ?>,
+							<?php echo wp_json_encode( $tooltips_color ); ?>
 						]
 					];
 
 					FUI.pollChart(
 						'#<?php echo esc_attr( $container_id ); ?>',
 						<?php echo wp_json_encode( $chart_data ); ?>,
-						'<?php echo esc_html( $chart_design ); ?>',
+						<?php echo wp_json_encode( $chart_design ); ?>,
 						chartExtras
 					);
 
