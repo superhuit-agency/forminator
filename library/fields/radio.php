@@ -514,7 +514,7 @@ class Forminator_Radio extends Forminator_Field {
 		// Due to members' request to allow html, we now use wp_kses_post for sanitization of this field.
 		if ( is_array( $data ) ) {
 			foreach ( $data as $key => $val ) {
-				$data[ $key ] = trim( wp_kses_post( $val ) );
+				$data[ $key ] = is_scalar( $val ) ? trim( wp_kses_post( $val ) ) : '';
 			}
 		} else {
 			$data = trim( wp_kses_post( $data ) );

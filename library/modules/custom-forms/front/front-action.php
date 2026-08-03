@@ -1072,6 +1072,11 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 			$field_data = array();
 		}
 
+		// Strip client-supplied `return`; only the filter below may set it.
+		if ( is_array( $field_data ) ) {
+			unset( $field_data['return'] );
+		}
+
 		/**
 		 * Filter handle specific field types
 		 *

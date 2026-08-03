@@ -3,7 +3,7 @@ Contributors: WPMUDEV
 Tags: contact form, custom form, forms, payment form, WordPress form plugin
 Requires at least: 6.4
 Tested up to: 7.0
-Stable tag: 1.55.1
+Stable tag: 1.56.0
 Requires PHP: 7.4
 License: GPL v3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
@@ -230,6 +230,21 @@ We take plugin security incredibly seriously; if you have a bug or vulnerability
 6. Publish Polls with Real-time Stats
 
 == Changelog ==
+
+= 1.56.2 (2026-07-30) =
+
+- Fix: Arbitrary file upload vulnerability
+
+
+= 1.56.1 (2026-07-30) =
+
+- Fix: Cross-Site Scripting (XSS) vulnerability
+
+
+= 1.56.0.1 (2026-07-30) =
+
+- Fix: Privilege escalation vulnerability
+
 
 = 1.56.0 ( 2026-07-21 ) =
 

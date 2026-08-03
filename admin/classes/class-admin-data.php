@@ -134,7 +134,7 @@ class Forminator_Admin_Data {
 			'formNonce'                      => $this->get_nonce(),
 			'resetTrackingDataNonce'         => wp_create_nonce( 'forminator_reset_tracking_data' ),
 			'createNonce'                    => wp_create_nonce( 'forminator_create_module' ),
-			'previewNonce'                   => wp_create_nonce( 'forminator_load_module' ),
+			'previewNonce'                   => wp_create_nonce( 'forminator_load_module_preview' ),
 			'updateLivePreviewNonce'         => wp_create_nonce( 'forminator_update_live_preview' ),
 			'searchNonce'                    => wp_create_nonce( 'forminator_search_emails' ),
 			'gFontNonce'                     => wp_create_nonce( 'forminator_load_google_fonts' ),

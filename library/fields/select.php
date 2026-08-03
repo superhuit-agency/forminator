@@ -730,7 +730,7 @@ class Forminator_Select extends Forminator_Field {
 		// Sanitize.
 		if ( is_array( $data ) ) {
 			foreach ( $data as $key => $val ) {
-				$data[ $key ] = trim( wp_kses_post( $val ) );
+				$data[ $key ] = is_scalar( $val ) ? trim( wp_kses_post( $val ) ) : '';
 			}
 		} else {
 			$data = trim( wp_kses_post( $data ) );

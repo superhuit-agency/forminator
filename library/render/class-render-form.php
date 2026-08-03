@@ -1438,6 +1438,8 @@ abstract class Forminator_Render_Form {
 			return;
 		}
 
+		// Preview uses a distinct nonce action so a public-page load nonce cannot
+		// authorize attacker-forced preview / preview_data via parameter collisions.
 		$ajax_options = array(
 			'action'           => 'forminator_load_' . static::$module_slug,
 			'type'             => $this->model->get_post_type(),
@@ -1446,7 +1448,7 @@ abstract class Forminator_Render_Form {
 			'is_preview'       => $is_preview,
 			'preview_data'     => $preview_data,
 			'last_submit_data' => $this->last_submitted_data,
-			'nonce'            => wp_create_nonce( 'forminator_load_module' ),
+			'nonce'            => wp_create_nonce( $is_preview ? 'forminator_load_module_preview' : 'forminator_load_module' ),
 			'extra'            => array(
 				'_wp_http_referer' => Forminator_Core::sanitize_text_field( $_SERVER['REQUEST_URI'] ), // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
 				'page_id'          => $this->get_post_id(),
@@ -1534,8 +1536,8 @@ abstract class Forminator_Render_Form {
 		$is_preview   = filter_input( INPUT_POST, 'is_preview', FILTER_VALIDATE_BOOLEAN );
 		$live_preview = filter_input( INPUT_POST, 'instant_preview', FILTER_VALIDATE_BOOLEAN );
 
-		// For preview, nonce verification is required to ensure the request is legitimate.
-		if ( $is_preview && ! wp_verify_nonce( $nonce, 'forminator_load_module' ) ) {
+		// Preview requires the preview-specific nonce (not the public load nonce).
+		if ( $is_preview && ! wp_verify_nonce( $nonce, 'forminator_load_module_preview' ) ) {
 			wp_send_json_error( new WP_Error( 'invalid_code' ) );
 		}
 

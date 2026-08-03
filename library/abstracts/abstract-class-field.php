@@ -2317,11 +2317,14 @@ abstract class Forminator_Field {
 		if ( is_wp_error( $upload_root ) || ! is_dir( $upload_root ) || ! wp_is_writable( $upload_root ) ) {
 			return;
 		}
-		// Make sure it was not called before WP init.
-		if ( function_exists( 'insert_with_markers' ) ) {
-			self::add_index_file( $upload_root );
-			self::add_htaccess_file( $upload_root );
+
+		// Load admin API on frontend requests so .htaccess is always created.
+		if ( ! function_exists( 'insert_with_markers' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/misc.php';
 		}
+
+		self::add_index_file( $upload_root );
+		self::add_htaccess_file( $upload_root );
 	}
 
 	/**
