@@ -723,7 +723,7 @@ abstract class Forminator_Admin_Page {
 						$stripe_link = 'https://wpmudev.com/docs/wpmu-dev-plugins/forminator/#stripe-field';
 						printf(
 							/* Translators: 1. 'Learn more' link */
-							esc_html__( 'You are using the Stripe simple card payment element, which is being deprecated by Stripe. %1$sTo ensure seamless transactions, update the Stripe field in the form(s) below to the new Stripe payment element.', 'forminator' ),
+							esc_html__( 'You are using the Stripe simple card payment element, which is being deprecated by Stripe and will be removed in an upcoming Forminator release. %1$sTo avoid failed payments, update the Stripe field in the form(s) below to the new Stripe payment element.', 'forminator' ),
 							forminator_is_show_documentation_link() ?
 								'<a href="' . esc_url( $stripe_link ) . '" target="_blank">' . esc_html__( 'Learn more.', 'forminator' ) . '</a> '
 								: ''

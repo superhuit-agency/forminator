@@ -358,10 +358,11 @@ class Forminator_Admin_Import_CF7 extends Forminator_Import_Mediator {
 		$settings['use-admin-email'] = false;
 
 		if ( isset( $mail['active'] ) && true === $mail['active'] ) {
-			$settings['use-admin-email']    = true;
-			$settings['admin-email-title']  = $this->replace_invalid_tags( $mail['subject'], $tags );
-			$settings['admin-email-editor'] = $this->replace_invalid_tags( $mail['body'], $tags );
-			$admin_email_from               = $this->replace_invalid_tags( $mail['sender'], $tags );
+			$settings['use-admin-email']        = true;
+			$settings['admin-email-title']      = $this->replace_invalid_tags( $mail['subject'], $tags );
+			$settings['admin-email-editor']     = $this->replace_invalid_tags( $mail['body'], $tags );
+			$settings['admin-email-attachment'] = ! empty( $mail['attachments'] ) ? 'true' : 'false';
+			$admin_email_from                   = $this->replace_invalid_tags( $mail['sender'], $tags );
 
 			if ( preg_match( '/^([^\<]*)(?:\<([^\>]*)\>)?$/u', $admin_email_from, $matches ) ) {
 				$settings['admin-email-from-name']    = isset( $matches[1] ) ? $matches[1] : '';
@@ -397,10 +398,11 @@ class Forminator_Admin_Import_CF7 extends Forminator_Import_Mediator {
 		$settings['use-user-email'] = false;
 
 		if ( isset( $mail_2['active'] ) && true === $mail_2['active'] ) {
-			$settings['use-user-email']    = true;
-			$settings['user-email-title']  = $this->replace_invalid_tags( $mail_2['subject'], $tags );
-			$settings['user-email-editor'] = $this->replace_invalid_tags( $mail_2['body'], $tags );
-			$user_email_from               = $this->replace_invalid_tags( $mail_2['sender'], $tags );
+			$settings['use-user-email']        = true;
+			$settings['user-email-title']      = $this->replace_invalid_tags( $mail_2['subject'], $tags );
+			$settings['user-email-editor']     = $this->replace_invalid_tags( $mail_2['body'], $tags );
+			$settings['user-email-attachment'] = ! empty( $mail_2['attachments'] ) ? 'true' : 'false';
+			$user_email_from                   = $this->replace_invalid_tags( $mail_2['sender'], $tags );
 
 			if ( preg_match( '/^([^\<]*)(?:\<([^\>]*)\>)?$/u', $user_email_from, $matches ) ) {
 				$settings['user-email-from-name']    = isset( $matches[1] ) ? $matches[1] : '';

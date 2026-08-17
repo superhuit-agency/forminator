@@ -90,10 +90,10 @@ if ( $this->total_entries() > 0 ) :
 				$url_entry_id = $url_entry_id ? $url_entry_id : 0;
 				foreach ( $this->entries_iterator() as $entries ) {
 
-					$entry_id    = $entries['id'];
-					$db_entry_id = isset( $entries['entry_id'] ) ? $entries['entry_id'] : '';
-					$draft_id    = isset( $entries['draft_id'] ) ? $entries['draft_id'] : '';
-					$draft_link  = isset( $entries['draft_link'] ) ? $entries['draft_link'] : '';
+					$db_entry_id      = isset( $entries['entry_id'] ) ? $entries['entry_id'] : '';
+					$display_entry_id = isset( $entries['display_entry_id'] ) ? $entries['display_entry_id'] : $db_entry_id;
+					$draft_id         = isset( $entries['draft_id'] ) ? $entries['draft_id'] : '';
+					$draft_link       = isset( $entries['draft_link'] ) ? $entries['draft_link'] : '';
 
 					$summary       = $entries['summary'];
 					$summary_items = $summary['items'];
@@ -158,7 +158,7 @@ if ( $this->total_entries() > 0 ) :
 
 								echo '<td class="sui-accordion-item-title">';
 
-								echo '<label class="sui-checkbox">';
+								echo '<label class="sui-checkbox sui-accordion-item-action">';
 
 								echo '<input type="checkbox" name="entry[]" value="' . esc_attr( $db_entry_id ) . '" id="wpf-cform-module-' . esc_attr( $db_entry_id ) . '" />';
 
@@ -167,12 +167,12 @@ if ( $this->total_entries() > 0 ) :
 								echo '<span class="sui-screen-reader-text">' . sprintf(
 									/* translators: %s: Entry ID */
 									esc_html__( 'Select entry number %s', 'forminator' ),
-									esc_html( $db_entry_id )
+									esc_html( $display_entry_id )
 								) . '</span>';
 
 								echo '</label>';
 
-								echo esc_html( $db_entry_id );
+								echo esc_html( $display_entry_id );
 
 								if ( 'draft' === $entries['status'] ) {
 									echo '<span class="sui-tag draft-tag status-tag">' . esc_html__( 'Draft', 'forminator' ) . '</span>';
@@ -234,7 +234,7 @@ if ( $this->total_entries() > 0 ) :
 
 								<div class="sui-box-body">
 
-									<h2 class="fui-entry-title"><?php echo '#' . esc_attr( $db_entry_id ); ?></h2>
+									<h2 class="fui-entry-title"><?php echo '#' . esc_attr( $display_entry_id ); ?></h2>
 
 									<?php if ( ! empty( $draft_id ) ) { ?>
 										<div class="sui-box-settings-slim-row sui-sm draft-id">

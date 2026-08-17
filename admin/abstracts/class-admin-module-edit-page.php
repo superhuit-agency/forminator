@@ -424,7 +424,7 @@ abstract class Forminator_Admin_Module_Edit_Page extends Forminator_Admin_Page {
 									<i class="sui-icon-community-people" aria-hidden="true"></i> <?php esc_html_e( 'View Submissions', 'forminator' ); ?>
 								</a></li>
 
-								<li <?php echo ( $has_leads ) ? 'aria-hidden="true"' : ''; ?>><form method="post">
+								<li><form method="post">
 									<input type="hidden" name="forminator_action" value="clone">
 									<input type="hidden" name="id" value="<?php echo esc_attr( $module['id'] ); ?>"/>
 									<input type="hidden" name="msearch" value="" />
@@ -432,17 +432,9 @@ abstract class Forminator_Admin_Module_Edit_Page extends Forminator_Admin_Page {
 										$clone_nonce = esc_attr( 'forminator-nonce-clone-' . $module['id'] );
 										wp_nonce_field( $clone_nonce, 'forminatorNonce' );
 									?>
-									<?php if ( $has_leads ) : ?>
-										<button type="submit" disabled="disabled" class="forminator-action-duplicate fui-button-with-tag sui-tooltip sui-tooltip-left sui-constrained" data-tooltip="<?php esc_html_e( 'Duplicate isn\'t supported at the moment for the quizzes with lead capturing enabled.', 'forminator' ); ?>">
-											<span class="sui-icon-page-multiple" aria-hidden="true"></span>
-											<span class="fui-button-label"><?php esc_html_e( 'Duplicate', 'forminator' ); ?></span>
-											<span class="sui-tag sui-tag-blue sui-tag-sm"><?php echo esc_html__( 'Coming soon', 'forminator' ); ?></span>
-										</button>
-									<?php else : ?>
-										<button class="forminator-action-duplicate" type="submit">
-											<i class="sui-icon-page-multiple" aria-hidden="true"></i> <?php esc_html_e( 'Duplicate', 'forminator' ); ?>
-										</button>
-									<?php endif; ?>
+									<button class="forminator-action-duplicate" type="submit">
+										<i class="sui-icon-page-multiple" aria-hidden="true"></i> <?php esc_html_e( 'Duplicate', 'forminator' ); ?>
+									</button>
 								</form></li>
 
 								<li>
@@ -473,24 +465,14 @@ abstract class Forminator_Admin_Module_Edit_Page extends Forminator_Admin_Page {
 								<?php } ?>
 
 								<?php if ( Forminator::is_import_export_feature_enabled() ) : ?>
-									<?php if ( $has_leads ) : ?>
-										<li aria-hidden="true"><a href="#" class="forminator-action-export fui-button-with-tag sui-tooltip sui-tooltip-left"
-											data-tooltip="<?php esc_html_e( 'Export isn\'t supported at the moment for the quizzes with lead capturing enabled.', 'forminator' ); ?>">
-											<span class="sui-icon-cloud-migration" aria-hidden="true"></span>
-											<span class="fui-button-label"><?php esc_html_e( 'Export', 'forminator' ); ?></span>
-											<span class="sui-tag sui-tag-blue sui-tag-sm"><?php echo esc_html__( 'Coming soon', 'forminator' ); ?></span>
-										</a></li>
-									<?php else : ?>
-										<li><a href="#"
-											class="forminator-action-export wpmudev-open-modal"
-											data-modal="<?php echo esc_attr( $export_dialog ); ?>"
-											data-modal-title=""
-											data-form-id="<?php echo esc_attr( $module['id'] ); ?>"
-											data-nonce="<?php echo esc_attr( wp_create_nonce( 'forminator_popup_export_' . $module_slug ) ); ?>">
-											<i class="sui-icon-cloud-migration" aria-hidden="true"></i> <?php esc_html_e( 'Export', 'forminator' ); ?>
-										</a></li>
-									<?php endif; ?>
-
+									<li><a href="#"
+										class="forminator-action-export wpmudev-open-modal"
+										data-modal="<?php echo esc_attr( $export_dialog ); ?>"
+										data-modal-title=""
+										data-form-id="<?php echo esc_attr( $module['id'] ); ?>"
+										data-nonce="<?php echo esc_attr( wp_create_nonce( 'forminator_popup_export_' . $module_slug ) ); ?>">
+										<i class="sui-icon-cloud-migration" aria-hidden="true"></i> <?php esc_html_e( 'Export', 'forminator' ); ?>
+									</a></li>
 								<?php endif; ?>
 
 								<li>
@@ -738,47 +720,31 @@ abstract class Forminator_Admin_Module_Edit_Page extends Forminator_Admin_Page {
 		$model = Forminator_Base_Form_Model::get_model( $id );
 
 		if ( is_object( $model ) ) {
-			// create one.
-			// reset id.
-			$model->id = null;
+			// Clone lead form if quiz has leads enabled.
+			$new_leads_id = null;
+			if ( 'quiz' === static::$module_slug ) {
+				$lead_model = forminator_get_quiz_lead_model( $model );
+				if ( $lead_model ) {
+					// Clone lead form using helper.
+					$new_leads_id = forminator_clone_form_model( $lead_model, $lead_model->id );
+					if ( is_wp_error( $new_leads_id ) ) {
+						return $new_leads_id;
+					}
 
-			// update title.
-			if ( isset( $model->settings['formName'] ) ) {
-				$model->settings['formName'] = /* translators: %s: Form name */ sprintf( esc_html__( 'Copy of %s', 'forminator' ), esc_html( $model->settings['formName'] ) );
+					// Update leadsId with new cloned lead form ID.
+					$model->settings['leadsId'] = $new_leads_id;
+				}
 			}
 
-			// save it to create new record.
-			$new_id = $model->save( true );
+			// Clone the main module using helper.
+			$new_id = forminator_clone_form_model( $model, $id );
 			if ( is_wp_error( $new_id ) ) {
+				// Delete the cloned lead form if quiz clone fails.
+				if ( ! empty( $new_leads_id ) ) {
+					Forminator_API::delete_form( $new_leads_id );
+				}
 				return $new_id;
 			}
-
-			/**
-			 * Action called after module cloned
-			 *
-			 * @since 1.11
-			 *
-			 * @param int    $new_id - module id.
-			 * @param object $model - module model.
-			 *
-			 * @since 1.39
-			 * @param int    $id - Old module id.
-			 */
-			do_action( 'forminator_' . static::$module_slug . '_action_clone', $new_id, $model, $id );
-
-			$function = 'forminator_clone_' . static::$module_slug . '_submissions_retention';
-			if ( function_exists( $function ) ) {
-				$function( $id, $new_id );
-			}
-
-			// Purge count forms cache.
-			$cache_prefix = 'forminator_' . static::$module_slug . '_total_entries';
-			wp_cache_delete( $cache_prefix, $cache_prefix );
-			wp_cache_delete( $cache_prefix . '_publish', $cache_prefix . '_publish' );
-			wp_cache_delete( $cache_prefix . '_draft', $cache_prefix . '_draft' );
-			// Call do action after create duplicate module.
-			Forminator_Base_Form_Model::module_update_do_action( static::$module_slug, $new_id, $model );
-
 		}
 	}
 
@@ -790,6 +756,11 @@ abstract class Forminator_Admin_Module_Edit_Page extends Forminator_Admin_Page {
 	 * @param int $id Module Id.
 	 */
 	public static function delete_module( $id ) {
+		// Validate ID.
+		if ( empty( $id ) || ! is_numeric( $id ) ) {
+			return new WP_Error( 'invalid_module_id', esc_html__( 'Invalid module ID provided.', 'forminator' ) );
+		}
+
 		// check if this id is valid and the record is exists.
 		$model = Forminator_Base_Form_Model::get_model( $id );
 		if ( is_object( $model ) ) {
@@ -798,14 +769,10 @@ abstract class Forminator_Admin_Module_Edit_Page extends Forminator_Admin_Page {
 				return $validate;
 			}
 			// For Quizzes with Leads.
-			if ( isset( $model->settings['hasLeads'] ) && isset( $model->settings['leadsId'] ) && $model->settings['hasLeads'] ) {
-				$leads_id    = $model->settings['leadsId'];
-				$leads_model = Forminator_Base_Form_Model::get_model( $leads_id );
-
-				if ( is_object( $leads_model ) ) {
-					wp_delete_post( $leads_id );
-					self::delete_css( $leads_id );
-				}
+			$lead_model = forminator_get_quiz_lead_model( $model );
+			if ( $lead_model ) {
+				wp_delete_post( $lead_model->id );
+				self::delete_css( $lead_model->id );
 			}
 
 			Forminator_Form_Entry_Model::delete_by_form( $id );

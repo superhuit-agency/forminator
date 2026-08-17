@@ -54,6 +54,9 @@
 		this._checkoutCanConfirm   = false;
 		this._checkoutSyncPromise  = null;
 		this._checkoutRefreshTimer = null;
+		this._checkoutVisibilitySnapshot = '';
+		this._checkoutRefreshRequestId = 0;
+		this._checkoutMountRequestId = 0;
 		this._returnedCheckoutSessionId = '';
 		this._isCheckoutReturnFlow = false;
 		this._checkoutReturnError = '';
@@ -408,7 +411,8 @@
 		// Ask server, whether the returned Checkout Session is still safe to reuse before resuming submission.
 		validateRecoveredCheckoutSession: function() {
 			var self = this;
-			var formData = new FormData();
+			var formData = new FormData(this.$el[0]);
+			var recoveryFormData = new FormData();
 			var nonce = this.$el.find('[name="forminator_nonce"]').val() || '';
 			var formId = this.$el.find('[name="form_id"]').val() || this.$el.data('form-id') || '';
 			var paymentId = this._returnedCheckoutSessionId || '';
@@ -417,16 +421,22 @@
 				return Promise.reject(new Error(window.ForminatorFront.cform.payment_failed));
 			}
 
-			formData.append('action', 'forminator_check_stripe_checkout_session_status');
-			formData.append('forminator_nonce', nonce);
-			formData.append('form_id', formId);
-			formData.append('paymentid', paymentId);
+			// Include restored field values so conditional Stripe fields are evaluated in the same state used before redirect.
+			formData.forEach(function(value, key) {
+				if ( key !== 'action' && key !== 'paymentid' ) {
+					recoveryFormData.append(key, value);
+				}
+			});
+			recoveryFormData.append('action', 'forminator_check_stripe_checkout_session_status');
+			recoveryFormData.append('forminator_nonce', nonce);
+			recoveryFormData.append('form_id', formId);
+			recoveryFormData.append('paymentid', paymentId);
 
 			return new Promise(function(resolve, reject) {
 				$.ajax({
 					type: 'POST',
 					url: window.ForminatorFront.ajaxUrl,
-					data: formData,
+					data: recoveryFormData,
 					cache: false,
 					contentType: false,
 					processData: false,
@@ -511,6 +521,7 @@
 			if ( this.isCheckoutSession() ) {
 				this.bindCheckoutSessionFields();
 				this.restoreCheckoutFormState();
+				this._checkoutVisibilitySnapshot = this.getCheckoutVisibilitySnapshot();
 			}
 
 			if ( this._isCheckoutReturnFlow ) {
@@ -606,7 +617,13 @@
 						return;
 					}
 
-					if ( ! hasValidator && ( ( checkoutEmail && ! self.getCheckoutEmailValue() ) || ( checkoutPhone && ! self.getCheckoutPhoneValue() ) ) ) {
+					if (
+						! hasValidator
+						&& (
+							( checkoutEmail && ! self.hasCheckoutContactElement() && ! self.getCheckoutEmailValue() )
+							|| ( checkoutPhone && self.hasVisibleCheckoutPhoneField() && ! self.getCheckoutPhoneValue() )
+						)
+					) {
 						callback();
 						return;
 					}
@@ -703,6 +720,7 @@
 				const {error, paymentIntent} = await self._stripe.retrievePaymentIntent(clientSecret);
 
 				if (error) {
+					self.logStripeClientError('subscription_redirect_retrieve_payment_intent_error', error);
 					clearInterval(interval);
 					return;
 				}
@@ -721,6 +739,14 @@
 					} else {
 						errorMessage = window.ForminatorFront.cform.payment_failed;
 					}
+					self.logStripeClientError(
+						'subscription_redirect_payment_intent_status_' + paymentIntent.status,
+						{
+							type: 'payment_intent_status',
+							code: paymentIntent.status,
+							message: errorMessage,
+						}
+					);
 					clearInterval(interval);
 					stripePopup.close();
 					self.$el.find('#forminator-stripe-paymentmethod').val('');
@@ -835,23 +861,57 @@
 		getCheckoutEmailValue: function() {
 			var checkoutEmail = this.getStripeData('checkoutEmail');
 
-			return checkoutEmail ? this.get_field_value(checkoutEmail) || '' : '';
+			if ( ! checkoutEmail ) {
+				return '';
+			}
+
+			var $checkoutEmailField = this.get_form_field(checkoutEmail);
+
+			return $checkoutEmailField.length && ! forminatorUtils().is_hidden( $checkoutEmailField )
+				? this.get_field_value(checkoutEmail) || ''
+				: '';
 		},
 
 		// Check whether Stripe's contact element should collect the Checkout email.
 		hasCheckoutContactElement: function() {
 			var checkoutEmail = this.getStripeData('checkoutEmail');
-			var hasCheckoutEmailField = checkoutEmail ? !! this.get_form_field(checkoutEmail).length : false;
-			var hasContactElement = this.isCheckoutSession() && ( ! checkoutEmail || ! hasCheckoutEmailField );
+			var $checkoutEmailField = checkoutEmail ? this.get_form_field(checkoutEmail) : $();
+			var hasVisibleCheckoutEmailField = $checkoutEmailField.length && ! forminatorUtils().is_hidden( $checkoutEmailField );
+			var hasContactElement = this.isCheckoutSession() && ( ! checkoutEmail || ! hasVisibleCheckoutEmailField );
 
 			return hasContactElement;
 		},
 
+		hasVisibleCheckoutPhoneField: function() {
+			var checkoutPhone = this.getStripeData('checkoutPhone');
+			var $checkoutPhoneField = checkoutPhone ? this.get_form_field(checkoutPhone) : $();
+
+			return $checkoutPhoneField.length && ! forminatorUtils().is_hidden( $checkoutPhoneField );
+		},
+
+		hasCheckoutPhoneCollection: function() {
+			return !! this.getStripeData('checkoutPhoneCollectionEnabled');
+		},
+
 		// Read the Checkout phone from the configured checkout phone field.
 		getCheckoutPhoneValue: function() {
-			var checkoutPhone = this.getStripeData('checkoutPhone');
+			if ( ! this.hasVisibleCheckoutPhoneField() ) {
+				return '';
+			}
 
-			return checkoutPhone ? this.get_field_value(checkoutPhone) || '' : '';
+			return this.get_field_value(this.getStripeData('checkoutPhone')) || '';
+		},
+
+		getCheckoutVisibilitySnapshot: function() {
+			var checkoutEmail = this.getStripeData('checkoutEmail');
+			var checkoutPhone = this.getStripeData('checkoutPhone');
+			var $checkoutEmailField = checkoutEmail ? this.get_form_field(checkoutEmail) : $();
+			var $checkoutPhoneField = checkoutPhone ? this.get_form_field(checkoutPhone) : $();
+
+			return JSON.stringify({
+				checkoutEmailVisible: $checkoutEmailField.length && ! forminatorUtils().is_hidden( $checkoutEmailField ),
+				checkoutPhoneVisible: $checkoutPhoneField.length && ! forminatorUtils().is_hidden( $checkoutPhoneField ),
+			});
 		},
 
 		// Validate a country code against Stripe's supported billing address countries.
@@ -945,12 +1005,14 @@
 
 		// Push mapped customer details into the active Stripe Checkout Session.
 		syncCheckoutCustomerDetails: function() {
+			var checkoutPhone = this.getCheckoutPhoneValue();
+
 			if ( ! this.hasCheckoutContactElement() ) {
 				this.runCheckoutAction('updateEmail', this.getCheckoutEmailValue() || null);
 			}
 
-			if ( this.getStripeData('checkoutPhone') ) {
-				this.runCheckoutAction('updatePhoneNumber', this.getCheckoutPhoneValue() || null);
+			if ( this.hasVisibleCheckoutPhoneField() && this.hasCheckoutPhoneCollection() ) {
+				this.runCheckoutAction('updatePhoneNumber', checkoutPhone || null);
 			}
 
 			var billingAddress = this.getCheckoutBillingAddressValue();
@@ -994,12 +1056,33 @@
 					});
 				});
 			});
+
+			this.$el.on('forminator:field:condition:toggled', function() {
+				var nextVisibilitySnapshot = self.getCheckoutVisibilitySnapshot();
+
+				if (
+					! self.isCheckoutSession()
+					|| self.isCheckoutSessionPreview()
+					|| self._isCheckoutReturnFlow
+					|| self._checkoutVisibilitySnapshot === nextVisibilitySnapshot
+				) {
+					return;
+				}
+
+				self._checkoutVisibilitySnapshot = nextVisibilitySnapshot;
+
+				window.clearTimeout(self._checkoutRefreshTimer);
+				self._checkoutRefreshTimer = window.setTimeout(function() {
+					self.refreshCheckoutSession().catch(function() {});
+				}, 300);
+			});
 		},
 
 		// Rebuild the Checkout Session before we try to confirm it.
 		refreshCheckoutSession: function() {
 			var self = this;
 			var previousIntent = self.intent;
+			var refreshRequestId = self.getNextCheckoutRefreshRequestId();
 			var restoreIntent = function() {
 				self.intent = previousIntent;
 			};
@@ -1007,9 +1090,17 @@
 			self.intent = true;
 			return new Promise(function(resolve, reject) {
 				self.updateAmount(null, {
+					checkoutRefreshRequestId: refreshRequestId,
 					onSuccess: function() {
+						if ( ! self.isLatestCheckoutRefreshRequest(refreshRequestId) ) {
+							restoreIntent();
+							resolve();
+							return;
+						}
+
 						self.waitForCheckoutReady().then(function() {
 							self._checkoutDependentSnapshot = self.getCheckoutSessionFieldsSnapshot('dependent');
+							self._checkoutVisibilitySnapshot = self.getCheckoutVisibilitySnapshot();
 							restoreIntent();
 							resolve();
 						}).catch(function(error) {
@@ -1018,11 +1109,25 @@
 						});
 					},
 					onFailure: function(error) {
+						if ( ! self.isLatestCheckoutRefreshRequest(refreshRequestId) ) {
+							restoreIntent();
+							resolve();
+							return;
+						}
+
 						restoreIntent();
 						reject(error || new Error(window.ForminatorFront.cform.payment_failed));
 					},
 				});
 			});
+		},
+
+		isLatestCheckoutRefreshRequest: function(refreshRequestId) {
+			return ! refreshRequestId || refreshRequestId === this._checkoutRefreshRequestId;
+		},
+
+		getNextCheckoutRefreshRequestId: function() {
+			return ++this._checkoutRefreshRequestId;
 		},
 
 		showCheckoutSessionRefreshError: function(error) {
@@ -1125,7 +1230,10 @@
 					return;
 				}
 
-				if ( self._checkoutDependentSnapshot !== self.getCheckoutSessionFieldsSnapshot('dependent') ) {
+				if (
+					self._checkoutDependentSnapshot !== self.getCheckoutSessionFieldsSnapshot('dependent')
+					|| self._checkoutVisibilitySnapshot !== self.getCheckoutVisibilitySnapshot()
+				) {
 					refreshAndFinalize();
 					return;
 				}
@@ -1208,7 +1316,7 @@
 				confirmOptions.email = checkoutEmail;
 			}
 			let checkoutPhone = this.getCheckoutPhoneValue();
-			if ( checkoutPhone ) {
+			if ( checkoutPhone && this.hasCheckoutPhoneCollection() ) {
 				confirmOptions.phoneNumber = checkoutPhone;
 			}
 			let checkoutBillingAddress = this.getCheckoutBillingAddressValue();
@@ -1264,11 +1372,20 @@
 					},
 				})
 				.then(function(result) {
+					if ( result && result.error ) {
+						self.logStripeClientError('subscription_confirm_payment_error', result.error);
+					}
+
 					self.$el.find('#forminator-stripe-subscriptionid').val( subscription );
 
 					if (self._beforeSubmitCallback) {
 						self._beforeSubmitCallback.call();
 					}
+				})
+				.catch(function(error) {
+					self.logStripeClientError('subscription_confirm_payment_exception', error);
+					self.$el.find('#forminator-stripe-subscriptionid').val('');
+					self.show_error(error && error.message ? error.message : window.ForminatorFront.cform.payment_failed);
 				});
 			} else {
 				this._stripe.retrievePaymentIntent(
@@ -1285,11 +1402,17 @@
 							} )
 							.then( function ( result ) {
 								if ( result.error ) {
+									self.logStripeClientError('3ds_confirm_payment_error', result.error);
 									self.$el.find('#forminator-stripe-subscriptionid').val('');
 									self.show_error(result.error.message);
 								} else if ( self._beforeSubmitCallback ) {
 									self._beforeSubmitCallback.call();
 								}
+							} )
+							.catch( function ( error ) {
+								self.logStripeClientError('3ds_confirm_payment_exception', error);
+								self.$el.find('#forminator-stripe-subscriptionid').val('');
+								self.show_error(error && error.message ? error.message : window.ForminatorFront.cform.payment_failed);
 							} );
 					}
 				});
@@ -1313,6 +1436,11 @@
 			var formData = new FormData( this.$el[0] );
 			var self = this;
 			var updateFormData = new FormData();
+
+			// Every Checkout update can create or remount a Session, including the first page load.
+			if ( this.isCheckoutSession() && ! options.checkoutRefreshRequestId ) {
+				options.checkoutRefreshRequestId = this.getNextCheckoutRefreshRequestId();
+			}
 
 			// Remove action from formData.
 			formData.forEach(function (value, key) {
@@ -1381,6 +1509,17 @@
 					self._form.find('button').attr('disabled', true);
 				},
 				success: function (data) {
+						if (
+							self.isCheckoutSession()
+							&& options.checkoutRefreshRequestId
+							&& ! self.isLatestCheckoutRefreshRequest(options.checkoutRefreshRequestId)
+						) {
+							if ( typeof options.onSuccess === 'function' ) {
+								options.onSuccess(data);
+							}
+							return;
+						}
+
 						self._lastMountFailed = false;
 						if (data.success === true) {
 							if ( self.isCheckoutSession() && options.validateOnly ) {
@@ -1394,6 +1533,7 @@
 						if (typeof data.data !== 'undefined') {
 							let hasPaymentId = 'undefined' !== typeof data.data.paymentid;
 							let hasPaymentPlan = 'undefined' !== typeof data.data.paymentPlan;
+							let hasCheckoutPhoneCollectionEnabled = 'undefined' !== typeof data.data.checkoutPhoneCollectionEnabled;
 							let hasForceMountStripeField = 'undefined' !== typeof data.data.forceMountStripeField;
 							let previousPaymentId = self.getStripeData('paymentid') || '';
 							let previousSecret = self.getStripeData('secret') || '';
@@ -1412,6 +1552,9 @@
 
 							// Save the latest Stripe ids before the early return check.
 							self._stripeData['forceMountStripeField'] = hasForceMountStripeField ? !! data.data.forceMountStripeField : false;
+							if ( hasCheckoutPhoneCollectionEnabled ) {
+								self._stripeData['checkoutPhoneCollectionEnabled'] = !! data.data.checkoutPhoneCollectionEnabled;
+							}
 
 							if ( hasPaymentId ) {
 								self.$el.find('#forminator-stripe-paymentid').val(data.data.paymentid);
@@ -1513,6 +1656,17 @@
 					}
 				},
 				error: function (err) {
+					if (
+						self.isCheckoutSession()
+						&& options.checkoutRefreshRequestId
+						&& ! self.isLatestCheckoutRefreshRequest(options.checkoutRefreshRequestId)
+					) {
+						if ( typeof options.onSuccess === 'function' ) {
+							options.onSuccess(err);
+						}
+						return;
+					}
+
 					self._lastMountFailed = true;
 					var $message = err.status === 400 ? window.ForminatorFront.cform.upload_error : window.ForminatorFront.cform.error;
 
@@ -1536,14 +1690,23 @@
 
 		show_error: function(message) {
 			var $target_message = this._form.find('.forminator-response-message');
+			var wasSubmitIntent = ! this.intent;
+
 			$target_message.html('<p>' + message + '</p>');
 			this.unfrozeForm($target_message);
+
+			if ( wasSubmitIntent ) {
+				// Stop a failed submit from being resumed by a later plan/field refresh.
+				this._beforeSubmitCallback = null;
+				this.intent = true;
+			}
 		},
 
 		unfrozeForm: function($target_message) {
 			this._form.find('button').removeAttr('disabled');
 
-			if ( ! this.intent ) {
+			// Show preview errors, but do not show an empty error box.
+			if ( ( ! this.intent || this.isCheckoutSessionPreview() ) && $.trim( $target_message.text() ) ) {
 				$target_message.removeAttr("aria-hidden")
 					.prop("tabindex", "-1")
 					.removeClass('forminator-loading forminator-accessible')
@@ -1807,7 +1970,7 @@
 				billingDetailsFields.name = 'never';
 			}
 
-			if ( this.getStripeData('checkoutPhone') ) {
+			if ( this.hasVisibleCheckoutPhoneField() && this.hasCheckoutPhoneCollection() ) {
 				billingDetailsFields.phone = 'never';
 			}
 
@@ -1824,6 +1987,7 @@
 				key = this.getStripeData('key'),
 				paymentOptions = { ...this.getStripeData('paymentOptions') }
 			;
+			let checkoutMountRequestId = this.isCheckoutSession() ? ++this._checkoutMountRequestId : 0;
 
 			if ( isSubscription ) {
 				clientSecret = null;
@@ -1864,7 +2028,7 @@
 
 			if ( this.isCheckoutSession() ) {
 				// Checkout Sessions require a server-generated session client secret.
-				return this.mountCheckoutSessionField(clientSecret, fieldId, paymentOptions);
+				return this.mountCheckoutSessionField(clientSecret, fieldId, paymentOptions, checkoutMountRequestId);
 			}
 
 			let stripeObject = { ...this.getStripeData('elementsOptions') };
@@ -1903,7 +2067,7 @@
 			});
 		},
 
-		mountCheckoutSessionField: function(clientSecret, fieldId, paymentOptions) {
+		mountCheckoutSessionField: function(clientSecret, fieldId, paymentOptions, checkoutMountRequestId) {
 			if ( ! clientSecret ) {
 				return false;
 			}
@@ -1952,17 +2116,36 @@
 
 				let setupCheckout = async function(checkout) {
 					try {
+						if ( ! self.isLatestCheckoutMountRequest(checkoutMountRequestId) ) {
+							resolve(false);
+							return false;
+						}
+
 						self._checkout = checkout;
 						if ( typeof checkout.on === 'function' ) {
 							checkout.on('change', function(session) {
+								if ( ! self.isLatestCheckoutMountRequest(checkoutMountRequestId) ) {
+									return;
+								}
+
 								self._checkoutCanConfirm = !! ( session && session.canConfirm );
 							});
 						}
 
 						let loadActionsResult = await checkout.loadActions();
 						if ( loadActionsResult.type !== 'success' ) {
+							if ( ! self.isLatestCheckoutMountRequest(checkoutMountRequestId) ) {
+								resolve(false);
+								return false;
+							}
+
 							self.show_error(self.getStripeCheckoutErrorMessage(loadActionsResult.error));
 							reject(loadActionsResult.error || new Error(window.ForminatorFront.cform.payment_failed));
+							return false;
+						}
+
+						if ( ! self.isLatestCheckoutMountRequest(checkoutMountRequestId) ) {
+							resolve(false);
 							return false;
 						}
 
@@ -1984,15 +2167,20 @@
 						self._paymentElement = checkout.createPaymentElement(sanitizedPaymentOptions);
 						self._paymentElement.mount('#payment-element-' + fieldId);
 
-						if ( contactElement && typeof checkout.createContactDetailsElement === 'function' ) {
+						if ( self.hasCheckoutContactElement() && contactElement && typeof checkout.createContactDetailsElement === 'function' ) {
 							self._contactElement = checkout.createContactDetailsElement();
 							self._contactElement.mount('#payment-contact-element-' + fieldId);
 						}
 
-							self.syncCheckoutCustomerDetails();
-							resolve(true);
-							return true;
+						self.syncCheckoutCustomerDetails();
+						resolve(true);
+						return true;
 					} catch ( error ) {
+						if ( ! self.isLatestCheckoutMountRequest(checkoutMountRequestId) ) {
+							resolve(false);
+							return false;
+						}
+
 						self.show_error(self.getStripeCheckoutErrorMessage(error));
 						reject(error);
 						return false;
@@ -2001,6 +2189,11 @@
 
 				if ( checkoutInit && typeof checkoutInit.then === 'function' ) {
 					checkoutInit.then(setupCheckout).catch(function(error) {
+						if ( ! self.isLatestCheckoutMountRequest(checkoutMountRequestId) ) {
+							resolve(false);
+							return;
+						}
+
 						self.show_error(self.getStripeCheckoutErrorMessage(error));
 						reject(error);
 					});
@@ -2010,6 +2203,10 @@
 			});
 
 			return this._mountPromise;
+		},
+
+		isLatestCheckoutMountRequest: function(checkoutMountRequestId) {
+			return ! checkoutMountRequestId || checkoutMountRequestId === this._checkoutMountRequestId;
 		},
 
 		hideCardError: function () {

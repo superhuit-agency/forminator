@@ -3,7 +3,7 @@ Contributors: WPMUDEV
 Tags: contact form, custom form, forms, payment form, WordPress form plugin
 Requires at least: 6.4
 Tested up to: 7.0
-Stable tag: 1.56.0
+Stable tag: 1.57.0
 Requires PHP: 7.4
 License: GPL v3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
@@ -230,6 +230,53 @@ We take plugin security incredibly seriously; if you have a bug or vulnerability
 6. Publish Polls with Real-time Stats
 
 == Changelog ==
+
+= 1.57.0 (2026-08-12) =
+
+- Enhancement: Added an option to set a custom Submission ID for each form
+- Enhancement: Added Submission ID prefix setting
+- Enhancement: Exporting/Importing quizzes that include a lead generation form
+- Enhancement: Added an option to fill empty fields with "N/A" in email notifications
+- Enhancement: Datepicker field now includes an offset setting for Today date
+- Enhancement: Improved Stripe error logging and parameter handling
+- Enhancement: Improved Mailchimp integration member deletion and status validation
+- Enhancement: Added country prefix support for phone field merge tags
+- Enhancement: Added more supported languages for Stripe field
+- Enhancement: Stripe currency dropdowns are now sorted alphabetically by currency code
+- Enhancement: Added deprecation warnings for the legacy Stripe card element field
+- Enhancement: Stripe field now reloads only for the last amount change instead of refreshing on every quick change
+- Enhancement: Form submission is no longer blocked when mapped billing phone or email fields are hidden by visibility conditions
+- Enhancement: Added a notice for Divi 5 Visual Builder shortcode-render incompatibility
+- Enhancement: Notification data is now passed to the forminator_custom_form_mail_admin_message filter
+- Fix: PayPal payments now work correctly with more than one repeater field
+- Fix: Draft saving no longer fails when a Stripe variable amount is invalid
+- Fix: Integration settings validation messages are now translatable
+- Fix: Resolved JavaScript error when switching between Visual and Code editor in Rich Textarea and Post Data fields
+- Fix: Shortcode generator modal no longer leaves blank space on the page on load
+- Fix: Defender 2FA options are now selectable in Safari browser when using a Forminator login form
+- Fix: Name fields with a single subfield now use the full-width layout correctly
+- Fix: Poll results no longer jump-scroll after each vote
+- Fix: Pagination in the form preview modal now scrolls instead of overflowing
+- Fix: Gutenberg block preview now works correctly with plain permalinks
+- Fix: Polls now load correctly on the front end when using the Reload Page submission method
+- Fix: Resolved JavaScript error when closing the Forminator modal in the Classic Editor
+- Fix: Signature field placeholder now displays correctly
+- Fix: Corrected phone number validation for Benin (BJ) 10-digit numbers
+- Fix: Added missing color customization controls for Post Data sub-fields
+- Fix: Clearer error when Mailchimp rejects an incomplete Address field
+- Fix: Draft submissions are now visible on the Submissions page when no prior entries exist
+- Fix: Publish header no longer stays sticky after closing form preview
+- Fix: Custom CSS styles now apply correctly to Select2 dropdowns
+- Fix: Searching for a form while the page is still loading no longer causes an error
+- Fix: Resolved undefined array key warning for Signature fields in Lead Forms
+- Fix: File attachment settings are now imported correctly from Contact Form 7
+- Fix: Radio, Checkbox, and Select values now appear correctly in Resend Draft emails
+- Fix: TinyMCE Visual and Code modes now switch correctly inside Hustle popups
+- Fix: Clicking submission-settings checkboxes no longer triggers unwanted page auto-scroll
+- Fix: Three-dot dropdown now opens correctly in Gujarati and Hindi locales
+- Fix: Resolved critical error when empty HTML and Number fields are repeated inside a Field Group
+- Fix: Trello due date format is now validated with clearer error handling for invalid dates
+
 
 = 1.56.2 (2026-07-30) =
 

@@ -271,6 +271,14 @@ class Forminator_Stripe extends Forminator_Field {
 			$checkout_phone = '';
 		}
 		$should_render_contact = $this->is_checkout_session( $field ) && empty( $checkout_email );
+
+		if ( $this->is_checkout_session( $field ) && ! empty( $checkout_email ) ) {
+			$checkout_email_field = $views_obj->model->get_field( $checkout_email, true );
+
+			if ( ! empty( self::get_property( 'conditions', $checkout_email_field, array() ) ) ) {
+				$should_render_contact = true;
+			}
+		}
 		forminator_maybe_log(
 			__METHOD__,
 			array(
@@ -935,16 +943,8 @@ class Forminator_Stripe extends Forminator_Field {
 			$options['excluded_payment_method_types'] = self::get_checkout_session_excluded_payment_methods();
 		}
 
-		$checkout_phone_enabled = filter_var( self::get_property( 'checkout_phone_enabled', $field, false ), FILTER_VALIDATE_BOOLEAN );
-		$custom_form            = Forminator_Base_Form_Model::get_model( $form_id );
-		$checkout_phone         = $custom_form instanceof Forminator_Form_Model
-			? forminator_get_active_mapped_field_id( self::get_property( 'checkout_phone', $field, '' ), $custom_form->get_fields(), $form_id )
-			: '';
 		// Enable Stripe phone collection only when the saved mapping still points to an active Phone field.
-		if (
-			$checkout_phone_enabled
-			&& ! empty( $checkout_phone )
-		) {
+		if ( $this->is_checkout_phone_collection_enabled( $field ) ) {
 			$options['phone_number_collection'] = array(
 				'enabled' => true,
 			);
@@ -988,16 +988,22 @@ class Forminator_Stripe extends Forminator_Field {
 				)
 			);
 
+			$is_preview  = filter_input( INPUT_POST, 'is_preview', FILTER_VALIDATE_BOOLEAN );
 			$stripe_code = $e instanceof \Forminator\Stripe\Exception\ApiErrorException ? $e->getStripeCode() : '';
 			$message     = \Forminator\Stripe\ErrorObject::CODE_AMOUNT_TOO_SMALL === $stripe_code
 				? esc_html__( 'Unable to process checkout. Amount is below the minimum payment allowed.', 'forminator' )
-				: esc_html__( 'Unable to initialize checkout. Please try again.', 'forminator' );
+				: (
+					$is_preview
+						? esc_html( $e->getMessage() )
+						: esc_html__( 'Unable to initialize checkout. Please try again.', 'forminator' )
+				);
 
 			$response = array(
 				'message'         => $message,
 				'errors'          => array(),
 				'paymentPlan'     => $this->payment_plan_hash,
 				'exception_class' => get_class( $e ),
+				'error_message'   => $e->getMessage(),
 				'stripe_code'     => $stripe_code,
 			);
 
@@ -1408,10 +1414,11 @@ class Forminator_Stripe extends Forminator_Field {
 
 			wp_send_json_success(
 				array(
-					'paymentid'     => $response['paymentid'] ?? '',
-					'paymentsecret' => $response['paymentsecret'] ?? '',
-					'paymentPlan'   => $this->payment_plan_hash,
-					'paymentApi'    => 'checkout_session',
+					'paymentid'                      => $response['paymentid'] ?? '',
+					'paymentsecret'                  => $response['paymentsecret'] ?? '',
+					'paymentPlan'                    => $this->payment_plan_hash,
+					'paymentApi'                     => 'checkout_session',
+					'checkoutPhoneCollectionEnabled' => $this->is_checkout_phone_collection_enabled( $field ),
 				)
 			);
 		}
@@ -1457,7 +1464,8 @@ class Forminator_Stripe extends Forminator_Field {
 			);
 		}
 
-		$session = $this->generate_checkout_session( $amount, $field, ! $allow_default_amount );
+		$checkout_phone_collection_enabled = $this->is_checkout_phone_collection_enabled( $field );
+		$session                           = $this->generate_checkout_session( $amount, $field, ! $allow_default_amount );
 
 		if (
 			is_wp_error( $session )
@@ -1489,11 +1497,12 @@ class Forminator_Stripe extends Forminator_Field {
 
 		wp_send_json_success(
 			array(
-				'paymentid'             => $session->id,
-				'paymentsecret'         => $session->client_secret,
-				'paymentPlan'           => $this->payment_plan_hash,
-				'paymentApi'            => 'checkout_session',
-				'forceMountStripeField' => $force_mount_stripe_field,
+				'paymentid'                      => $session->id,
+				'paymentsecret'                  => $session->client_secret,
+				'paymentPlan'                    => $this->payment_plan_hash,
+				'paymentApi'                     => 'checkout_session',
+				'checkoutPhoneCollectionEnabled' => $checkout_phone_collection_enabled,
+				'forceMountStripeField'          => $force_mount_stripe_field,
 			)
 		);
 	}
@@ -1543,12 +1552,34 @@ class Forminator_Stripe extends Forminator_Field {
 
 		wp_send_json_success(
 			array(
-				'paymentid'     => $session->id,
-				'paymentsecret' => $session->client_secret ?? '',
-				'paymentPlan'   => $this->payment_plan_hash,
-				'paymentApi'    => 'checkout_session',
+				'paymentid'                      => $session->id,
+				'paymentsecret'                  => $session->client_secret ?? '',
+				'paymentPlan'                    => $this->payment_plan_hash,
+				'paymentApi'                     => 'checkout_session',
+				'checkoutPhoneCollectionEnabled' => $this->is_checkout_phone_collection_enabled( $field ),
 			)
 		);
+	}
+
+	/**
+	 * Check whether the current Checkout Session request should enable Stripe phone collection.
+	 *
+	 * @since 1.56
+	 *
+	 * @param array $field Field.
+	 * @return bool
+	 */
+	private function is_checkout_phone_collection_enabled( $field ) {
+		$form_id                = Forminator_Front_Action::$module_id;
+		$checkout_phone_enabled = filter_var( self::get_property( 'checkout_phone_enabled', $field, false ), FILTER_VALIDATE_BOOLEAN );
+		$custom_form            = Forminator_Base_Form_Model::get_model( $form_id );
+		$checkout_phone         = $custom_form instanceof Forminator_Form_Model
+			? forminator_get_active_mapped_field_id( self::get_property( 'checkout_phone', $field, '' ), $custom_form->get_fields(), $form_id )
+			: '';
+
+		return $checkout_phone_enabled
+			&& ! empty( $checkout_phone )
+			&& ! in_array( $checkout_phone, Forminator_CForm_Front_Action::$hidden_fields, true );
 	}
 
 	/**
@@ -1905,6 +1936,10 @@ class Forminator_Stripe extends Forminator_Field {
 		// Billing country is submitted as an address subfield, so allow callers to validate a derived field like billing_address-country.
 		if ( ! empty( $field_suffix ) ) {
 			$field_id .= $field_suffix;
+		}
+
+		if ( in_array( $field_id, Forminator_CForm_Front_Action::$hidden_fields, true ) ) {
+			return;
 		}
 
 		$submitted_data  = Forminator_CForm_Front_Action::$prepared_data;

@@ -20,6 +20,24 @@ $nonce      = wp_create_nonce( 'forminator_save_payments_settings' );
 
 		<div class="sui-box-body">
 
+			<div class="sui-box-settings-row">
+				<p>
+					<?php
+					esc_html_e( 'Configure your preferred payment processors here. You can select either live or test/sandbox mode for any form when configuring the Stripe or PayPal fields in the form.', 'forminator' );
+					if ( forminator_is_show_documentation_link() ) {
+						printf(
+							/* translators: 1. Opening anchor tag for Stripe docs, 2. closing anchor tag, 3. opening anchor tag for PayPal docs, 4. closing anchor tag. */
+							' ' . esc_html__( 'Learn more about %1$sStripe%2$s and %3$sPayPal%4$s payment modes.', 'forminator' ),
+							'<a href="https://wpmudev.com/docs/wpmu-dev-plugins/forminator/#stripe" target="_blank" rel="noreferrer">',
+							'</a>',
+							'<a href="https://wpmudev.com/docs/wpmu-dev-plugins/forminator/#paypal-field" target="_blank" rel="noreferrer">',
+							'</a>'
+						);
+					}
+					?>
+				</p>
+			</div>
+
 			<?php if ( class_exists( 'Forminator_Gateway_Stripe' ) ) : ?>
 				<div id="sui-box-stripe" class="sui-box-settings-row">
 					<?php $this->template( 'settings/payments/section-stripe' ); ?>

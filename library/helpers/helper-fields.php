@@ -790,6 +790,20 @@ function forminator_replace_form_data( $content, ?Forminator_Form_Model $custom_
 			if ( is_null( $value ) ) {
 				$value = '';
 			}
+			if ( '' === $value ) {
+				/**
+				 * Filter the replacement value for empty field placeholders.
+				 *
+				 * By default an empty string is used. Hooking into this filter allows
+				 * replacing empty fields with a custom value (e.g. "N/A" in email notifications).
+				 *
+				 * @since 1.57.0
+				 *
+				 * @param string $value      The replacement value. Default empty string.
+				 * @param string $element_id The field element ID (e.g. "text-1").
+				 */
+				$value = apply_filters( 'forminator_empty_field_placeholder', $value, $element_id );
+			}
 			if ( ! $urlencode ) {
 				$content = forminator_replace_placeholder_in_urls( $content, $match, $value );
 			}
@@ -859,6 +873,10 @@ function forminator_get_value_from_form_entry( $element_id, ?Forminator_Form_Mod
 		$value = forminator_get_field_from_form_entry( $element_id, $custom_form, $entry, $user_meta );
 
 		if ( strpos( $element_id, 'html' ) !== false ) {
+			if ( is_null( $value ) ) {
+				$value = '';
+			}
+
 			// For repeated html copies (e.g. html-1-2), rewrite sibling field placeholders
 			// inside the HTML content so {name-1} resolves to name-1-2 for the second copy.
 			$explode = explode( '-', $element_id );
@@ -910,6 +928,9 @@ function forminator_get_value_from_form_entry( $element_id, ?Forminator_Form_Mod
 	if ( false !== strpos( $element_id, 'group' ) ) {
 		$value = forminator_prepare_formatted_group_field( $element_id, $custom_form, $entry, false, $is_pdf );
 	}
+
+	// Address and rating fields submit a value even when untouched.
+	$value = forminator_maybe_replace_empty_field_value( $value, $element_id );
 
 	// If array, convert it to string.
 	if ( is_array( $value ) ) {
@@ -1226,6 +1247,10 @@ function forminator_prepare_formatted_form_entry(
 		if ( is_null( $form_fields ) ) {
 			$form_fields = array();
 		}
+		if ( $exclude_empty ) {
+			// Use PHP_INT_MAX to run after any consumer-added filters and ensure empty fields are excluded, not shown as "N/A".
+			add_filter( 'forminator_empty_field_placeholder', '__return_empty_string', PHP_INT_MAX );
+		}
 	} else {
 		$rendering_group = true;
 	}
@@ -1248,6 +1273,10 @@ function forminator_prepare_formatted_form_entry(
 		} elseif ( 'html' === $field_type ) {
 			$label = $form_field->__get( 'field_label' );
 			$value = $form_field->__get( 'variations' );
+			if ( is_null( $value ) ) {
+				$value = '';
+			}
+
 			if ( $repeater_suffix ) {
 				$value = forminator_rewrite_html_field_placeholders( $value, $form_field->parent_group, ltrim( $repeater_suffix, '-' ), $custom_form );
 			}
@@ -1314,6 +1343,10 @@ function forminator_prepare_formatted_form_entry(
 		}
 	}
 	$html .= '</' . $list_tag . '><br/>';
+
+	if ( ! $rendering_group && $exclude_empty ) {
+		remove_filter( 'forminator_empty_field_placeholder', '__return_empty_string', PHP_INT_MAX );
+	}
 
 	return $html;
 }
@@ -1410,7 +1443,23 @@ function forminator_get_formatted_form_name( Forminator_Form_Model $custom_form,
  * @return string
  */
 function forminator_get_submission_id( ?Forminator_Form_Model $custom_form = null, $entry = null ) {
-	return is_object( $entry ) && isset( $entry->entry_id ) ? esc_html( $entry->entry_id ) : 0;
+	$entry_id = 0;
+	if ( is_object( $entry ) && isset( $entry->entry_id ) ) {
+		$entry_id = absint( $entry->entry_id );
+	}
+
+	if ( ! is_object( $entry ) || ! $entry_id ) {
+		return '0';
+	}
+
+	$custom_id = isset( $entry->custom_id ) ? absint( $entry->custom_id ) : 0;
+	if ( $custom_id < 1 ) {
+		return (string) $entry_id;
+	}
+
+	$prefix = isset( $entry->custom_prefix ) ? forminator_custom_sequence_normalize_prefix( $entry->custom_prefix ) : '';
+
+	return $prefix . $custom_id;
 }
 
 /**
@@ -1651,6 +1700,84 @@ function forminator_replace_variables( $content, $id = false, $entry = null ) {
 }
 
 /**
+ * Check whether a stored field value holds no user input
+ *
+ * An empty() check is not enough: address and name fields store an array of empty
+ * subfields and an untouched rating field stores "0/{max_rating}".
+ *
+ * @since 1.57.0
+ *
+ * @param mixed  $value      Stored field value.
+ * @param string $element_id Field element ID, e.g. "address-1".
+ *
+ * @return bool
+ */
+function forminator_field_value_has_no_input( $value, $element_id = '' ) {
+	// 0 is the placeholder option of the rating dropdown, it can't be selected.
+	if ( is_string( $value ) && 0 === strpos( $element_id, 'rating-' ) ) {
+		$rating_value = explode( '/', $value );
+
+		return empty( $rating_value[0] );
+	}
+
+	if ( is_array( $value ) ) {
+		/**
+		 * Filter the subfields that are stored automatically
+		 *
+		 * They are kept even when nothing was submitted, e.g. the format of a date field.
+		 *
+		 * @since 1.57.0
+		 *
+		 * @param array  $auto_filled_subfields Subfield keys that hold no user input.
+		 * @param string $element_id            The field element ID (e.g. "date-1").
+		 */
+		$auto_filled_subfields = apply_filters( 'forminator_auto_filled_subfields', array( 'format', 'ampm' ), $element_id );
+
+		$value = array_diff_key( $value, array_flip( $auto_filled_subfields ) );
+
+		foreach ( $value as $sub_value ) {
+			if ( ! forminator_field_value_has_no_input( $sub_value ) ) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	return null === $value || '' === $value;
+}
+
+/**
+ * Replace a field value that holds no user input with the empty field placeholder
+ *
+ * The stored value is returned untouched when no replacement is provided.
+ *
+ * @since 1.57.0
+ *
+ * @param mixed  $value      Stored field value.
+ * @param string $element_id Field element ID, e.g. "address-1".
+ *
+ * @return mixed
+ */
+function forminator_maybe_replace_empty_field_value( $value, $element_id ) {
+	if ( ! forminator_field_value_has_no_input( $value, $element_id ) ) {
+		return $value;
+	}
+
+	/**
+	 * Filter the replacement value for empty field placeholders.
+	 *
+	 * @since 1.57.0
+	 *
+	 * @param string $value      The replacement value. Default empty string.
+	 * @param string $element_id The field element ID (e.g. "text-1").
+	 */
+	$placeholder = apply_filters( 'forminator_empty_field_placeholder', '', $element_id );
+
+	return '' !== $placeholder ? $placeholder : $value;
+}
+
+/**
  * Render entry
  * Used in email notifications
  * TODO: refactor this
@@ -1685,6 +1812,19 @@ function render_entry( $item, $column_name, $field = null, $type = '', $remove_e
 
 	if ( $is_calculation && $data ) {
 		return Forminator_Form_Entry_Model::meta_value_to_string( 'calculation', $data, true, PHP_INT_MAX, $field );
+	}
+
+	// Treat a field that stores a value while holding no input, e.g. an empty address, as empty.
+	if ( forminator_field_value_has_no_input( $data, $column_name ) ) {
+		if ( $remove_empty ) {
+			return '';
+		}
+
+		// Return a replacement only, the stored value is rendered below.
+		$placeholder = forminator_maybe_replace_empty_field_value( $data, $column_name );
+		if ( is_string( $placeholder ) && '' !== $placeholder ) {
+			return $placeholder;
+		}
 	}
 
 	if ( $data || '0' === $data ) {
@@ -1975,6 +2115,10 @@ function render_entry( $item, $column_name, $field = null, $type = '', $remove_e
 								if ( 'amount' === $key_slug && in_array( $field['type'], array( 'stripe', 'stripe-ocs', 'paypal' ), true ) ) {
 									$value = Forminator_Field::get_formatted_amount( $field, $data );
 								}
+								if ( ! $remove_empty ) {
+									// Replace the subfields the user left empty.
+									$value = forminator_maybe_replace_empty_field_value( $value, $column_name );
+								}
 								if ( $remove_empty && empty( $value ) ) {
 									$output .= '';
 								} elseif ( $show_label ) {
@@ -2036,6 +2180,7 @@ function render_entry( $item, $column_name, $field = null, $type = '', $remove_e
 		}
 	}
 
+	// Empty values are replaced above, a falsy value like 0 is real data.
 	return '';
 }
 

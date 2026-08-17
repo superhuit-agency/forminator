@@ -2181,7 +2181,7 @@ abstract class Forminator_Field {
 				paste_webkit_styles : 'font-weight font-style color',
 				preview_styles      : 'font-family font-size font-weight font-style text-decoration text-transform',
 				tabfocus_elements   : ':prev,:next',
-                plugins    : 'charmap,hr,media,paste,tabfocus,textcolor,fullscreen,wptextpattern,lists,wordpress,wpeditimage,wpgallery,link,wplink,wpdialogs,wpview'," // phpcs:ignore WordPress.WP.CapitalPDangit.MisspelledInText -- false positive.
+				plugins    : 'charmap,hr,media,paste,tabfocus,textcolor,fullscreen,wptextpattern,lists,wordpress,wpeditimage,wpgallery,link,wplink,wpdialogs,wpview'," // phpcs:ignore WordPress.WP.CapitalPDangit.MisspelledInText -- false positive.
 				. "
 				resize     : 'vertical',
 				menubar    : false,
@@ -2552,6 +2552,59 @@ abstract class Forminator_Field {
 	public function get_richtext_editor_script( $id, $media_buttons = false ) {
 		$args            = self::get_tinymce_args( $id, $media_buttons );
 		$is_block_editor = filter_input( INPUT_POST, 'is_block_editor', FILTER_VALIDATE_BOOLEAN );
+		$initialize      = '( function initForminatorEditor() {
+            var editorId = "' . esc_attr( $id ) . '";
+            var textarea = document.getElementById( editorId );
+            var observer;
+            var editorConfig = ' . $args . ';
+
+            if ( editorConfig.tinymce && typeof editorConfig.tinymce === "object" ) {
+                var originalSetup = editorConfig.tinymce.setup;
+
+                editorConfig.tinymce.setup = function( editor ) {
+                    if ( typeof originalSetup === "function" ) originalSetup( editor );
+                    editor.on( "init", function() {
+                        var select = editor.selection && editor.selection.select;
+                        if ( typeof select !== "function" ) return;
+                        editor.selection.select = function() {
+                            try { return select.apply( this, arguments ); } catch ( error ) {
+                                // Work around a TinyMCE mode-switch race where bookmark restoration can target a stale selection node.
+                                if ( error && -1 !== String( error.message ).indexOf( "setBaseAndExtent" ) ) return;
+                                throw error;
+                            }
+                        };
+                    } );
+                };
+            }
+
+			if ( ! textarea ) {
+				return;
+			}
+
+			if ( typeof wp === "undefined" || ! wp.editor || typeof wp.editor.initialize !== "function" ) {
+				return;
+			}
+
+			function initializeEditor() {
+				if ( 0 === textarea.getClientRects().length ) {
+					return false;
+				}
+
+				if ( observer ) {
+					observer.disconnect();
+				}
+
+				wp.editor.initialize( editorId, editorConfig );
+				return true;
+			}
+
+			if ( initializeEditor() || typeof IntersectionObserver === "undefined" ) {
+				return;
+			}
+
+			observer = new IntersectionObserver( initializeEditor );
+			observer.observe( textarea );
+		} )();';
 		if ( $is_block_editor ) {
 			// Message to show when rich text editor preview is not available in Gutenberg block editor.
 			$message = '<div style="all: initial;"><div class="block-editor-warning"><div class="block-editor-warning__contents"><p class="block-editor-warning__message">'
@@ -2559,7 +2612,7 @@ abstract class Forminator_Field {
 						. '</p></div></div></div>';
 			$script  = '<script>
 				if ( typeof wp !== "undefined" && wp.editor && typeof wp.editor.initialize === "function" ) {
-					wp.editor.initialize("' . esc_attr( $id ) . '", ' . $args . ');
+					' . $initialize . '
 				} else {
 				 	let textElement = document.getElementById("' . esc_attr( $id ) . '");
 					if( textElement ) {
@@ -2580,7 +2633,7 @@ abstract class Forminator_Field {
 					}, 50);
 				})(jQuery, document);</script>';
 		} else {
-			$script = '<script>wp.editor.initialize("' . esc_attr( $id ) . '", ' . $args . ');</script>';
+			$script = '<script>' . $initialize . '</script>';
 		}
 		return $script;
 	}

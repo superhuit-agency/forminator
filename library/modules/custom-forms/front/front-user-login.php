@@ -168,6 +168,7 @@ class Forminator_CForm_Front_User_Login extends Forminator_User {
 					if ( ! isset( Forminator_CForm_Front_Action::$prepared_data['auth_method'] ) ) {
 						$response['authentication'] = 'show';
 						$response['user']           = $sign_on;
+						$response['username']       = $sign_on->user_login;
 						$response['auth_token']     = $token;
 						$response['auth_method']    = $auth_method;
 						$response['auth_nav']       = $this->forminator_show_2fa_nav( $available_providers );

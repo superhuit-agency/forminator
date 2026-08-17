@@ -258,9 +258,42 @@ class Forminator_Quiz_Model extends Forminator_Base_Form_Model {
 	}
 
 	/**
+	 * Get export Model
+	 *
+	 * @return array
+	 * @since 1.57.0
+	 */
+	public function to_exportable_data() {
+		$exportable_data = parent::to_exportable_data();
+
+		$lead_exportable = $this->get_exportable_lead_form_data();
+		if ( ! empty( $lead_exportable ) ) {
+			$exportable_data['lead_form'] = $lead_exportable;
+		}
+
+		return $exportable_data;
+	}
+
+	/**
+	 * Get exportable lead form data.
+	 *
+	 * @return array
+	 * @since 1.57.0
+	 */
+	private function get_exportable_lead_form_data() {
+		$lead_model = forminator_get_quiz_lead_model( $this );
+		if ( ! $lead_model instanceof Forminator_Form_Model ) {
+			return array();
+		}
+
+		return $lead_model->to_exportable_data();
+	}
+
+	/**
 	 * Export integrations setting
 	 *
 	 * @param array $exportable_data Exportable data.
+	 *
 	 * @return array
 	 */
 	public function export_integrations_data( $exportable_data ) {
@@ -268,18 +301,90 @@ class Forminator_Quiz_Model extends Forminator_Base_Form_Model {
 	}
 
 	/**
-	 * Import Integrations data model
+	 * Create model from import data.
 	 *
-	 * @since 1.4
-	 *
-	 * @param mixed  $model Model.
 	 * @param array  $import_data Import data.
-	 * @param string $module Module.
+	 * @param string $name Form name.
 	 *
-	 * @return Forminator_Base_Form_Model
+	 * @return Forminator_Base_Form_Model|Forminator_Form_Model|Forminator_Poll_Model|Forminator_Quiz_Model|WP_Error
+	 * @since 1.57.0
 	 */
-	public static function import_integrations_data( $model, $import_data, $module ) {
+	public static function create_from_import_data( $import_data, $name = '' ) {
+		$model = parent::create_from_import_data( $import_data, $name );
+
+		return self::import_lead_form_data( $model, $import_data );
+	}
+
+	/**
+	 * Import lead form data.
+	 *
+	 * @param mixed $model Model.
+	 * @param array $import_data Import data.
+	 *
+	 * @return Forminator_Base_Form_Model|WP_Error
+	 * @since 1.57.0
+	 */
+	private static function import_lead_form_data( $model, $import_data ) {
+		if ( is_wp_error( $model ) || ! $model instanceof Forminator_Quiz_Model || empty( $import_data['lead_form'] ) ) {
+			return $model;
+		}
+
+		$lead_import_data = $import_data['lead_form'];
+		// Create lead form from import data.
+		$lead_model = Forminator_Form_Model::create_from_import_data( $lead_import_data );
+		if ( is_wp_error( $lead_model ) ) {
+			self::clear_lead_form_data( $model );
+			Forminator_API::delete_quiz( $model->id );
+			return $lead_model;
+		}
+
+		if ( $lead_model instanceof Forminator_Form_Model ) {
+			// Update quiz settings with new lead form ID.
+			$model->settings['hasLeads'] = true;
+			$model->settings['leadsId']  = $lead_model->id;
+			// Save the updated settings.
+			$save_result = $model->save();
+			if ( is_wp_error( $save_result ) ) {
+				Forminator_API::delete_form( $lead_model->id );
+				self::clear_lead_form_data( $model );
+				Forminator_API::delete_quiz( $model->id );
+				return $save_result;
+			}
+		}
+
 		return $model;
+	}
+
+	/**
+	 * Clear lead form data from quiz settings.
+	 *
+	 * @param Forminator_Quiz_Model $model Quiz model.
+	 *
+	 * @return void
+	 * @since 1.57.0
+	 */
+	private static function clear_lead_form_data( $model ) {
+		$model->settings['hasLeads'] = false;
+		$model->settings['leadsId']  = 0;
+
+		$save_result = $model->save();
+		if ( ! is_wp_error( $save_result ) && ! empty( $save_result ) ) {
+			return;
+		}
+
+		$meta = get_post_meta( $model->id, Forminator_Base_Form_Model::META_KEY, true );
+		if ( ! is_array( $meta ) ) {
+			return;
+		}
+
+		if ( empty( $meta['settings'] ) || ! is_array( $meta['settings'] ) ) {
+			$meta['settings'] = array();
+		}
+
+		$meta['settings']['hasLeads'] = false;
+		$meta['settings']['leadsId']  = 0;
+
+		update_post_meta( $model->id, Forminator_Base_Form_Model::META_KEY, $meta );
 	}
 
 	/**

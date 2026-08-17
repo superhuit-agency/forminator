@@ -10,6 +10,17 @@
 
 	<label class="sui-label"><?php esc_html_e( 'Active Filters', 'forminator' ); ?></label>
 
+	<?php if ( ! empty( $this->filter_validation_error ) ) : ?>
+		<div class="sui-notice sui-notice-error sui-active">
+			<div class="sui-notice-content">
+				<div class="sui-notice-message">
+					<span class="sui-notice-icon sui-icon-warning-alert" aria-hidden="true"></span>
+					<p><?php echo esc_html( $this->filter_validation_error ); ?></p>
+				</div>
+			</div>
+		</div>
+	<?php endif; ?>
+
 	<div class="sui-pagination-active-filters forminator-entries-fields-filters">
 
 		<?php if ( isset( $this->filters['search'] ) ) : ?>
@@ -29,13 +40,7 @@
 
 		<?php if ( isset( $this->filters['min_id'] ) ) : ?>
 			<div class="sui-active-filter">
-				<?php
-				printf(
-				/* translators: %s: Minimum ID */
-					esc_html__( 'From ID: %s', 'forminator' ),
-					esc_html( $this->filters['min_id'] )
-				);
-				?>
+				<?php printf( /* translators: %s: Minimum ID */ esc_html__( 'From ID: %s', 'forminator' ), esc_html( $this->filters['min_id'] ) ); ?>
 				<button class="sui-active-filter-remove" type="submit" name="min_id" value="">
 					<span class="sui-screen-reader-text"><?php esc_html_e( 'Remove this keyword', 'forminator' ); ?></span>
 				</button>
@@ -44,13 +49,7 @@
 
 		<?php if ( isset( $this->filters['max_id'] ) ) : ?>
 			<div class="sui-active-filter">
-				<?php
-				printf(
-				/* translators: %s: Maximum ID */
-					esc_html__( 'To ID: %s', 'forminator' ),
-					esc_html( $this->filters['max_id'] )
-				);
-				?>
+				<?php printf( /* translators: %s: Maximum ID */ esc_html__( 'To ID: %s', 'forminator' ), esc_html( $this->filters['max_id'] ) ); ?>
 				<button class="sui-active-filter-remove" type="submit" name="max_id" value="">
 					<span class="sui-screen-reader-text"><?php esc_html_e( 'Remove this keyword', 'forminator' ); ?></span>
 				</button>

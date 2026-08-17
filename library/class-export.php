@@ -702,8 +702,12 @@ class Forminator_Export {
 						if ( isset( $mapper['property'] ) ) {
 							if ( property_exists( $entry, $mapper['property'] ) ) {
 								$property = $mapper['property'];
-								// casting property to string.
-								$data[] = (string) $entry->$property;
+								if ( 'entry_id' === $property ) {
+									$data[] = (string) forminator_get_submission_id( null, $entry );
+								} else {
+									// casting property to string.
+									$data[] = (string) $entry->$property;
+								}
 							} else {
 								$data[] = '';
 							}

@@ -190,6 +190,12 @@ abstract class Forminator_Render_Form {
 	 * @return string
 	 */
 	public function render_shortcode( $atts = array() ) {
+		// Divi 5 VB strips scripts from harvested shortcodes, so a rendered
+		// form would be inert. Show a notice instead.
+		if ( forminator_is_divi5_vb_shortcode_request() ) {
+			return self::divi5_vb_preview_notice( static::$module_slug );
+		}
+
 		// use already created instance if already available.
 		$view = new static();
 		$id   = ! empty( $atts['id'] ) ? (string) (int) $atts['id'] : 0;
@@ -216,6 +222,38 @@ abstract class Forminator_Render_Form {
 		$view->ajax_loader( $is_preview, $preview_data, $lead_data, $is_block_editor );
 
 		return ob_get_clean();
+	}
+
+	/**
+	 * Build the "preview not available" notice shown inside Divi 5's Visual
+	 * Builder canvas in place of a real form/poll/quiz render. Uses inline
+	 * styles so it stands alone without depending on any enqueued CSS
+	 * reaching the canvas.
+	 *
+	 * @since 1.57.0
+	 *
+	 * @param string $module_slug 'form', 'poll', or 'quiz'.
+	 *
+	 * @return string
+	 */
+	private static function divi5_vb_preview_notice( $module_slug ) {
+		switch ( $module_slug ) {
+			case 'poll':
+				$message = esc_html__( "Forminator polls can't be previewed inside Divi's Visual Builder.", 'forminator' );
+				break;
+			case 'quiz':
+				$message = esc_html__( "Forminator quizzes can't be previewed inside Divi's Visual Builder.", 'forminator' );
+				break;
+			case 'form':
+			default:
+				$message = esc_html__( "Forminator forms can't be previewed inside Divi's Visual Builder.", 'forminator' );
+				break;
+		}
+
+		return sprintf(
+			'<div style="border:1px dashed #cbd5e0;background:#f7fafc;color:#4a5568;padding:16px 20px;border-radius:4px;font:14px/1.5 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;">%s</div>',
+			$message
+		);
 	}
 
 	/**
@@ -886,7 +924,10 @@ abstract class Forminator_Render_Form {
 			$prefix,
 			false,
 			true,
-			'forminator-' . $slug
+			'forminator-' . $slug,
+			array(
+				'.forminator-select-dropdown' => '.forminator-' . $slug . '-' . $properties['form_id'],
+			)
 		);
 
 		return $custom_css;
@@ -1268,7 +1309,11 @@ abstract class Forminator_Render_Form {
 	 * @return bool
 	 */
 	public function can_track_views() {
-		return $this->track_views && ! $this->is_preview && ! $this->is_admin && ! $this->is_admin_ajax_render();
+		return $this->track_views
+			&& ! $this->is_preview
+			&& ! $this->is_admin
+			&& ! $this->is_admin_ajax_render()
+			&& ! is_preview();
 	}
 
 	/**

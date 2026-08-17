@@ -104,6 +104,13 @@ abstract class Forminator_Admin_View_Page extends Forminator_Admin_Page {
 	public $filters = array();
 
 	/**
+	 * Validation error for active filters UI.
+	 *
+	 * @var string
+	 */
+	public $filter_validation_error = '';
+
+	/**
 	 * Order to be used
 	 *
 	 * [key=>order]
@@ -395,12 +402,13 @@ abstract class Forminator_Admin_View_Page extends Forminator_Admin_Page {
 	 * @since 1.5.4
 	 */
 	protected function parse_filters() {
-		$data_range   = Forminator_Core::sanitize_text_field( 'date_range' );
-		$user_status  = Forminator_Core::sanitize_text_field( 'user_status' );
-		$search       = Forminator_Core::sanitize_text_field( 'search' );
-		$min_id       = Forminator_Core::sanitize_text_field( 'min_id' );
-		$max_id       = Forminator_Core::sanitize_text_field( 'max_id' );
-		$entry_status = Forminator_Core::sanitize_text_field( 'entry_status' );
+		$this->filter_validation_error = '';
+		$data_range                    = Forminator_Core::sanitize_text_field( 'date_range' );
+		$user_status                   = Forminator_Core::sanitize_text_field( 'user_status' );
+		$search                        = Forminator_Core::sanitize_text_field( 'search' );
+		$min_id                        = Forminator_Core::sanitize_text_field( 'min_id' );
+		$max_id                        = Forminator_Core::sanitize_text_field( 'max_id' );
+		$entry_status                  = Forminator_Core::sanitize_text_field( 'entry_status' );
 
 		$filters = array();
 		if ( ! empty( $data_range ) ) {
@@ -421,17 +429,28 @@ abstract class Forminator_Admin_View_Page extends Forminator_Admin_Page {
 			$filters['user_status'] = $user_status;
 		}
 
-		if ( ! empty( $min_id ) ) {
-			$min_id = intval( $min_id );
-			if ( $min_id > 0 ) {
-				$filters['min_id'] = $min_id;
-			}
-		}
+		$min_id  = trim( (string) $min_id );
+		$max_id  = trim( (string) $max_id );
+		$min_set = '' !== $min_id;
+		$max_set = '' !== $max_id;
 
-		if ( ! empty( $max_id ) ) {
-			$max_id = intval( $max_id );
-			if ( $max_id > 0 ) {
-				$filters['max_id'] = $max_id;
+		if ( $min_set && ! ctype_digit( $min_id ) ) {
+			$this->filter_validation_error = esc_html__( 'Please use a valid numeric ID (for example: 100).', 'forminator' );
+		} elseif ( $max_set && ! ctype_digit( $max_id ) ) {
+			$this->filter_validation_error = esc_html__( 'Please use a valid numeric ID (for example: 100).', 'forminator' );
+		} else {
+			if ( $min_set ) {
+				$min_id = absint( $min_id );
+				if ( $min_id > 0 ) {
+					$filters['min_id'] = $min_id;
+				}
+			}
+
+			if ( $max_set ) {
+				$max_id = absint( $max_id );
+				if ( $max_id > 0 ) {
+					$filters['max_id'] = $max_id;
+				}
 			}
 		}
 

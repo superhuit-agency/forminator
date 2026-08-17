@@ -219,7 +219,7 @@ abstract class Forminator_Front_Action {
 	 * @param array $prepared_data Submitted data.
 	 * @return array Updated submitted data array
 	 */
-	private static function make_nice_group_suffixes( $prepared_data ) {
+	protected static function make_nice_group_suffixes( $prepared_data ) {
 		$new_suffixes = array();
 		foreach ( $prepared_data as $key => $suffixes ) {
 			if ( 0 !== strpos( $key, 'group-' ) || '-copies' !== substr( $key, -7 ) ) {

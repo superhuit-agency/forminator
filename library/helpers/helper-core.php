@@ -1056,6 +1056,28 @@ function forminator_is_page_builder_preview() {
 }
 
 /**
+ * Detect a Divi 5 Visual Builder shortcode-render request
+ * (et_pb_preview endpoint with is_fb_preview set).
+ *
+ * @since 1.57.0
+ *
+ * @return bool
+ */
+function forminator_is_divi5_vb_shortcode_request() {
+	// phpcs:disable WordPress.Security.NonceVerification.Recommended -- nonce is verified below.
+	if ( ! isset( $_GET['et_pb_preview'] ) || ! isset( $_POST['is_fb_preview'] ) ) {
+		return false;
+	}
+
+	$nonce = isset( $_GET['et_pb_preview_nonce'] )
+		? sanitize_text_field( wp_unslash( $_GET['et_pb_preview_nonce'] ) )
+		: '';
+	// phpcs:enable WordPress.Security.NonceVerification.Recommended
+
+	return (bool) wp_verify_nonce( $nonce, 'et_pb_preview_nonce' );
+}
+
+/**
  * Return week day from number
  *
  * @since 1.0
