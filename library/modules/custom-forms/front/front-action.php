@@ -206,6 +206,7 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 		$parsed_fields = array();
 		if ( ! empty( $data['form_fields'] ) ) {
 			wp_parse_str( $data['form_fields'], $parsed_fields );
+			$parsed_fields = self::make_nice_group_suffixes( $parsed_fields );
 		}
 		self::$module_id     = $form_id;
 		self::$module_object = Forminator_Base_Form_Model::get_model( $form_id );
@@ -732,6 +733,9 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 		if ( isset( $login_user['auth_token'] ) ) {
 			self::$response_attrs['auth_token'] = $login_user['auth_token'];
 		}
+		if ( isset( $login_user['username'] ) ) {
+			self::$response_attrs['username'] = $login_user['username'];
+		}
 		if ( isset( $login_user['auth_method'] ) ) {
 			self::$response_attrs['auth_method'] = $login_user['auth_method'];
 		}
@@ -924,7 +928,7 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 			self::set_field_data_array( $field_index, $field, $stored_fields );
 		}
 
-		if ( ! empty( self::$info['stripe_field'] ) ) {
+		if ( ! self::$is_draft && ! self::$is_abandoned && ! empty( self::$info['stripe_field'] ) ) {
 			$stripe_field = Forminator_Core::get_field_object( 'stripe' );
 			if ( $stripe_field instanceof Forminator_Stripe ) {
 				$stripe_field->validate( self::$info['stripe_field'], array() );
@@ -1634,6 +1638,8 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 				return self::return_success();
 			}
 
+			self::maybe_log_legacy_stripe_deprecation();
+
 			if ( self::is_spam() ) {
 				$entry->is_spam = 1;
 				self::$is_spam  = true;
@@ -1719,6 +1725,31 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 	}
 
 	/**
+	 * Log a deprecation warning when the submitted form uses the legacy Stripe (Card Element) field.
+	 *
+	 * Fires once per submission and only for the old `stripe` field, never for `stripe-ocs`.
+	 *
+	 * @since 1.57.0
+	 *
+	 * @return void
+	 */
+	private static function maybe_log_legacy_stripe_deprecation() {
+		$stripe_field = self::$info['stripe_field'] ?? array();
+		if ( empty( $stripe_field ) || 'stripe' !== ( $stripe_field['type'] ?? '' ) ) {
+			return;
+		}
+
+		forminator_maybe_log(
+			__METHOD__,
+			sprintf(
+				'The legacy Stripe (Card Element) field `%1$s` on form #%2$d is deprecated and will be removed in a future Forminator release. Please rebuild this form using the new Stripe field to avoid failed payments.',
+				$stripe_field['element_id'] ?? '',
+				self::$module_id
+			)
+		);
+	}
+
+	/**
 	 * Check abandonment required fields
 	 *
 	 * @throws Exception When there is an error.
@@ -1762,6 +1793,7 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 	 */
 	private static function save_entry_fields( $entry ) {
 		self::remove_password();
+		forminator_custom_sequence_assign_custom_id( $entry, self::$module_id );
 		self::handle_hidden_fields_after_entry_save( $entry, self::$module_id );
 
 		/**
@@ -3397,7 +3429,7 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 				}
 
 				if ( 'submission_id' === $field['value'] ) {
-					self::$info['field_data_array'][ $key ]['value'] = $entry->entry_id;
+					self::$info['field_data_array'][ $key ]['value'] = forminator_get_submission_id( null, $entry );
 				}
 			}
 		}

@@ -980,7 +980,7 @@ class Forminator_Migration {
 					'slug'             => 'notification-1111-2222',
 					'label'            => 'Admin Email',
 					'email-recipients' => 'default',
-					'email-attachment' => 'false',
+					'email-attachment' => ! empty( $settings['admin-email-attachment'] ) ? $settings['admin-email-attachment'] : 'false',
 				);
 				if ( ! empty( $settings['admin-email-recipients'] ) ) {
 					$admin_args['recipients'] = implode( ',', $settings['admin-email-recipients'] );
@@ -1013,6 +1013,7 @@ class Forminator_Migration {
 					'slug'             => 'notification-3333-4444',
 					'label'            => 'Confirmation Email',
 					'email-recipients' => 'default',
+					'email-attachment' => ! empty( $settings['user-email-attachment'] ) ? $settings['user-email-attachment'] : 'false',
 				);
 				if ( ! empty( $settings['user-email-recipients'] ) ) {
 					$user_args['recipients'] = implode( ',', $settings['user-email-recipients'] );

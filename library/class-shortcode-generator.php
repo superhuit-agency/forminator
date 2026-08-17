@@ -98,7 +98,7 @@ class Forminator_Shortcode_Generator {
 	public function attach_button() {
 		// Button markup.
 		printf(
-			'<button type="button" id="%s" class="button" data-editor="content" data-a11y-dialog-show="forminator-popup">%s<span>%s</span></button>',
+			'<button type="button" id="%s" class="button" data-editor="content" data-modal-open="forminator-popup">%s<span>%s</span></button>',
 			'forminator-generate-shortcode',
 			'<i class="forminator-scgen-icon" aria-hidden="true"></i>',
 			esc_html__( 'Add Form', 'forminator' )
@@ -220,7 +220,7 @@ class Forminator_Shortcode_Generator {
 
 							<p id="scgenDialogDescription" class="sui-description"><?php esc_html_e( 'Select an option from the dropdown menu and generate a shortcode to insert in your post or page.', 'forminator' ); ?></p>
 
-							<button class="sui-modal-skip sui-button-icon sui-button-float--right sui-dialog-close" data-modal-close="">
+							<button type="button" class="sui-modal-skip sui-button-icon sui-button-float--right sui-dialog-close" data-modal-close="">
 								<span class="sui-icon-close sui-md" aria-hidden="true"></span>
 								<span class="sui-screen-reader-text"><?php esc_html_e( 'Close this dialog window.', 'forminator' ); ?></span>
 							</button>

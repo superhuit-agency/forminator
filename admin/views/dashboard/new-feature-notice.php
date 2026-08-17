@@ -5,28 +5,6 @@
  * @package Forminator
  */
 
-/* Check if there is at least one form with a Stripe field (legacy or OCS), any status. */
-global $wpdb;
-// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-$is_stripe_forms = (bool) $wpdb->get_var(
-	$wpdb->prepare(
-		"SELECT 1
-		FROM {$wpdb->posts} AS p
-		INNER JOIN {$wpdb->postmeta} AS pm ON p.ID = pm.post_id
-		WHERE p.post_type = %s
-			AND pm.meta_key = %s
-			AND (
-				pm.meta_value LIKE %s
-				OR pm.meta_value LIKE %s
-			)
-		LIMIT 1",
-		'forminator_forms',
-		Forminator_Base_Form_Model::META_KEY,
-		'%"type";s:6:"stripe"%',
-		'%"type";s:10:"stripe-ocs"%'
-	)
-);
-
 $user      = wp_get_current_user();
 $banner_1x = forminator_plugin_url() . 'assets/images/Feature_highlight.png';
 $banner_2x = forminator_plugin_url() . 'assets/images/Feature_highlight@2x.png';
@@ -43,7 +21,7 @@ $banner_2x = forminator_plugin_url() . 'assets/images/Feature_highlight@2x.png';
 		aria-labelledby="forminator-new-feature__title"
 	>
 
-		<div class="sui-box forminator-feature-modal" data-prop="forminator_dismiss_feature_1560"
+		<div class="sui-box forminator-feature-modal" data-prop="forminator_dismiss_feature_1570"
 			data-nonce="<?php echo esc_attr( wp_create_nonce( 'forminator_dismiss_notification' ) ); ?>">
 
 			<div class="sui-box-header sui-flatten sui-content-center">
@@ -63,72 +41,56 @@ $banner_2x = forminator_plugin_url() . 'assets/images/Feature_highlight@2x.png';
 
 				<h3 class="sui-box-title sui-lg" style="overflow: initial; white-space: initial; text-overflow: initial;">
 				<?php
-					esc_html_e( 'New Stripe Checkout Sessions experience', 'forminator' );
+					esc_html_e( 'Introduce Sequential Submission IDs', 'forminator' );
 				?>
 				</h3>
 
-				<p class="sui-description" style="text-align: left;">
+				<p class="sui-description">
 				<?php
-				printf(
-					/* translators: 1. Open 'b' and 'i' tags. 2. Close 'i' and 'b' tags. */
-					esc_html__( 'We have upgraded our Stripe integration to the new %1$sStripe Checkout Sessions%2$s API for a faster, more modern, and secure checkout experience. This update includes several key enhancements:', 'forminator' ),
-					'<b><i>',
-					'</i></b>'
-				);
+					esc_html_e( 'You can now generate custom, form-specific sequential IDs for every submission. Instead of global submission counters that jump across different forms.', 'forminator' );
 				?>
 				</p>
 				<p></p>
 
 				<div class="sui-modal-list" style="text-align: left; background-color: #F8F8F8; padding: 15px; border-radius: 5px;">
-					<h4><?php esc_html_e( 'What\'s New?', 'forminator' ); ?></h4>
-					<ul>
+					<ul style="margin: 0; line-height: 22px;">
 
-						<li>
-							<h3 style="margin-bottom: 0;">
-								<span class="sui-icon-check-tick sui-sm sui-success" aria-hidden="true"></span>
-								&nbsp;&nbsp;
-								<?php esc_html_e( 'Adaptive Pricing', 'forminator' ); ?>
+						<li style="line-height: 22px; margin-bottom: 10px;">
+							<h3 style="margin-bottom: 0; display: inline;">
+								<?php esc_html_e( 'Now (Custom Prefixes & Starting Numbers):', 'forminator' ); ?>
 							</h3>
-							<p class="sui-description" style="margin: 5px 0 20px 25px;">
-								<?php esc_html_e( 'Let visitors pay in their local currency', 'forminator' ); ?>
+							<p class="sui-description" style="display: inline;">
+								<?php esc_html_e( 'Every form maintains its own sequence. With option to add your own prefix (e.g., INV-) and set exact starting numbers.', 'forminator' ); ?>
 							</p>
 						</li>
 
-						<li>
-							<h3 style="margin-bottom: 0;">
-								<span class="sui-icon-check-tick sui-sm sui-success" aria-hidden="true"></span>
-								&nbsp;&nbsp;
-								<?php esc_html_e( 'Stripe Connect', 'forminator' ); ?>
+						<li style="line-height: 22px; margin-bottom: 10px;">
+							<h3 style="margin-bottom: 0; display: inline;">
+								<?php esc_html_e( 'Unified Display:', 'forminator' ); ?>
 							</h3>
-							<p class="sui-description" style="margin: 5px 0 20px 25px;">
-								<?php esc_html_e( 'Remove the need for manual API key configuration.', 'forminator' ); ?>
+							<p class="sui-description" style="display: inline;">
+								<?php esc_html_e( 'Custom IDs reflect seamlessly across your email notifications, submission logs, CSV exports, and PDFs.', 'forminator' ); ?>
 							</p>
 						</li>
 
-						<li>
-							<h3 style="margin-bottom: 0;">
-								<span class="sui-icon-check-tick sui-sm sui-success" aria-hidden="true"></span>
-								&nbsp;&nbsp;
-								<?php esc_html_e( '100+ Payment Methods', 'forminator' ); ?>
+						<li style="line-height: 22px;">
+							<h3 style="margin-bottom: 0; display: inline;">
+								<?php esc_html_e( 'Enabled by Default for New Forms:', 'forminator' ); ?>
 							</h3>
-							<p class="sui-description" style="margin: 5px 0 0 25px;">
-								<?php esc_html_e( 'Offer a wide range of global payment options.', 'forminator' ); ?>
+							<p class="sui-description" style="display: inline;">
+								<?php
+								printf(
+									/* translators: 1. Bold text. 2. Bold text. */
+									esc_html__( 'All newly created forms will use sequential numbering automatically. You can also turn it on anytime for existing forms in %1$sForm Settings → Sequential Form ID%2$s.', 'forminator' ),
+									'<b>',
+									'</b>'
+								);
+								?>
 							</p>
 						</li>
 
 					</ul>
 				</div>
-
-				<?php if ( $is_stripe_forms ) { ?>
-					<p></p>
-					<p class="sui-description" style="text-align: left;">
-					<?php
-						esc_html_e( 'Note: Your Stripe integration has been automatically updated; no action is required on your part.', 'forminator' );
-					?>
-					</p>
-				<?php } ?>
-
-
 			</div>
 
 			<div class="sui-box-footer sui-flatten sui-content-center">

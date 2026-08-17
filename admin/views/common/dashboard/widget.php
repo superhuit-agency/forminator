@@ -156,7 +156,7 @@ $modules = Forminator_API::$method( null, 1, $num_recent, $statuses );
 
 									<li><a href="<?php echo esc_url( admin_url( 'admin.php?page=forminator-entries&form_type=' . forminator_get_prefix( $module_slug, 'post_type' ) . '&form_id=' . $module['id'] ) ); ?>"><i class="sui-icon-community-people" aria-hidden="true"></i> <?php esc_html_e( 'View Submissions', 'forminator' ); ?></a></li>
 
-									<li <?php echo ( $has_leads ) ? 'aria-hidden="true"' : ''; ?>><form method="post">
+									<li><form method="post">
 										<input type="hidden" name="forminator_action" value="clone">
 										<input type="hidden" name="form_type" value="<?php echo esc_attr( forminator_get_prefix( $module_slug, 'custom-' ) ); ?>">
 										<input type="hidden" name="id" value="<?php echo esc_attr( $module['id'] ); ?>"/>
@@ -164,38 +164,21 @@ $modules = Forminator_API::$method( null, 1, $num_recent, $statuses );
 										$clone_nonce = esc_attr( 'forminator-nonce-clone-' . $module['id'] );
 										wp_nonce_field( $clone_nonce, 'forminatorNonce' );
 									?>
-										<?php if ( $has_leads ) : ?>
-											<button type="submit" disabled="disabled" class="fui-button-with-tag sui-tooltip sui-tooltip-left sui-constrained" data-tooltip="<?php esc_html_e( 'Duplicate isn\'t supported at the moment for the quizzes with lead capturing enabled.', 'forminator' ); ?>">
-												<span class="sui-icon-page-multiple" aria-hidden="true"></span>
-												<span class="fui-button-label"><?php esc_html_e( 'Duplicate', 'forminator' ); ?></span>
-												<span class="sui-tag sui-tag-blue sui-tag-sm"><?php echo esc_html__( 'Coming soon', 'forminator' ); ?></span>
-											</button>
-										<?php else : ?>
-											<button type="submit">
-												<i class="sui-icon-page-multiple" aria-hidden="true"></i> <?php esc_html_e( 'Duplicate', 'forminator' ); ?>
-											</button>
-										<?php endif; ?>
+										<button type="submit">
+											<i class="sui-icon-page-multiple" aria-hidden="true"></i> <?php esc_html_e( 'Duplicate', 'forminator' ); ?>
+										</button>
 									</form></li>
 
 									<?php if ( Forminator::is_import_export_feature_enabled() ) : ?>
 
-										<?php if ( $has_leads ) : ?>
-											<li aria-hidden="true"><a href="#" class="fui-button-with-tag sui-tooltip sui-tooltip-left"
-												data-tooltip="<?php esc_html_e( 'Export isn\'t supported at the moment for the quizzes with lead capturing enabled.', 'forminator' ); ?>">
-												<span class="sui-icon-cloud-migration" aria-hidden="true"></span>
-												<span class="fui-button-label"><?php esc_html_e( 'Export', 'forminator' ); ?></span>
-												<span class="sui-tag sui-tag-blue sui-tag-sm"><?php echo esc_html__( 'Coming soon', 'forminator' ); ?></span>
-											</a></li>
-										<?php else : ?>
-											<li><a href="#"
-												class="wpmudev-open-modal"
-												data-modal="<?php echo esc_attr( $export_dialog ); ?>"
-												data-modal-title=""
-												data-form-id="<?php echo esc_attr( $module['id'] ); ?>"
-												data-nonce="<?php echo esc_attr( wp_create_nonce( 'forminator_popup_export_' . $module_slug ) ); ?>">
-												<i class="sui-icon-cloud-migration" aria-hidden="true"></i> <?php esc_html_e( 'Export', 'forminator' ); ?>
-											</a></li>
-										<?php endif; ?>
+										<li><a href="#"
+											class="wpmudev-open-modal"
+											data-modal="<?php echo esc_attr( $export_dialog ); ?>"
+											data-modal-title=""
+											data-form-id="<?php echo esc_attr( $module['id'] ); ?>"
+											data-nonce="<?php echo esc_attr( wp_create_nonce( 'forminator_popup_export_' . $module_slug ) ); ?>">
+											<i class="sui-icon-cloud-migration" aria-hidden="true"></i> <?php esc_html_e( 'Export', 'forminator' ); ?>
+										</a></li>
 
 									<?php endif; ?>
 

@@ -51,7 +51,7 @@ foreach ( $this->entries_iterator() as $entries ) {
 
 				echo '<td class="sui-accordion-item-title">';
 
-					echo '<label class="sui-checkbox">';
+					echo '<label class="sui-checkbox sui-accordion-item-action">';
 
 						echo '<input type="checkbox" name="ids[]" value="' . esc_attr( $db_entry_id ) . '" id="quiz-answer-' . esc_attr( $db_entry_id ) . '" />';
 

@@ -593,7 +593,8 @@
 						initialCountry: 'undefined' !== typeof ( country ) ? country : 'us',
 						validationNumberTypes: null,
 						loadUtils: () => import(window.ForminatorFront.cform.intlTelInput_utils_script),
-						strictMode: true,
+						// Benin moved to 10-digit numbers, but the bundled utils still limit input to the old length.
+						strictMode: ! ( 'international' === validation && 'undefined' !== typeof ( country ) && 'bj' === country.toLowerCase() ),
 					};
 
 					if ( 'undefined' !== typeof ( validation ) && 'standard' === validation ) {
@@ -1270,6 +1271,12 @@
 		init_login_2FA: function () {
 			var self = this;
 			this.two_factor_providers( 'totp' );
+			$('body').on('keydown', '#forminator-2fa-webauthn .option-row', function ( event ) {
+				if ( 'Enter' === event.key || ' ' === event.key || 'Spacebar' === event.key ) {
+					event.preventDefault();
+					$( this ).triggerHandler( 'click' );
+				}
+			});
 			$('body').on('click', '.forminator-2fa-link', function () {
 				self.$el.find('#login_error').remove();
 				self.$el.find('.notification').empty();
@@ -1288,6 +1295,7 @@
 			self.$el.find('.forminator-authentication-box').hide();
 			self.$el.find('.forminator-authentication-box input').attr( 'disabled', true );
 			self.$el.find( '#forminator-2fa-' + slug ).show();
+			self.$el.find( '#forminator-2fa-' + slug + ' .option-row' ).attr( 'tabindex', '0' ).attr( 'role', 'button' );
 			self.$el.find( '#forminator-2fa-' + slug + ' input' ).attr( 'disabled', false );
 			if ( self.$el.find('.forminator-2fa-link').length > 0 ) {
 				self.$el.find('.forminator-2fa-link').hide();
@@ -1787,6 +1795,19 @@
 				$field.find( '#' + editor_id ).trigger( 'change' );
 			}, 100 ); // Small timeout to ensure editor is ready when switching
 		} );
+
+		// Bind the click event to the editor tab when Hustle popups are displayed.
+		$( document ).on( "hustle:module:displayed", function (e, data) {
+			$( e.target ).find( '.wp-switch-editor' ).on( 'click', function () {
+				if( typeof switchEditors !== 'undefined' && typeof switchEditors.go === 'function' ) {
+					if ( $( this ).hasClass( 'switch-tmce' ) ) {
+						switchEditors.go( editor_id, 'tmce' );
+					} else {
+						switchEditors.go( editor_id, 'html' );
+					}
+				}
+			} );
+		});
 
 		// trigger editor change to save value to textarea,
 		// default wp tinymce textarea update only triggered when submit

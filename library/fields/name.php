@@ -96,6 +96,7 @@ class Forminator_Name extends Forminator_Field {
 			'fname'          => 'true',
 			'mname'          => 'true',
 			'lname'          => 'true',
+			'default_layout' => 'default',
 			'layout_columns' => '2',
 		);
 	}
@@ -277,8 +278,10 @@ class Forminator_Name extends Forminator_Field {
 				$cols = 6;
 		}
 
-		if ( 'default' === self::get_property( 'default_layout', $field, false ) ) {
-			$cols = 6;
+		if ( 'default' === self::get_property( 'default_layout', $field, 'default' ) ) {
+			$fields         = array( $prefix, $fname, $mname, $lname );
+			$enabled_fields = count( array_filter( $fields ) );
+			$cols           = ( $enabled_fields <= 1 ) ? 12 : 6;
 		}
 
 		// START: Row.

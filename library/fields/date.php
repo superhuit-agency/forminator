@@ -225,7 +225,7 @@ class Forminator_Date extends Forminator_Field {
 
 			if ( 'today' === $default_date ) {
 				$datepicker_format = $this->normalize_date_format( $date_format );
-				$default_value     = current_time( $datepicker_format );
+				$default_value     = self::apply_default_date_offset( $field, $datepicker_format );
 			}
 
 			if ( 'custom' === $default_date ) {
@@ -806,7 +806,7 @@ class Forminator_Date extends Forminator_Field {
 		$default_date_value = esc_html( self::get_property( 'date', $field, '' ) );
 
 		if ( 'today' === $default_date ) {
-			return explode( ' ', current_time( 'j n Y' ) );
+			return explode( ' ', self::apply_default_date_offset( $field, 'j n Y' ) );
 		}
 
 		if ( empty( $default_date_value ) ) {
@@ -856,6 +856,50 @@ class Forminator_Date extends Forminator_Field {
 		$date_format = str_replace( 'yy', 'Y', $date_format );
 
 		return $date_format;
+	}
+
+	/**
+	 * Apply the "Default Date" offset (used when default_date is "today").
+	 *
+	 * Falls back to today's date in the site's timezone when no offset is set
+	 * or the offset cannot be parsed, preserving the previous behavior.
+	 *
+	 * @since 1.57.0
+	 *
+	 * @param array  $field       Field settings.
+	 * @param string $format      Current date format.
+	 *
+	 * @return string
+	 */
+	public static function apply_default_date_offset( $field, $format ) {
+		$value = abs( (int) self::get_property( 'default_date_offset_value', $field, 0 ) );
+
+		// phpcs:ignore WordPress.DateTime.CurrentTimeTimestamp.Requested -- Site timezone is intentional.
+		$now = current_time( 'U' );
+
+		if ( 0 === $value ) {
+			$timestamp = $now;
+		} else {
+			$operator = self::get_property( 'default_date_offset_operator', $field, '+' );
+			if ( ! in_array( $operator, array( '+', '-' ), true ) ) {
+				$operator = '+';
+			}
+
+			$duration = self::get_property( 'default_date_offset_duration', $field, 'days' );
+			if ( ! in_array( $duration, array( 'days', 'weeks', 'months', 'years' ), true ) ) {
+				$duration = 'days';
+			}
+
+			// abs() keeps the chosen +/- operator in control of the offset direction.
+			$timestamp = strtotime( $operator . $value . ' ' . $duration, $now );
+			if ( false === $timestamp ) {
+				$timestamp = $now;
+			}
+		}
+
+		$timestamp = apply_filters( 'forminator_field_date_default_offset_timestamp', $timestamp, $field, $format );
+
+		return date_i18n( $format, $timestamp );
 	}
 
 	/**

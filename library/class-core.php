@@ -480,6 +480,8 @@ class Forminator_Core {
 		/* @noinspection PhpIncludeInspection */
 		include_once forminator_plugin_dir() . 'library/helpers/helper-fields.php';
 		/* @noinspection PhpIncludeInspection */
+		include_once forminator_plugin_dir() . 'library/helpers/helper-custom-sequence.php';
+		/* @noinspection PhpIncludeInspection */
 		include_once forminator_plugin_dir() . 'library/helpers/helper-google-fonts.php';
 		/* @noinspection PhpIncludeInspection */
 		include_once forminator_plugin_dir() . 'library/helpers/helper-mail.php';

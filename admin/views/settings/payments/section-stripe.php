@@ -10,6 +10,9 @@ $stripe_is_configured    = false;
 $forminator_currencies   = forminator_currency_list();
 $stripe_default_currency = 'USD';
 
+// Stripe shows the currency code in the dropdown, so sort by code alphabetically.
+ksort( $forminator_currencies );
+
 $stripe_oauth_available = $stripe_loaded && class_exists( 'Forminator_Stripe_Connect' );
 $stripe_site_has_ssl    = $stripe_oauth_available ? Forminator_Stripe_Connect::site_has_ssl() : false;
 $stripe_live_via_oauth  = $stripe_oauth_available && Forminator_Gateway_Stripe::is_oauth_connected( 'live' );

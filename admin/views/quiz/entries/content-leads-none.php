@@ -14,7 +14,7 @@ $form_type = $this->get_form_type();
 	<tr class="sui-accordion-item">
 
 		<td>
-			<label class="sui-checkbox">
+			<label class="sui-checkbox sui-accordion-item-action">
 				<input name="ids[]" value="<?php echo esc_attr( $entry->entry_id ); ?>" type="checkbox" id="quiz-answer-<?php echo esc_attr( $entry->entry_id ); ?>">
 				<span></span>
 				<div class="sui-description"><?php echo esc_attr( $entry->entry_id ); ?></div>

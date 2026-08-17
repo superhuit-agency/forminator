@@ -77,16 +77,14 @@
 		addCountryCode: function( form ) {
 			form.find('.forminator-field--phone').each(function() {
 				var phone_element = $(this),
-					national_mode = phone_element.data('national_mode') === 'enabled',
-				    iti           = intlTelInput.getInstance(this);
+					currentInput  = phone_element.val();
 
-				if ( !national_mode && iti ) {
-					var dialCode = '+' + iti.getSelectedCountryData().dialCode;
-					var currentInput = phone_element.val();
-					if (currentInput !== '' && !currentInput.trim().startsWith('+')) {
+				if ( currentInput !== '' && ! currentInput.trim().startsWith( '+' ) ) {
+					var dialCode = forminatorUtils().get_phone_dial_code( phone_element );
+					if ( dialCode ) {
 						phone_element.closest('.iti').find('.iti__selected-dial-code').hide();
 						phone_element.css('padding-inline-start', '45px');
-						phone_element.val(dialCode + ' ' + currentInput);
+						phone_element.val( '+' + dialCode + ' ' + currentInput );
 					}
 				}
 			});
@@ -376,6 +374,13 @@
 									authField.find('.lost-device-url').attr('href', data.data.lost_url);
 
 									if( 'show' === data.data.authentication ) {
+										if (
+											'undefined' !== typeof window.webauthn &&
+											'undefined' !== typeof data.data.username
+										) {
+											window.webauthn.username = data.data.username;
+										}
+
 										self.$el.find('.forminator-authentication-nav').html('').append( data.data.auth_nav );
 										self.$el.find('.forminator-authentication-box').hide();
 										if ( 'fallback-email' === data.data.auth_method ) {
@@ -383,6 +388,7 @@
 											self.$el.find('.notification').hide();
 										}
 										self.$el.find( '#forminator-2fa-' + data.data.auth_method ).show();
+										self.$el.find( '#forminator-2fa-' + data.data.auth_method + ' .option-row' ).attr( 'tabindex', '0' ).attr( 'role', 'button' );
 										self.$el.find('.forminator-authentication-box input').attr( 'disabled', true );
 										self.$el.find( '#forminator-2fa-' + data.data.auth_method + ' input' ).attr( 'disabled', false );
 										self.$el.find('.forminator-2fa-link').show();

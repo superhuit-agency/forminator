@@ -42,6 +42,7 @@ class Forminator_Custom_Form_Admin extends Forminator_Admin_Module {
 		add_action( 'wp_ajax_forminator_rename_template', array( $this, 'rename_template' ) );
 		add_action( 'wp_ajax_forminator_duplicate_template', array( $this, 'duplicate_template' ) );
 		add_action( 'wp_ajax_forminator_disconnect_hub', array( $this, 'disconnect_hub' ) );
+		add_action( 'wp_ajax_forminator_get_custom_sequence_settings', array( $this, 'get_custom_sequence_settings' ) );
 	}
 
 	/**
@@ -102,11 +103,13 @@ class Forminator_Custom_Form_Admin extends Forminator_Admin_Module {
 				'wrappers'              => $wrappers,
 				'settings'              => array_merge(
 					array(
-						'pagination-header' => 'nav',
-						'paginationData'    => array(
+						'pagination-header'       => 'nav',
+						'paginationData'          => array(
 							'pagination-header-design' => 'show',
 							'pagination-header'        => 'nav',
 						),
+						'custom_sequence_enabled' => '',
+						'custom_sequence_prefix'  => '',
 					),
 					$settings,
 					array(
@@ -123,10 +126,11 @@ class Forminator_Custom_Form_Admin extends Forminator_Admin_Module {
 		}
 
 		$data['modules']['custom_form'] = array(
-			'new_form_url'    => menu_page_url( $this->page_edit, false ),
-			'form_list_url'   => menu_page_url( $this->page, false ),
-			'preview_nonce'   => wp_create_nonce( 'forminator_popup_preview_form' ),
-			'templates_nonce' => wp_create_nonce( 'forminator_get_preset_templates' ),
+			'new_form_url'          => menu_page_url( $this->page_edit, false ),
+			'form_list_url'         => menu_page_url( $this->page, false ),
+			'preview_nonce'         => wp_create_nonce( 'forminator_popup_preview_form' ),
+			'templates_nonce'       => wp_create_nonce( 'forminator_get_preset_templates' ),
+			'custom_sequence_nonce' => wp_create_nonce( 'forminator_get_custom_sequence_settings' ),
 		);
 
 		$presets_page = admin_url( 'admin.php?page=forminator-settings&section=appearance-presets' );
@@ -233,18 +237,20 @@ class Forminator_Custom_Form_Admin extends Forminator_Admin_Module {
 		if ( ! isset( $form ) || ! isset( $form->notifications ) ) {
 			return array(
 				array(
-					'slug'             => 'notification-1234-4567',
-					'label'            => esc_html__( 'Admin Email', 'forminator' ),
-					'email-recipients' => 'default',
-					'recipients'       => get_option( 'admin_email' ),
-					'email-subject'    => esc_html__( 'New Form Entry #{submission_id} for {form_name}', 'forminator' ),
-					'email-editor'     => sprintf(
+					'slug'              => 'notification-1234-4567',
+					'label'             => esc_html__( 'Admin Email', 'forminator' ),
+					'email-recipients'  => 'default',
+					'recipients'        => get_option( 'admin_email' ),
+					'email-subject'     => esc_html__( 'New Form Entry #{submission_id} for {form_name}', 'forminator' ),
+					'email-editor'      => sprintf(
 						'%1$s <br/> {all_fields} <br/>---<br/> %2$s',
 						esc_html__( 'You have a new website form submission:', 'forminator' ),
 						esc_html__( 'This message was sent from {site_url}.', 'forminator' )
 					),
-					'email-attachment' => 'true',
-					'type'             => 'default',
+					'email-attachment'  => 'true',
+					// Empty fields are replaced with "N/A" by default on new forms @since 1.57.0.
+					'fill-empty-fields' => 'true',
+					'type'              => 'default',
 				),
 			);
 		}
@@ -297,6 +303,8 @@ class Forminator_Custom_Form_Admin extends Forminator_Admin_Module {
 				'email-editor-method-email'   => $message_method_email,
 				'email-subject-method-manual' => esc_html__( 'New User Registration on {site_url} needs approval.', 'forminator' ),
 				'email-editor-method-manual'  => $message_method_manual,
+				// Empty fields are replaced with "N/A" by default on new forms @since 1.57.0.
+				'fill-empty-fields'           => 'true',
 				'type'                        => 'registration',
 			);
 			if ( ! is_null( $template ) ) {
@@ -336,6 +344,8 @@ class Forminator_Custom_Form_Admin extends Forminator_Admin_Module {
 				'email-editor-method-email'   => $message_method_email,
 				'email-subject-method-manual' => esc_html__( 'Your new account on {site_title} is under review.', 'forminator' ),
 				'email-editor-method-manual'  => $message_method_manual,
+				// Empty fields are replaced with "N/A" by default on new forms @since 1.57.0.
+				'fill-empty-fields'           => 'true',
 			);
 
 			return $notifications;
@@ -378,31 +388,33 @@ class Forminator_Custom_Form_Admin extends Forminator_Admin_Module {
 	public static function get_default_settings( $name, $settings = array() ) {
 		$default_settings = array_merge(
 			array(
-				'formName'               => $name,
-				'pagination-header'      => 'nav',
-				'version'                => FORMINATOR_VERSION,
-				'form-border-style'      => 'solid',
-				'form-padding'           => '',
-				'form-border'            => '',
-				'fields-style'           => 'open',
-				'field-image-size'       => 'custom',
-				'validation'             => 'on_submit',
-				'akismet-protection'     => true,
-				'form-style'             => 'default',
-				'form-substyle'          => 'default',
-				'enable-ajax'            => 'true',
-				'autoclose'              => 'true',
-				'submission-indicator'   => 'show',
-				'indicator-label'        => esc_html__( 'Submitting...', 'forminator' ),
-				'paginationData'         => array(
+				'formName'                => $name,
+				'pagination-header'       => 'nav',
+				'version'                 => FORMINATOR_VERSION,
+				'form-border-style'       => 'solid',
+				'form-padding'            => '',
+				'form-border'             => '',
+				'fields-style'            => 'open',
+				'field-image-size'        => 'custom',
+				'validation'              => 'on_submit',
+				'akismet-protection'      => true,
+				'form-style'              => 'default',
+				'form-substyle'           => 'default',
+				'enable-ajax'             => 'true',
+				'autoclose'               => 'true',
+				'submission-indicator'    => 'show',
+				'indicator-label'         => esc_html__( 'Submitting...', 'forminator' ),
+				'paginationData'          => array(
 					'pagination-header-design' => 'show',
 					'pagination-header'        => 'nav',
 				),
-				'cform-color-option'     => 'theme',
-				'basic-field-image-size' => 'custom',
-				'basic-fields-style'     => 'open',
-				'store_submissions'      => '1',
-				'description-position'   => 'above',
+				'cform-color-option'      => 'theme',
+				'basic-field-image-size'  => 'custom',
+				'basic-fields-style'      => 'open',
+				'store_submissions'       => '1',
+				'description-position'    => 'above',
+				'custom_sequence_enabled' => '1',
+				'custom_sequence_prefix'  => '',
 			),
 			self::get_default_color_settings(),
 			$settings
@@ -628,6 +640,8 @@ class Forminator_Custom_Form_Admin extends Forminator_Admin_Module {
 		// Save data.
 		$id = $model->save();
 		if ( ! is_wp_error( $id ) ) {
+			forminator_custom_sequence_maybe_sync_counter( $model->settings, $id );
+
 			$form_model = $model->load( $id );
 			if ( false !== $form_model ) {
 				Forminator_Base_Form_Model::module_update_do_action( 'form', $id, $form_model );
@@ -695,7 +709,9 @@ class Forminator_Custom_Form_Admin extends Forminator_Admin_Module {
 			}
 		}
 
-		$settings = self::validate_settings( $template->settings );
+		$sequence_settings = isset( $template->settings ) && is_array( $template->settings ) ? $template->settings : array();
+		$settings          = self::validate_settings( $template->settings );
+		$settings          = forminator_custom_sequence_sanitize_settings( $settings );
 
 		// Validate User access and role in registration form.
 		if ( isset( $settings['form-type'] ) && 'registration' === $settings['form-type'] ) {
@@ -758,6 +774,8 @@ class Forminator_Custom_Form_Admin extends Forminator_Admin_Module {
 		if ( is_wp_error( $id ) ) {
 			return $id;
 		}
+
+		forminator_custom_sequence_maybe_sync_counter( $sequence_settings, $id );
 
 		// Remove temporary settings.
 		Forminator_Base_Form_Model::remove_temp_settings( $id );
@@ -1022,6 +1040,29 @@ class Forminator_Custom_Form_Admin extends Forminator_Admin_Module {
 		} else {
 			wp_send_json_error( esc_html__( 'Unable to disconnect the site.', 'forminator' ) );
 		}
+	}
+
+	/**
+	 * Return latest custom sequence settings for a form.
+	 *
+	 * @return void
+	 */
+	public function get_custom_sequence_settings() {
+		forminator_validate_ajax( 'forminator_get_custom_sequence_settings', '_ajax_nonce', 'forminator-cform' );
+
+		$form_id = filter_input( INPUT_POST, 'form_id', FILTER_VALIDATE_INT );
+		if ( ! $form_id ) {
+			wp_send_json_error( esc_html__( 'Form ID is required.', 'forminator' ) );
+		}
+
+		$sequence_settings = forminator_custom_sequence_get_settings( $form_id );
+
+		wp_send_json_success(
+			array(
+				'prefix'      => $sequence_settings['prefix'],
+				'next_number' => (string) $sequence_settings['next'],
+			)
+		);
 	}
 
 	/**

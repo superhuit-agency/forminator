@@ -39,9 +39,10 @@ class Forminator_CForm_Front_Mail extends Forminator_Mail {
 	 * @param object $entry Saved entry.
 	 * @param bool   $full_mode Use full mode or not.
 	 * @param bool   $is_email_recipient Is email recipient or not.
+	 * @param bool   $fill_empty Whether to replace empty field values with "N/A".
 	 * @return string
 	 */
-	private function replace_placeholders( $settings, $option_name, $module, $entry, $full_mode = false, $is_email_recipient = false ) {
+	private function replace_placeholders( $settings, $option_name, $module, $entry, $full_mode = false, $is_email_recipient = false, $fill_empty = false ) {
 		if ( ! isset( $settings[ $option_name ] ) ) {
 			return '';
 		}
@@ -49,6 +50,10 @@ class Forminator_CForm_Front_Mail extends Forminator_Mail {
 		if ( $is_email_recipient ) {
 			// For email recipient, we want to separate repeated field values by comma, instead of new line.
 			add_filter( 'forminator_formatted_repeated_field_values', array( __CLASS__, 'format_repeated_field_values_with_commas' ), 10, 2 );
+		}
+
+		if ( $fill_empty ) {
+			add_filter( 'forminator_empty_field_placeholder', array( __CLASS__, 'replace_empty_field_with_na' ), 10 );
 		}
 
 		if ( $full_mode ) {
@@ -63,9 +68,33 @@ class Forminator_CForm_Front_Mail extends Forminator_Mail {
 		}
 
 		$text = forminator_replace_variables( $text, $module->id, $entry );
+		// Keep fill_empty filter active through replace_custom_form_data so {all_fields} also gets N/A.
 		$text = forminator_replace_custom_form_data( $text, $module, $entry, $this->skip_custom_form_data['admin'] );
 
+		if ( $fill_empty ) {
+			remove_filter( 'forminator_empty_field_placeholder', array( __CLASS__, 'replace_empty_field_with_na' ), 10 );
+		}
+
 		return $text;
+	}
+
+	/**
+	 * Return the "N/A" string for empty field placeholders in email notifications.
+	 *
+	 * @since 1.57.0
+	 *
+	 * @param string $value The current (empty) field value.
+	 * @return string
+	 */
+	public static function replace_empty_field_with_na( $value ) {
+		/**
+		 * Filter the string used to replace empty field placeholders in email notifications.
+		 *
+		 * @since 1.57.0
+		 *
+		 * @param string $na_string The replacement string. Default "N/A".
+		 */
+		return apply_filters( 'forminator_email_empty_field_value', esc_html__( 'N/A', 'forminator' ) );
 	}
 
 	/**
@@ -192,7 +221,7 @@ class Forminator_CForm_Front_Mail extends Forminator_Mail {
 			if (
 			empty( $data ) && ! empty( $submitted_data ) &&
 			isset( $submitted_data['action'] ) &&
-			'forminator_email_draft_link' === $submitted_data['action']
+			in_array( $submitted_data['action'], array( 'forminator_email_draft_link', 'forminator_resend_draft_email' ), true )
 			) {
 				$data = recreate_prepared_data( $custom_form, $entry );
 
@@ -316,8 +345,10 @@ class Forminator_CForm_Front_Mail extends Forminator_Mail {
 						continue;
 					}
 
-					$subject = $this->replace_placeholders( $notification, 'email-subject', $custom_form, $entry, true );
-					$message = $this->replace_placeholders( $notification, 'email-editor', $custom_form, $entry, true );
+					$fill_empty = isset( $notification['fill-empty-fields'] ) && 'true' === $notification['fill-empty-fields'];
+
+					$subject = $this->replace_placeholders( $notification, 'email-subject', $custom_form, $entry, true, false, $fill_empty );
+					$message = $this->replace_placeholders( $notification, 'email-editor', $custom_form, $entry, true, false, $fill_empty );
 					/**
 					 * Custom form mail subject filter
 					 *
@@ -335,8 +366,14 @@ class Forminator_CForm_Front_Mail extends Forminator_Mail {
 					 *
 					 * @since 1.0.2
 					 *
-					 * @param string $message
-					 * @param Forminator_Form_Model - the current form
+					 * @param string                       $message
+					 * @param Forminator_Form_Model        $custom_form Current Form Model.
+					 * @param array                        $data        POST data.
+					 * @param Forminator_Form_Entry_Model  $entry       Entry model.
+					 * @param Forminator_CForm_Front_Mail  $this        Mail class.
+					 *
+					 * @since 1.57.0 Added $notification parameter.
+					 * @param array $notification Current notification settings.
 					 *
 					 * @return string $message
 					 */
@@ -344,7 +381,7 @@ class Forminator_CForm_Front_Mail extends Forminator_Mail {
 						$message .= '<p style="color:#f2ac40;"><em>' . esc_html__( 'Note: Attachments were not included due to size limits.', 'forminator' ) . '</em></p>';
 					}
 
-					$message = apply_filters( 'forminator_custom_form_mail_admin_message', $message, $custom_form, $data, $entry, $this );
+					$message = apply_filters( 'forminator_custom_form_mail_admin_message', $message, $custom_form, $data, $entry, $this, $notification );
 
 					$headers = $this->prepare_headers( $notification, $custom_form, $data, $entry );
 					$this->set_headers( $headers );

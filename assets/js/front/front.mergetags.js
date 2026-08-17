@@ -116,6 +116,12 @@
 				});
 			});
 
+			this.$el.on( 'countrychange', 'input.forminator-field--phone', function () {
+				setTimeout( function() {
+					self.replaceAll();
+				}, 300 );
+			} );
+
 			// When remove a group item, we need to replace all merge tags.
 			this.$el.on( 'forminator-group-item-removed', function () {
 				self.replaceAll();
@@ -397,11 +403,26 @@
 				$element.inputmask({'autoUnmask' : false});
 				value = $element.val();
 				$element.inputmask({'autoUnmask' : true});
+			} else if ( this.field_is_phone($element) ) {
+				value = this.get_phone_value( $element );
 			} else {
 				value = $element.val();
 			}
 
 			return this.sanitize_text_field( value );
+		},
+
+		get_phone_value: function ( $element ) {
+			var phoneVal = $element.val();
+
+			if ( phoneVal !== '' && ! phoneVal.trim().startsWith( '+' ) ) {
+				var dialCode = forminatorUtils().get_phone_dial_code( $element );
+				if ( dialCode ) {
+					return '+' + dialCode + ' ' + phoneVal;
+				}
+			}
+
+			return phoneVal;
 		},
 
 		/**
@@ -544,6 +565,10 @@
 			});
 
 			return is_checkbox;
+		},
+
+		field_is_phone: function ($element) {
+			return $element.hasClass('forminator-field--phone');
 		},
 
 		field_is_upload: function ($element) {

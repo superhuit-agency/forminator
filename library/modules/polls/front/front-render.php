@@ -910,6 +910,45 @@ class Forminator_Poll_Front extends Forminator_Render_Form {
 	}
 
 	/**
+	 * Whether the poll results view should scroll into focus.
+	 *
+	 * Page-reload submission only; AJAX results are handled client-side.
+	 *
+	 * @return bool
+	 */
+	private function should_focus_poll_results() {
+		$poll_id = (int) $this->model->id;
+		$form_id = filter_input( INPUT_GET, 'form_id', FILTER_VALIDATE_INT );
+		$saved   = filter_input( INPUT_GET, 'saved', FILTER_VALIDATE_BOOLEAN );
+		$results = filter_input( INPUT_GET, 'results', FILTER_VALIDATE_BOOLEAN );
+
+		if ( $poll_id === (int) $form_id && ( $saved || $results ) ) {
+			return true;
+		}
+
+		$referrer = wp_get_referer();
+		if ( ! $referrer ) {
+			return false;
+		}
+
+		$query_string = wp_parse_url( $referrer, PHP_URL_QUERY );
+		if ( empty( $query_string ) ) {
+			return false;
+		}
+
+		parse_str( $query_string, $query_vars );
+
+		if ( empty( $query_vars['form_id'] ) || $poll_id !== (int) $query_vars['form_id'] ) {
+			return false;
+		}
+
+		$referrer_saved   = ! empty( $query_vars['saved'] ) ? filter_var( $query_vars['saved'], FILTER_VALIDATE_BOOLEAN ) : false;
+		$referrer_results = ! empty( $query_vars['results'] ) ? filter_var( $query_vars['results'], FILTER_VALIDATE_BOOLEAN ) : false;
+
+		return $referrer_saved || $referrer_results;
+	}
+
+	/**
 	 * Render success
 	 *
 	 * @param bool  $render Render.
@@ -929,15 +968,16 @@ class Forminator_Poll_Front extends Forminator_Render_Form {
 
 		if ( is_object( $this->model ) ) {
 
-			$post_id         = $this->get_post_id();
-			$return_url      = get_permalink( $post_id );
-			$chart_container = 'forminator_chart_poll_' . uniqid() . '_' . $this->model->id;
+			$post_id           = $this->get_post_id();
+			$return_url        = get_permalink( $post_id );
+			$chart_container   = 'forminator_chart_poll_' . uniqid() . '_' . $this->model->id;
+			$should_focus_poll = $this->should_focus_poll_results() ? 'forminator-poll--should-focus-poll' : '';
 
 			ob_start();
 			?>
 
 			<form id="forminator-module-<?php echo esc_attr( $this->model->id ); ?>"
-				class="forminator-ui forminator-poll forminator-poll-<?php echo esc_attr( $this->model->id ); ?> <?php echo esc_attr( $this->get_form_design_class() ); ?> <?php echo esc_attr( $this->get_fields_type_class() ); ?> <?php echo esc_attr( $this->form_extra_classes() ); ?>"
+				class="forminator-ui forminator-poll forminator-poll-<?php echo esc_attr( $this->model->id ); ?> <?php echo esc_attr( $this->get_form_design_class() ); ?> <?php echo esc_attr( $this->get_fields_type_class() ); ?> <?php echo esc_attr( $this->form_extra_classes() ); ?> <?php echo esc_attr( $should_focus_poll ); ?>"
 				method="GET"
 				action="<?php echo esc_url( $return_url ); ?>"
 				data-forminator-render="<?php echo esc_attr( self::$render_ids[ $this->model->id ] ); ?>"
@@ -1197,7 +1237,9 @@ class Forminator_Poll_Front extends Forminator_Render_Form {
 					var chartCanvas  = $( '#<?php echo esc_attr( $container_id ); ?>' ),
 						chartBody    = chartCanvas.closest( '.forminator-poll-body' ),
 						chartWrapper = chartBody.find( '.forminator-chart-wrapper' ),
-						focusElement = chartCanvas
+						form         = chartCanvas.closest( 'form' ),
+						isInWidget   = form.parent().hasClass( 'widget_forminator_widget' ),
+						shouldFocus  = ! isInWidget && form.hasClass( 'forminator-poll--should-focus-poll' )
 						;
 
 					if ( chartWrapper.length ) {
@@ -1207,16 +1249,21 @@ class Forminator_Poll_Front extends Forminator_Render_Form {
 						chartWrapper.addClass( 'forminator-show' );
 						chartWrapper.removeAttr( 'aria-hidden' );
 
-						focusElement = chartWrapper;
-					}
-
-					if( focusElement.length ) {
-						// If poll is added to sidebar widget, let's not add auto-scroll.
-						if ( ! focusElement.parents( 'form' ).parent().hasClass( 'widget_forminator_widget' ) ) {
-							focusElement.attr( 'tabindex', '-1' );
+						if ( shouldFocus ) {
+							chartWrapper.attr( 'tabindex', '-1' );
+							chartWrapper.focus();
 						}
-	
-						focusElement.focus();
+
+					} else {
+
+						// Bar chart: FUI.pollChart does not wrap the canvas (pie only).
+						chartCanvas.addClass( 'forminator-show' );
+						chartCanvas.removeAttr( 'aria-hidden' );
+
+						if ( shouldFocus ) {
+							chartCanvas.attr( 'tabindex', '-1' );
+							chartCanvas.focus();
+						}
 					}
 
 				});
@@ -1263,9 +1310,9 @@ class Forminator_Poll_Front extends Forminator_Render_Form {
 	 *
 	 * @since 1.6.1
 	 *
-	 * @param bool $hide Hide.
-	 * @param bool $is_preview Is preview.
-	 * @param int  $render_id Render ID.
+	 * @param bool     $hide Hide.
+	 * @param bool     $is_preview Is preview.
+	 * @param int|null $render_id Render ID.
 	 *
 	 * @return false|string
 	 */
@@ -1276,11 +1323,12 @@ class Forminator_Poll_Front extends Forminator_Render_Form {
 		$is_same_render = false;
 		$rendered       = false;
 		$form_id        = Forminator_Core::sanitize_text_field( 'form_id' );
+		$saved          = Forminator_Core::sanitize_text_field( 'saved' );
+		$results        = Forminator_Core::sanitize_text_field( 'results' );
 		if ( null === $render_id ) {
 			$render_id = Forminator_Core::sanitize_text_field( 'render_id' );
 		}
-		$saved   = Forminator_Core::sanitize_text_field( 'saved' );
-		$results = Forminator_Core::sanitize_text_field( 'results' );
+
 		if ( (int) $form_id === (int) $this->model->id ) {
 			$is_same_form = true;
 		}
@@ -1289,11 +1337,12 @@ class Forminator_Poll_Front extends Forminator_Render_Form {
 			$is_same_render = true;
 		}
 
-		$status_info = $this->model->opening_status();
+		$current_render_id = isset( self::$render_ids[ $this->model->id ] ) ? (int) self::$render_ids[ $this->model->id ] : 0;
+		$status_info       = $this->model->opening_status();
 
 		if ( 'open' !== $status_info['status'] ) {
 			$this->track_views = false;
-			$this->render( $this->model->id, $hide, $is_preview, $render_id );
+			$this->render( $this->model->id, $hide, $is_preview, $current_render_id );
 			$rendered = true;
 		} elseif ( $saved && $is_same_form && $is_same_render && $this->show_results() ) {
 				$this->track_views = false;
@@ -1305,7 +1354,7 @@ class Forminator_Poll_Front extends Forminator_Render_Form {
 			$this->track_views = false;
 			$this->render_success();
 		} else {
-			$this->render( $this->model->id, $hide, $is_preview, $render_id );
+			$this->render( $this->model->id, $hide, $is_preview, $current_render_id );
 
 			$rendered = true;
 		}

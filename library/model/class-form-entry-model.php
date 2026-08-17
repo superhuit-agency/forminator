@@ -66,6 +66,20 @@ class Forminator_Form_Entry_Model {
 	public $is_spam = false;
 
 	/**
+	 * Custom sequence numeric ID
+	 *
+	 * @var int
+	 */
+	public $custom_id = 0;
+
+	/**
+	 * Custom sequence prefix
+	 *
+	 * @var string
+	 */
+	public $custom_prefix = '';
+
+	/**
 	 * Entry status
 	 *
 	 * @var string 'active'|'spam'|'draft'|'abandoned'
@@ -199,6 +213,8 @@ class Forminator_Form_Entry_Model {
 			$this->entry_type       = $entry_object_cache->entry_type;
 			$this->form_id          = $entry_object_cache->form_id;
 			$this->is_spam          = $entry_object_cache->is_spam;
+			$this->custom_id        = isset( $entry_object_cache->custom_id ) ? $entry_object_cache->custom_id : 0;
+			$this->custom_prefix    = isset( $entry_object_cache->custom_prefix ) ? $entry_object_cache->custom_prefix : '';
 			$this->date_created_sql = $entry_object_cache->date_created_sql;
 			$this->date_created     = $entry_object_cache->date_created;
 			$this->time_created     = $entry_object_cache->time_created;
@@ -209,13 +225,15 @@ class Forminator_Form_Entry_Model {
 			return $entry_object_cache;
 		} else {
 			$table_name = Forminator_Database_Tables::get_table_name( Forminator_Database_Tables::FORM_ENTRY );
-			$sql        = "SELECT `entry_type`, `form_id`, `is_spam`, `date_created`, `draft_id`, `status` FROM {$table_name} WHERE `entry_id` = %d";
+			$sql        = "SELECT `entry_type`, `form_id`, `is_spam`, `custom_id`, `custom_prefix`, `date_created`, `draft_id`, `status` FROM {$table_name} WHERE `entry_id` = %d";
 			$entry      = $wpdb->get_row( $wpdb->prepare( $sql, $entry_id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery
 			if ( $entry ) {
 				$this->entry_id         = $entry_id;
 				$this->entry_type       = $entry->entry_type;
 				$this->form_id          = $entry->form_id;
 				$this->is_spam          = $entry->is_spam;
+				$this->custom_id        = isset( $entry->custom_id ) ? absint( $entry->custom_id ) : 0;
+				$this->custom_prefix    = isset( $entry->custom_prefix ) ? $entry->custom_prefix : '';
 				$this->date_created_sql = $entry->date_created;
 				$this->date_created     = date_i18n( 'j M Y', strtotime( $entry->date_created ) );
 				$this->time_created     = date_i18n( 'M j, Y @ g:i A', strtotime( $entry->date_created ) );
@@ -2169,7 +2187,7 @@ class Forminator_Form_Entry_Model {
 			return $entries_cache;
 		} else {
 			$table_name = Forminator_Database_Tables::get_table_name( Forminator_Database_Tables::FORM_ENTRY );
-			$sql        = "SELECT count(`entry_id`) FROM {$table_name} WHERE `status` = 'active'";
+			$sql        = "SELECT count(`entry_id`) FROM {$table_name} WHERE `status` != 'spam'";
 			$entries    = $wpdb->get_var( $sql ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery
 			if ( $entries ) {
 				wp_cache_set( 'all_form_types', $entries, self::FORM_COUNT_CACHE_GROUP );
@@ -2339,7 +2357,10 @@ class Forminator_Form_Entry_Model {
 				if ( ! method_exists( $connected_addon, 'get_addon_hooks' ) ) {
 					throw new Exception( $addon_slug . ': Method get_addon_hooks doesn\'t exist.' );
 				}
-				$module_hooks    = $connected_addon->get_addon_hooks( $form_id, $module_slug );
+				$module_hooks = $connected_addon->get_addon_hooks( $form_id, $module_slug );
+				if ( ! $module_hooks instanceof Forminator_Integration_Hooks ) {
+					continue;
+				}
 				$addon_meta_data = forminator_find_addon_meta_data_from_entry_model( $connected_addon, $entry_model );
 				$module_hooks->on_before_delete_entry( $entry_model, $addon_meta_data );
 			} catch ( Exception $e ) {
@@ -2766,12 +2787,23 @@ class Forminator_Form_Entry_Model {
 			$where .= $wpdb->prepare( ' AND metas.meta_value LIKE %s', '%' . $wpdb->esc_like( $args['search'] ) . '%' );
 		}
 
-		if ( isset( $args['min_id'] ) ) {
-			$where .= $wpdb->prepare( ' AND entries.entry_id >= %d', esc_sql( $args['min_id'] ) );
-		}
+		if ( isset( $args['min_id'] ) || isset( $args['max_id'] ) ) {
+			$entry_id_conds  = array( 'entries.custom_id = 0' );
+			$custom_id_conds = array( 'entries.custom_id > 0' );
 
-		if ( isset( $args['max_id'] ) ) {
-			$where .= $wpdb->prepare( ' AND entries.entry_id <= %d', esc_sql( $args['max_id'] ) );
+			if ( isset( $args['min_id'] ) && is_numeric( $args['min_id'] ) ) {
+				$entry_id_conds[]  = $wpdb->prepare( 'entries.entry_id >= %d', absint( $args['min_id'] ) );
+				$custom_id_conds[] = $wpdb->prepare( 'entries.custom_id >= %d', absint( $args['min_id'] ) );
+			}
+
+			if ( isset( $args['max_id'] ) && is_numeric( $args['max_id'] ) ) {
+				$entry_id_conds[]  = $wpdb->prepare( 'entries.entry_id <= %d', absint( $args['max_id'] ) );
+				$custom_id_conds[] = $wpdb->prepare( 'entries.custom_id <= %d', absint( $args['max_id'] ) );
+			}
+
+			if ( ! empty( $entry_id_conds ) ) {
+				$where .= ' AND ((' . implode( ' AND ', $entry_id_conds ) . ') OR (' . implode( ' AND ', $custom_id_conds ) . '))';
+			}
 		}
 
 		if ( isset( $args['entry_status'] ) && 'completed' === $args['entry_status'] ) {
@@ -2844,6 +2876,10 @@ class Forminator_Form_Entry_Model {
 			 * @since 1.5.4
 			 */
 			$order = apply_filters( 'forminator_query_entries_order', $order, $args );
+
+			if ( 'entries.date_created' === $args['order_by'] ) {
+				$order .= ', entries.entry_id ' . $order;
+			}
 		}
 
 		// limit.

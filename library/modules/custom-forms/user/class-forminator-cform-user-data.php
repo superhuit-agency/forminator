@@ -265,6 +265,7 @@ class Forminator_CForm_User_Data {
 			'email-1'          => $email,
 			'draft_link'       => $draft_link,
 			'retention_period' => $retention,
+			'action'           => 'forminator_resend_draft_email',
 		);
 
 		$front_action       = new Forminator_CForm_Front_Action();

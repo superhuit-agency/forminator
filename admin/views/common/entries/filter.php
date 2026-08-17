@@ -103,7 +103,7 @@ $is_show_fields     = ! method_exists( $this, 'has_leads' ) || (bool) $this->has
 				name="max_id"
 				min="0"
 				value="<?php echo esc_attr( $max_id ); ?>"
-				placeholder="<?php esc_html_e( 'E.g. 100', 'forminator' ); ?>"
+				placeholder="<?php esc_html_e( 'E.g. 200', 'forminator' ); ?>"
 				id="forminator-forms-filter--to-id"
 				class="sui-form-control"/>
 

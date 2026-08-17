@@ -749,7 +749,8 @@ class Forminator_CForm_View_Page extends Forminator_Admin_View_Page {
 			 *
 			 * @var Forminator_Form_Entry_Model $entry */
 
-			$draft_link = '';
+			$display_entry_id = forminator_get_submission_id( null, $entry );
+			$draft_link       = '';
 			if ( ! empty( $entry->draft_id ) && isset( $entry->meta_data['_draft_page_id']['value'] ) ) {
 				$draft_page_id = absint( $entry->meta_data['_draft_page_id']['value'] );
 				if ( $draft_page_id ) {
@@ -758,14 +759,15 @@ class Forminator_CForm_View_Page extends Forminator_Admin_View_Page {
 			}
 
 			$iterator = array(
-				'id'         => $numerator_id,
-				'entry_id'   => $entry->entry_id,
-				'draft_id'   => $entry->draft_id,
-				'draft_link' => $draft_link,
-				'entry_date' => $entry->time_created,
-				'status'     => $entry->status,
-				'summary'    => array(),
-				'detail'     => array(),
+				'id'               => $display_entry_id,
+				'display_entry_id' => $display_entry_id,
+				'entry_id'         => $entry->entry_id,
+				'draft_id'         => $entry->draft_id,
+				'draft_link'       => $draft_link,
+				'entry_date'       => $entry->time_created,
+				'status'           => $entry->status,
+				'summary'          => array(),
+				'detail'           => array(),
 			);
 
 			$iterator['summary']['num_fields_left'] = $fields_left;
@@ -781,7 +783,7 @@ class Forminator_CForm_View_Page extends Forminator_Admin_View_Page {
 				if ( isset( $header['type'] ) && 'entry_entry_id' === $header['type'] ) {
 					$summary_items[] = array(
 						'colspan' => 1,
-						'value'   => $numerator_id,
+						'value'   => $display_entry_id,
 					);
 					continue;
 				} elseif ( isset( $header['type'] ) && 'entry_time_created' === $header['type'] ) {

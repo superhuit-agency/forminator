@@ -94,6 +94,8 @@ class Forminator_Database_Tables {
 				`entry_type` VARCHAR(191) NOT NULL,
 				`draft_id` VARCHAR(12) NULL,
 				`form_id` bigint(20) unsigned NOT NULL,
+				`custom_id` bigint(20) unsigned NOT NULL DEFAULT 0,
+				`custom_prefix` VARCHAR(191) NOT NULL DEFAULT '',
 				`is_spam` TINYINT(1) NOT NULL DEFAULT 0,
 				`date_created` datetime NOT NULL default '0000-00-00 00:00:00',
 				`status` ENUM('active','spam','draft','abandoned') NOT NULL DEFAULT 'active',
@@ -101,6 +103,7 @@ class Forminator_Database_Tables {
 				KEY `entry_is_spam` (`is_spam` ASC ),
 				KEY `entry_status` (`status`),
 				KEY `entry_form_status` (`form_id`, `status`),
+				KEY `entry_form_custom_id` (`form_id`, `custom_id`),
 				KEY `entry_type` (`entry_type`($max_index_length)),
 				KEY `entry_form_id` (`form_id`))
 				$charset_collate;";
