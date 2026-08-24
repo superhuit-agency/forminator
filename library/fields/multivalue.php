@@ -415,10 +415,11 @@ class Forminator_MultiValue extends Forminator_Field {
 	 * @param array|string $data Data.
 	 */
 	public function validate( $field, $data ) {
-		$id = self::get_property( 'element_id', $field );
+		$id            = self::get_property( 'element_id', $field );
+		$option_values = array_map( 'forminator_normalize_choice_option_value', array_column( $field['options'], 'value' ) );
 
 		foreach ( $data as $value ) {
-			if ( false === array_search( strval( htmlspecialchars_decode( $value ) ), array_map( 'strval', array_column( $field['options'], 'value' ) ), true ) ) {
+			if ( false === array_search( forminator_normalize_choice_option_value( $value ), $option_values, true ) ) {
 				$this->validation_message[ $id ] = apply_filters(
 					'forminator_checkbox_field_nonexistent_validation_message',
 					esc_html__( 'Selected value does not exist.', 'forminator' ),
@@ -472,14 +473,7 @@ class Forminator_MultiValue extends Forminator_Field {
 	public function sanitize( $field, $data ) {
 		$original_data = $data;
 
-		// Sanitize.
-		if ( is_array( $data ) ) {
-			foreach ( $data as $key => $val ) {
-				$data[ $key ] = is_scalar( $val ) ? trim( wp_kses_post( $val ) ) : '';
-			}
-		} else {
-			$data = trim( wp_kses_post( $data ) );
-		}
+		$data = $this->sanitize_choice_data( $data );
 
 		return apply_filters( 'forminator_field_multi_sanitize', $data, $field, $original_data );
 	}

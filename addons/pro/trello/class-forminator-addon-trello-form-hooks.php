@@ -148,7 +148,10 @@ class Forminator_Trello_Form_Hooks extends Forminator_Integration_Form_Hooks {
 					$due_date         = forminator_reformat_date( $due_date, $date_format, 'F j Y' );
 				}
 
-				$args['due'] = $due_date;
+				$parsed_date = date_create( $due_date );
+				if ( false !== $parsed_date ) {
+					$args['due'] = date_format( $parsed_date, 'c' );
+				}
 			}
 
 			if ( isset( $connection_settings['position'] ) ) {

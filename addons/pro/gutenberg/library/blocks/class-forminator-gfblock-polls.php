@@ -104,6 +104,7 @@ class Forminator_GFBlock_Polls extends Forminator_GFBlock_Abstract {
 				'forms'     => $this->get_forms(),
 				'admin_url' => admin_url( 'admin.php' ),
 				'l10n'      => $this->localize(),
+				'rest_url'  => $this->get_preview_rest_url(),
 			)
 		);
 

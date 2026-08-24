@@ -1069,9 +1069,9 @@ class Forminator_Postdata extends Forminator_Field {
 			$image = $data['post-image'];
 		}
 
-		// Do not sanitize post content.
+		// Sanitize post content while preserving supported rich textarea hooks.
 		if ( isset( $data['post-content'] ) ) {
-			$content = wp_kses_post( $data['post-content'] );
+			$content = forminator_sanitize_rich_textarea_widget_hooks( $data['post-content'] );
 
 			// Balance tags to ensure that user-added HTML tags are properly closed.
 			$content = force_balance_tags( $content );

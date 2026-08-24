@@ -229,7 +229,7 @@ function forminator_decode_html_entity( $fields ) {
 /**
  * Return choice option value as submitted on the front end.
  *
- * Strips HTML tags and decodes entities so builder values match browser POST data.
+ * Decodes entities, strips HTML tags, and trims whitespace so builder values match browser POST data.
  *
  * @since 1.56.0
  *
@@ -242,7 +242,10 @@ function forminator_normalize_choice_option_value( $value ) {
 		return '';
 	}
 
-	return htmlspecialchars_decode( wp_strip_all_tags( (string) $value ), ENT_QUOTES );
+	$decoded  = htmlspecialchars_decode( (string) $value, ENT_QUOTES );
+	$stripped = wp_strip_all_tags( $decoded );
+
+	return trim( $stripped );
 }
 
 /**
@@ -988,11 +991,6 @@ function forminator_resolve_draft_display_value( $entry, $element_id, $field_typ
 		$data[ 'custom-' . $element_id ] = $custom_val;
 	}
 
-	// When storing values (not labels), only process if there's a custom option to resolve.
-	if ( $print_value && ! isset( $data[ 'custom-' . $element_id ] ) ) {
-		return $value;
-	}
-
 	$label = forminator_replace_field_data( $form, $element_id, $data, false, $print_value );
 
 	return '' !== $label ? $label : $value;
@@ -1071,7 +1069,7 @@ function forminator_replace_field_data( $custom_form, $element_id, $data, $is_pd
 						$display_items[] = $display_text;
 					}
 				} else {
-					$display_items[] = $selected_value;
+					$display_items[] = $is_email ? esc_html( $selected_value ) : $selected_value;
 				}
 			}
 

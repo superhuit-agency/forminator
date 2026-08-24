@@ -109,6 +109,17 @@ abstract class Forminator_GFBlock_Abstract {
 	}
 
 	/**
+	 * REST URL for block preview (plain and pretty permalinks).
+	 *
+	 * @since 1.57.0
+	 *
+	 * @return string
+	 */
+	public function get_preview_rest_url() {
+		return rest_url( 'forminator/v1/preview/' . $this->get_slug() );
+	}
+
+	/**
 	 * Register REST API route for block preview.
 	 *
 	 * @since 1.0 Gutenberg Integration

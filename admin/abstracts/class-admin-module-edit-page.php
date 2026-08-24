@@ -226,17 +226,15 @@ abstract class Forminator_Admin_Module_Edit_Page extends Forminator_Admin_Page {
 	 */
 	public static function has_error_on_registration_form( $module ) {
 		if ( ! empty( $module['model']->settings['form-type'] ) && 'registration' === $module['model']->settings['form-type'] ) {
-			$settings = $module['model']->settings;
-			if ( 'manual' === forminator_get_property( $settings, 'activation-method' ) ) {
-				return false;
-			}
-			if ( ! forminator_is_user_registration_enabled() ) {
-				return true;
-			}
+			$settings           = $module['model']->settings;
 			$option_create_site = forminator_get_property( $settings, 'site-registration' );
-			if ( forminator_is_main_site() && 'enable' === $option_create_site && ! forminator_is_site_registration_enabled() ) {
+			// Site creation is blocked whatever the activation method.
+			if ( is_multisite() && 'enable' === $option_create_site && ! forminator_is_site_registration_enabled() ) {
 				return true;
 			}
+			// Manual activation still creates the account on approval, so disabled registration is not an error then.
+			return ! forminator_is_user_registration_enabled()
+				&& 'manual' !== forminator_get_property( $settings, 'activation-method' );
 		}
 		return false;
 	}

@@ -938,6 +938,14 @@ class Forminator_CForm_View_Page extends Forminator_Admin_View_Page {
 				'value' => $sub_entry_value,
 			);
 
+			if ( isset( $sub_meta['type'] ) ) {
+				$sub_entry['type'] = $sub_meta['type'];
+			}
+
+			if ( isset( $sub_meta['rich'] ) ) {
+				$sub_entry['rich'] = $sub_meta['rich'];
+			}
+
 			if ( ! empty( $sub_meta['sub_metas'] ) ) {
 				$sub_meta['meta_key']    .= $slug;
 				$sub_entry['sub_entries'] = self::get_sub_entries( $sub_meta, $entry, $slug );

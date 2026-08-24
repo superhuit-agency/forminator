@@ -191,6 +191,7 @@ class Forminator_CForm_Front_User_Registration extends Forminator_User {
 			&& isset( $option_create_site )
 			&& 'enable' === $option_create_site
 			&& $site_data
+			&& forminator_is_site_registration_enabled()
 		) {
 			if ( ! has_action( 'after_signup_site', 'wpmu_signup_blog_notification' ) ) {
 				add_action( 'after_signup_site', 'wpmu_signup_blog_notification', 10, 7 );
@@ -645,9 +646,8 @@ class Forminator_CForm_Front_User_Registration extends Forminator_User {
 		// Is option 'Site registration' enabled?
 		$option_create_site = forminator_get_property( $setting, 'site-registration' );
 
-		$activation_method = forminator_get_property( $setting, 'activation-method' );
-		// If activation method is not 'manual' and site registration is disabled, do not create a site.
-		if ( 'manual' !== $activation_method && ! forminator_is_site_registration_enabled() ) {
+		// Whatever the activation method, do not create a site the network doesn't allow.
+		if ( ! forminator_is_site_registration_enabled() ) {
 			$option_create_site = false;
 		}
 		if ( ! $option_create_site || ( isset( $option_create_site ) && 'enable' !== $option_create_site ) ) {

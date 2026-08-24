@@ -320,7 +320,7 @@ class Forminator_Form_Entry_Model {
 			}
 		}
 		if ( 'abandoned' === $this->status ) {
-			$form_uid = filter_input( INPUT_POST, 'form_uid' );
+			$form_uid = Forminator_Core::sanitize_text_field( 'form_uid' );
 			if ( $form_uid ) {
 				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
 				$meta_id = $wpdb->insert(
@@ -328,7 +328,7 @@ class Forminator_Form_Entry_Model {
 					array(
 						'entry_id'     => $this->entry_id,
 						'meta_key'     => 'form_uid', // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
-						'meta_value'   => $form_uid, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+						'meta_value'   => maybe_serialize( $form_uid ), // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 						'date_created' => ! empty( $entry_date ) ? $entry_date : date_i18n( 'Y-m-d H:i:s' ),
 					)
 				);
@@ -355,9 +355,17 @@ class Forminator_Form_Entry_Model {
 		$sql             = "SELECT `meta_id`, `meta_key`, `meta_value` FROM {$table_meta_name} WHERE `entry_id` = %d";
 		$results         = $db->get_results( $db->prepare( $sql, $this->entry_id ) );
 		foreach ( $results as $result ) {
+			$meta_value = $result->meta_value;
+			// Form UID is visitor-controlled, so only unwrap serialized string values.
+			if ( 'form_uid' === $result->meta_key ) {
+				$meta_value = is_serialized_string( $meta_value ) ? maybe_unserialize( $meta_value ) : $meta_value;
+			} else {
+				$meta_value = is_array( $meta_value ) ? array_map( 'maybe_unserialize', $meta_value ) : maybe_unserialize( $meta_value );
+			}
+
 			$this->meta_data[ $result->meta_key ] = array(
 				'id'    => $result->meta_id,
-				'value' => is_array( $result->meta_value ) ? array_map( 'maybe_unserialize', $result->meta_value ) : maybe_unserialize( $result->meta_value ),
+				'value' => $meta_value,
 			);
 		}
 
@@ -493,14 +501,14 @@ class Forminator_Form_Entry_Model {
 	 * @return int
 	 */
 	private function get_saved_entry_id() {
-		$form_uid = filter_input( INPUT_POST, 'form_uid' );
+		$form_uid = Forminator_Core::sanitize_text_field( 'form_uid' );
 		if ( ! $form_uid ) {
 			return 0;
 		}
 		global $wpdb;
 		$sql      = "SELECT m.entry_id FROM {$this->table_meta_name} m JOIN {$this->table_name} e ON (m.entry_id = e.entry_id)" .
 			" WHERE e.form_id = %d AND e.status = 'abandoned' AND m.meta_key = 'form_uid' AND m.meta_value = %s";
-		$entry_id = $wpdb->get_var( $wpdb->prepare( $sql, $this->form_id, $form_uid ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.NotPrepared
+		$entry_id = $wpdb->get_var( $wpdb->prepare( $sql, $this->form_id, maybe_serialize( $form_uid ) ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.NotPrepared
 
 		$this->updating_entry = ! empty( $entry_id );
 
@@ -1571,6 +1579,10 @@ class Forminator_Form_Entry_Model {
 						$upload_count = 0;
 						$file_values  = is_array( $file['file_url'] ) ? $file['file_url'] : array( $file['file_url'] );
 						foreach ( $file_values as $file_value ) {
+							if ( ! is_scalar( $file_value ) ) {
+								continue;
+							}
+
 							$url       = $file_value;
 							$file_name = basename( $url );
 							$file_name = ! empty( $file_name ) ? $file_name : esc_html__( '(no filename)', 'forminator' );
@@ -1584,11 +1596,12 @@ class Forminator_Form_Entry_Model {
 								$string_value .= '<br/>';
 							}
 
-							$string_value .= '<a href="' . $url . '" rel="noopener noreferrer" target="_blank" title="' . esc_html__( 'View File', 'forminator' ) . '">' . $file_name . '</a>';
+							$string_value .= '<a href="' . esc_url( $url ) . '" rel="noopener noreferrer" target="_blank" title="' . esc_html__( 'View File', 'forminator' ) . '">' . esc_html( $file_name ) . '</a>';
 						}
 					} else {
 						// truncate url.
-						$string_value = is_array( $file['file_url'] ) ? implode( ', ', $file['file_url'] ) : $file['file_url'];
+						$file_urls    = is_array( $file['file_url'] ) ? array_filter( $file['file_url'], 'is_scalar' ) : array( $file['file_url'] );
+						$string_value = implode( ', ', $file_urls );
 						if ( strlen( $string_value ) > $truncate ) {
 							$string_value = substr( $string_value, 0, $truncate ) . '...';
 						}

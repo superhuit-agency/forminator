@@ -231,6 +231,51 @@ We take plugin security incredibly seriously; if you have a bug or vulnerability
 
 == Changelog ==
 
+= 1.57.1 ( 2026-08-18 ) =
+
+- Fix: Security issue affecting Multisite site registration (props: Jakub Herman)
+
+
+= 1.57.0.8 ( 2026-08-18 ) =
+
+- Fix: Security issue affecting payment processing (props: Jakub Herman)
+
+
+= 1.57.0.7 ( 2026-08-18 ) =
+
+- Fix: Privilege escalation vulnerability
+
+
+= 1.57.0.6 ( 2026-08-18 ) =
+
+- Fix: Vulnerability - PHP Object Injection
+
+
+= 1.57.0.5 ( 2026-08-18 ) =
+
+- Fix: Security improvements on Hub-Connector (props: Jakub Herman)
+
+
+= 1.57.0.4 ( 2026-08-18 ) =
+
+- Fix: Cross-Site Scripting (XSS) vulnerability
+
+
+= 1.57.0.3 ( 2026-08-18 ) =
+
+- Fix: Cross-Site Scripting (XSS) vulnerability
+
+
+= 1.57.0.2 ( 2026-08-18 ) =
+
+- Fix: Cross-Site Scripting (XSS) vulnerability
+
+
+= 1.57.0.1 ( 2026-08-18 ) =
+
+- Fix: Cross-Site Scripting (XSS) vulnerability
+
+
 = 1.57.0 (2026-08-12) =
 
 - Enhancement: Added an option to set a custom Submission ID for each form
@@ -478,56 +523,6 @@ We take plugin security incredibly seriously; if you have a bug or vulnerability
 - Fix: Field UI issues such as Rating reset, Select limits, and preview Select dropdown problems
 - Fix: UI rendering issues including hover effects, Sliders, and pagination glitches
 - Fix: Long labels not displaying correctly in Poll results
-
-
-= 1.52.2 ( 2026-04-07 ) =
-
-- Fix: Security improvements
-
-
-= 1.52.1 ( 2026-04-07 ) =
-
-- Fix: Security improvements
-
-
-= 1.52.0 ( 2026-03-18 ) =
-
-- Enhancement: Show notification when an unsupported PHP version is detected and deactivate the plugin
-- Enhancement: Improve plugin architecture by removing unnecessary PHP version checks and legacy compatibility logic
-- Enhancement: Improve wp.org guidelines compliance across the plugin
-- Enhancement: Compatibility with PHP 8.5
-- Enhancement: Improve email notifications by skipping attachments larger than 15MB
-- Enhancement: Improve minimum version comparison logic across Add-ons
-- Enhancement: Add default values validation for Slider field
-- Enhancement: Improve Material Design accessibility by highlighting required field indicators
-- Enhancement: Improve permission handling when accessing Registration form editing
-- Enhancement: Auto-populate submissions when only one form exists
-- Enhancement: Display Group fields in the main table on Submissions page
-- Enhancement: Add pagination in form search results
-- Enhancement: Update HubSpot Contact Lists API to v3
-- Enhancement: Update successful submission messages for different templates
-- Fix: Stripe and PayPal fields not working together when added without conditions
-- Fix: Users able to proceed after uploading forbidden file types
-- Fix: Fatal error occurs when uploading PDF files and submit button visibility condition is set
-- Fix: Submission data missing Group field values
-- Fix: Resend Email Notification is not working correctly for routed email notifications
-- Fix: PayPal button is incorrectly active in Instant Preview
-- Fix: Datepicker positioning issues in popups
-- Fix: Group visibility condition is not working correctly for draft forms
-- Fix: Extra paragraph tags added when editing Consent field descriptions
-- Fix: Some placeholders aren't replaced in the admin area
-- Fix: HTTP Referer URL missing when resending notification emails
-- Fix: Incorrect color displayed in Mailjet connection status message
-- Fix: reCAPTCHA v3 not displaying on the frontend when configured inline
-- Fix: Calculation errors when processing extremely large numeric values
-- Fix: European numeric format not processed correctly in certain cases
-- Fix: Placeholder visibility issue in Stripe fixed amount field
-- Fix: Remove unsupported option to assign Variable Quantity to Currency field
-- Fix: Invalid label validation on the Consent field
-- Fix: CSS selector issues affecting Group fields in generated PDFs
-- Fix: Forms could be published with an empty name after autosave
-- Fix: Translation issue with the "Select" string
-- Fix: PDF output font weight adjusted to allow proper HTML formatting in textareas
 
 
 **Full changelog can be found here – [Forminator changelog](https://wpmudev.com/project/forminator-pro/#changelog_all?utm_source=wordpress.org&utm_medium=readme&utm_campaign=forminator-readme&utm_content=wpmu_dev_changelog_link).**

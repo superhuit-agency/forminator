@@ -346,6 +346,18 @@ class Forminator_Mailchimp_Form_Hooks extends Forminator_Integration_Form_Hooks 
 			foreach ( $mailchimp_fields_list as $item ) {
 				if ( $item->required ) {
 					$mailchimp_required_fields[] = $item;
+				} elseif ( 'address' === $item->type ) {
+					if ( ! empty( $addon_setting_values['fields_map'][ $item->tag ] ) ) {
+						// If it's not required, but there is some data mapped and submitted, we also need to check it as required because Mailchimp will return an error if the data is incomplete.
+						$address_fields = $form_settings_instance->mail_address_fields();
+						foreach ( $address_fields as $addr => $address ) {
+							if ( ! empty( $addon_setting_values['fields_map'][ $item->tag ][ $addr ] )
+								&& ! empty( $submitted_data[ $addon_setting_values['fields_map'][ $item->tag ][ $addr ] ] ) ) {
+								$mailchimp_required_fields[] = $item;
+								break;
+							}
+						}
+					}
 				}
 			}
 
@@ -354,6 +366,9 @@ class Forminator_Mailchimp_Form_Hooks extends Forminator_Integration_Form_Hooks 
 				if ( 'address' === $mailchimp_required_field->type ) {
 					$address_fields = $form_settings_instance->mail_address_fields();
 					foreach ( $address_fields as $addr => $address ) {
+						if ( in_array( $addr, array( 'addr2', 'country' ), true ) ) {
+							continue; // Skip addr2 and country as they are not required by Mailchimp.
+						}
 						if ( ! isset( $addon_setting_values['fields_map'][ $mailchimp_required_field->tag ][ $addr ] ) ) {
 							throw new Forminator_Integration_Exception(
 								sprintf(
@@ -725,7 +740,17 @@ class Forminator_Mailchimp_Form_Hooks extends Forminator_Integration_Form_Hooks 
 			);
 
 			if ( empty( $delete_member_url ) ) {
-				$delete_member_url = self::get_delete_member_url_from_addon_meta_data( $addon_meta_data );
+				$multi_global_id   = $this->addon->multi_global_id;
+				$expected_name     = ! empty( $multi_global_id ) ? 'status-' . $multi_global_id : 'status';
+				$connection_meta   = array_values(
+					array_filter(
+						$addon_meta_data,
+						function ( $item ) use ( $expected_name ) {
+							return isset( $item['name'] ) && $item['name'] === $expected_name;
+						}
+					)
+				);
+				$delete_member_url = self::get_delete_member_url_from_addon_meta_data( $connection_meta );
 			}
 
 			forminator_addon_maybe_log( __METHOD__, $delete_member_url );
@@ -776,8 +801,8 @@ class Forminator_Mailchimp_Form_Hooks extends Forminator_Integration_Form_Hooks 
 
 		$addon_meta_data = $addon_meta_data[0];
 
-		// make sure its `status`, because we only add this.
-		if ( 'status' !== $addon_meta_data['name'] ) {
+		// make sure its `status` or `status-{global_id}`, because we only add this.
+		if ( 'status' !== $addon_meta_data['name'] && 0 !== stripos( $addon_meta_data['name'], 'status-' ) ) {
 			return array();
 		}
 		if ( ! isset( $addon_meta_data['value'] ) || ! is_array( $addon_meta_data['value'] ) ) {

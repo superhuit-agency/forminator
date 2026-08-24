@@ -154,7 +154,10 @@ class Forminator_Trello_Quiz_Hooks extends Forminator_Integration_Quiz_Hooks {
 			}
 			if ( ! empty( $quiz_settings['hasLeads'] ) && ! empty( $connection_settings['due_date'] ) ) {
 				$due_date    = forminator_addon_replace_custom_vars( $connection_settings['due_date'], $lead_submitted_data, $this->lead_model, $form_entry_fields, false );
-				$args['due'] = $due_date;
+				$parsed_date = date_create( $due_date );
+				if ( false !== $parsed_date ) {
+					$args['due'] = date_format( $parsed_date, 'c' );
+				}
 			}
 			if ( isset( $connection_settings['position'] ) ) {
 				$args['pos'] = $connection_settings['position'];

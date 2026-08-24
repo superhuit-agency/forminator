@@ -157,7 +157,7 @@ trait Forminator_Hubspot_Settings_Trait {
 			try {
 				$input_exceptions = new Forminator_Integration_Settings_Exception();
 				if ( empty( $fields_map['email'] ) ) {
-					$input_exceptions->add_input_exception( 'Please assign field for Email Address', 'email_error' );
+					$input_exceptions->add_input_exception( esc_html__( 'Please assign field for Email Address', 'forminator' ), 'email_error' );
 				}
 				foreach ( $fields as $key => $title ) {
 					if ( ! empty( $fields_map[ $key ] ) ) {
@@ -387,15 +387,15 @@ trait Forminator_Hubspot_Settings_Trait {
 				$input_exceptions = new Forminator_Integration_Settings_Exception();
 				if ( '1' === $create_ticket && isset( $submitted_data['pipeline_id'] ) && empty( $submitted_data['pipeline_id'] )
 					&& 0 !== (int) $submitted_data['pipeline_id'] ) {
-					$input_exceptions->add_input_exception( 'Please select pipeline', 'pipeline_error' );
+					$input_exceptions->add_input_exception( esc_html__( 'Please select pipeline', 'forminator' ), 'pipeline_error' );
 				}
 				if ( '1' === $create_ticket && isset( $submitted_data['status_id'] ) && empty( $submitted_data['status_id'] )
 					&& 0 !== (int) $submitted_data['status_id'] ) {
-					$input_exceptions->add_input_exception( 'Please select status', 'status_error' );
+					$input_exceptions->add_input_exception( esc_html__( 'Please select status', 'forminator' ), 'status_error' );
 				}
 
 				if ( '1' === $create_ticket && isset( $submitted_data['ticket_name'] ) && empty( $submitted_data['ticket_name'] ) ) {
-					$input_exceptions->add_input_exception( 'Please enter ticket name', 'ticket_name_error' );
+					$input_exceptions->add_input_exception( esc_html__( 'Please enter ticket name', 'forminator' ), 'ticket_name_error' );
 				}
 
 				if ( $input_exceptions->input_exceptions_is_available() ) {

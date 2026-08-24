@@ -302,7 +302,7 @@ trait Forminator_Aweber_Settings_Trait {
 
 				$input_exceptions = new Forminator_Integration_Settings_Exception();
 				if ( empty( $fields_map['default_field_email'] ) ) {
-					$input_exceptions->add_input_exception( 'Please assign field for Email Address', 'default_field_email_error' );
+					$input_exceptions->add_input_exception( esc_html__( 'Please assign field for Email Address', 'forminator' ), 'default_field_email_error' );
 				}
 
 				foreach ( $fields as $key => $title ) {

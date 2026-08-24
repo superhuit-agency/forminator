@@ -1622,6 +1622,25 @@ abstract class Forminator_Field {
 	}
 
 	/**
+	 * Sanitize flat choice values to match front-end submission.
+	 *
+	 * @param mixed $data Field data.
+	 *
+	 * @return array|string
+	 */
+	protected function sanitize_choice_data( $data ) {
+		if ( is_array( $data ) ) {
+			foreach ( $data as $key => $value ) {
+				$data[ $key ] = forminator_normalize_choice_option_value( $value );
+			}
+
+			return $data;
+		}
+
+		return forminator_normalize_choice_option_value( $data );
+	}
+
+	/**
 	 * Check if field is available
 	 * Override it for field that needs dependencies
 	 * Example : `captcha` that needs `captcha_key` to be displayed properly

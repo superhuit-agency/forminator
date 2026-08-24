@@ -727,14 +727,7 @@ class Forminator_Select extends Forminator_Field {
 	public function sanitize( $field, $data ) {
 		$original_data = $data;
 
-		// Sanitize.
-		if ( is_array( $data ) ) {
-			foreach ( $data as $key => $val ) {
-				$data[ $key ] = is_scalar( $val ) ? trim( wp_kses_post( $val ) ) : '';
-			}
-		} else {
-			$data = trim( wp_kses_post( $data ) );
-		}
+		$data = $this->sanitize_choice_data( $data );
 
 		return apply_filters( 'forminator_field_single_sanitize', $data, $field, $original_data );
 	}
