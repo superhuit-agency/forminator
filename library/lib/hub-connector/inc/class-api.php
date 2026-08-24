@@ -63,21 +63,30 @@ class API {
 			return \WPMUDEV_APIKEY;
 		} else {
 			/**
-			 * If forced, clear cache and get the value.
+			 * If forced, clear notoptions cache.
 			 *
-			 * Temporary workaround for cache plugin conflicts.
+			 * Workaround W3 total Cache, due to possibility of discrepancies where object cache is used/allowed ( wp-admin vs non wp-admin ).
 			 *
-			 * @see https://incsub.atlassian.net/browse/DEF-2895
+			 * @see https://incsub.atlassian.net/browse/HUB-10174?focusedCommentId=312567
 			 */
 			if ( $force ) {
-				if ( is_multisite() ) {
-					$network_id = get_current_network_id();
-					$cache_key  = "$network_id:wpmudev_apikey";
-					wp_cache_delete( $cache_key, 'site-options' );
-				} else {
-					wp_cache_delete( 'wpmudev_apikey', 'options' );
+				if ( defined( 'W3TC' ) ) {
+					if ( is_multisite() ) {
+						$network_id  = get_current_network_id();
+						$cache_key   = "$network_id:notoptions";
+						$cache_group = 'site-options';
+					} else {
+						$cache_key   = 'notoptions';
+						$cache_group = 'options';
+					}
+					$notoptions = wp_cache_get( $cache_key, $cache_group );
+					unset( $notoptions['wpmudev_apikey'] );
+					wp_cache_set( $cache_key, $notoptions, $cache_group );
+					wp_cache_delete( 'wpmudev_apikey', $cache_group );
 				}
 			}
+
+			do_action( 'wpmudev_hub_connector_before_get_api_key', $force );
 
 			// If 'clear_key' is present in URL then do not load the key from DB.
 			return get_site_option( 'wpmudev_apikey', '' );
@@ -231,7 +240,16 @@ class API {
 		if ( 200 === wp_remote_retrieve_response_code( $response ) ) {
 			// Get membership data.
 			$data = json_decode( wp_remote_retrieve_body( $response ), true );
-			if ( ! empty( $data['membership'] ) ) {
+			if ( isset( $data['membership'] ) && empty( $data['membership'] ) && ! defined( '\WPMUDEV_APIKEY' ) && $this->get_api_key() ) {
+				Options::reset();
+				// Clear API key.
+				$this->set_api_key( '' );
+
+				return new WP_Error(
+					'invalid_api_key_or_expired',
+					__( 'Invalid API Key or Expired membership.', 'wpmudev' )
+				);
+			} elseif ( ! empty( $data['membership'] ) ) {
 				// Update membership data.
 				$this->update_membership_data( $data );
 
@@ -293,6 +311,41 @@ class API {
 	}
 
 	/**
+	 * Unsync site
+	 *
+	 * @return mixed|WP_Error
+	 */
+	public function unsync_site() {
+		// Only when logged in.
+		if ( ! $this->has_api_key() ) {
+			return new WP_Error(
+				'not_logged_in',
+				__( 'Not logged in.', 'wpmudev' )
+			);
+		}
+
+		// New request object.
+		$request = new Request();
+		// Make a hub unsync request.
+		$response = $request->delete(
+			'hub-unsync',
+			true,
+			array(
+				'call_version' => \WPMUDEV_HUB_CONNECTOR_VERSION,
+				'domain'       => Data::get()->network_site_url(),
+			)
+		);
+
+		// to trigger logging.
+		if ( 200 !== (int) wp_remote_retrieve_response_code( $response ) ) {
+			$this->get_api_error( $response );
+			$response = $this->format_error_messages( $response );
+		}
+
+		return $response;
+	}
+
+	/**
 	 * Logout and disconnect the site from Hub.
 	 *
 	 * @since 1.0.0
@@ -305,21 +358,15 @@ class API {
 			return new WP_Error( 'not_logged_in', __( 'Not logged in.', 'wpmudev' ) );
 		}
 
+		// whatever happens, reset + remove api key.
+		$response = $this->unsync_site();
+
 		// Reset settings.
 		Options::reset();
 		// Remove API key.
 		$this->set_api_key( '' );
 
-		// Do a sync to remove site.
-		$sync = $this->sync_site( true, false );
-
-		// Handle specific error.
-		if ( is_wp_error( $sync ) && 'invalid_api_response' === $sync->get_error_code() ) {
-			// For logout sync, membership data will be empty.
-			return array();
-		}
-
-		return $sync;
+		return $response;
 	}
 
 	/**
@@ -465,30 +512,12 @@ class API {
 			);
 		}
 
+		// Only enabled with constants.
+		// phpcs:disable WordPress.PHP.DevelopmentFunctions.error_log_wp_debug_backtrace_summary
+		// phpcs:disable WordPress.PHP.DevelopmentFunctions.error_log_error_log
 		if ( defined( '\WPMUDEV_API_DEBUG' ) && \WPMUDEV_API_DEBUG ) {
-			$trace     = debug_backtrace();
-			$caller    = array();
-			$last_line = '';
-			foreach ( $trace as $level => $item ) {
-				if ( ! isset( $item['class'] ) ) {
-					$item['class'] = '';
-				}
-				if ( ! isset( $item['type'] ) ) {
-					$item['type'] = '';
-				}
-				if ( ! isset( $item['function'] ) ) {
-					$item['function'] = '<function>';
-				}
-				if ( ! isset( $item['line'] ) ) {
-					$item['line'] = '?';
-				}
-
-				if ( $level > 0 ) {
-					$caller[] = $item['class'] . $item['type'] . $item['function'] . ':' . $last_line;
-				}
-				$last_line = $item['line'];
-			}
-			$caller_dump = "\n\t# " . implode( "\n\t# ", $caller );
+			$trace       = wp_debug_backtrace_summary( null, null, false );
+			$caller_dump = "\n\t# " . implode( "\n\t# ", $trace );
 
 			if ( is_array( $response ) && isset( $response['request_url'] ) ) {
 				$caller_dump = "\n\tURL: " . $response['request_url'] . $caller_dump;
@@ -507,9 +536,11 @@ class API {
 				0
 			);
 		}
+		// phpcs:enable WordPress.PHP.DevelopmentFunctions.error_log_wp_debug_backtrace_summary
+		// phpcs:enable WordPress.PHP.DevelopmentFunctions.error_log_error_log
 
 		// If error was "invalid API key" then log out the user. (we don't call logout here to avoid infinite loop).
-		if ( 401 == $error_code && ! defined( '\WPMUDEV_APIKEY' ) && ! defined( '\WPMUDEV_OVERRIDE_LOGOUT' ) ) {
+		if ( 401 === (int) $error_code && ! defined( '\WPMUDEV_APIKEY' ) && ! defined( '\WPMUDEV_OVERRIDE_LOGOUT' ) ) {
 			$this->set_api_key( '' );
 		}
 
@@ -527,9 +558,10 @@ class API {
 	 */
 	private function update_membership_data( $data ) {
 		if (
-			isset( $data['membership'] ) &&
-			empty( $data['membership'] ) &&
-			! defined( '\WPMUDEV_APIKEY' ) && $this->get_api_key()
+			isset( $data['membership'] )
+			&& empty( $data['membership'] )
+			&& ! defined( '\WPMUDEV_APIKEY' )
+			&& $this->get_api_key()
 		) {
 			// Clear API key.
 			$this->set_api_key( '' );
@@ -549,10 +581,13 @@ class API {
 	 * @return void
 	 */
 	private function maybe_log( $data ) {
+		// phpcs:disable WordPress.PHP.DevelopmentFunctions.error_log_error_log
+
 		// Only if logging is enabled.
 		if ( defined( '\WPMUDEV_API_DEBUG' ) && \WPMUDEV_API_DEBUG ) {
 			error_log( $data );
 		}
+		// phpcs:enable WordPress.PHP.DevelopmentFunctions.error_log_error_log
 	}
 
 	/**
@@ -576,6 +611,16 @@ class API {
 			// translators: %s Support URL.
 				__( 'This site is currently registered to a different user. Please <a target="_blank" href="%s">contact support for assistance</a>.', 'wpmudev' ),
 				Data::get()->server_url( 'hub/support/' )
+			);
+		} elseif ( 'expired_membership' === $error['code'] ) {
+			$error['message'] = sprintf(
+			// translators: %1$s Hub Account URL, %2$s: Switch to Free URL.
+				__(
+					'Login failed — your WPMU DEV membership has expired. Renew now to regain full access, or switch to our free plan to continue managing all your site in the Hub.<br/><br/><a class="sui-button sui-button-blue" href="%1$s" target="_blank">Renew Membership</a>&nbsp;<a class="sui-button sui-button-ghost" href="%2$s" target="_blank">Switch to Free</a>',
+					'wpmudev'
+				),
+				Data::get()->server_url( 'hub2/account/' ),
+				Data::get()->server_url( 'hub2/?switch-free=1 ' )
 			);
 		}
 

@@ -701,7 +701,7 @@ function forminator_list_pagination( $total, $type = 'listings', $is_ajax = fals
 		}
 
 		?>
-		<ul class="sui-pagination  
+		<ul class="sui-pagination
 		<?php
 		if ( $is_ajax ) {
 			echo 'forminator-ajax-pagination'; }
@@ -1266,5 +1266,69 @@ function forminator_balance_table_tag( $content ) {
 function forminator_format_html( $content ) {
 	$content = forminator_replace_linebreaks( $content );
 	$content = forminator_balance_table_tag( $content );
-	return $content;
+	return forminator_sanitize_rich_textarea_widget_hooks( $content );
+}
+
+/**
+ * Sanitize rich-text textarea content and block admin UI widget hooks.
+ *
+ * @since 1.57.1
+ *
+ * @param string $content Content.
+ * @return string
+ */
+function forminator_sanitize_rich_textarea_widget_hooks( $content ) {
+	if ( ! is_string( $content ) || '' === $content ) {
+		return $content;
+	}
+
+	return wp_kses( $content, forminator_get_rich_textarea_allowed_html() );
+}
+
+/**
+ * Get allowed HTML for public rich-text content rendered in admin screens.
+ *
+ * @since 1.57.1
+ *
+ * @return array
+ */
+function forminator_get_rich_textarea_allowed_html() {
+	$allowed_html = wp_kses_allowed_html( 'post' );
+
+	foreach ( $allowed_html as $tag => $attributes ) {
+		if ( ! is_array( $attributes ) ) {
+			continue;
+		}
+
+		// Public submissions should not carry admin widget state into Entries.
+		unset( $allowed_html[ $tag ]['data-*'] );
+
+		if ( isset( $allowed_html[ $tag ]['class'] ) ) {
+			$allowed_html[ $tag ]['class'] = array(
+				'value_callback' => 'forminator_is_allowed_rich_textarea_class_attribute',
+			);
+		}
+	}
+
+	return $allowed_html;
+}
+
+/**
+ * Check whether a class attribute is safe for public rich-text admin output.
+ *
+ * @since 1.57.1
+ *
+ * @param string $class_value Class attribute value.
+ * @return bool
+ */
+function forminator_is_allowed_rich_textarea_class_attribute( $class_value ) {
+	$classes = preg_split( '/\s+/', $class_value, -1, PREG_SPLIT_NO_EMPTY );
+
+	foreach ( $classes as $class_name ) {
+		if ( preg_match( '/^(sui|fui)-/i', $class_name ) ) {
+			return false;
+		}
+	}
+
+	return true;
 }

@@ -2106,18 +2106,19 @@ function forminator_check_registration_form_permissions( $settings ) {
 		}
 
 		$roles = forminator_get_accessible_user_roles();
-		if ( isset( $settings['registration-user-role'] ) && 'fixed' === $settings['registration-user-role'] ) {
-			if ( isset( $settings['registration-role-field'] ) && ! isset( $roles[ $settings['registration-role-field'] ] )
-				&& 'notCreate' !== $settings['registration-role-field'] ) { // Respect the "Don't create a user in the network's main site" option.
-				return new WP_Error( 'invalid_user_role', $error_message );
-			}
-		} elseif ( ! empty( $settings['user_role'] ) && is_array( $settings['user_role'] ) ) {
-			foreach ( $settings['user_role'] as $user_role ) {
-				if ( isset( $user_role['role'] ) && ! isset( $roles[ $user_role['role'] ] )
-					&& 'notCreate' !== $user_role['role'] ) { // Respect the "Don't create a user in the network's main site" option.
-					return new WP_Error( 'invalid_user_role', $error_message );
+		// Registration honours the conditional roles only for the `conditionally` mode, any other value assigns the fixed role.
+		if ( isset( $settings['registration-user-role'] ) && 'conditionally' === $settings['registration-user-role'] ) {
+			if ( ! empty( $settings['user_role'] ) && is_array( $settings['user_role'] ) ) {
+				foreach ( $settings['user_role'] as $user_role ) {
+					if ( isset( $user_role['role'] ) && ! isset( $roles[ $user_role['role'] ] )
+						&& 'notCreate' !== $user_role['role'] ) { // Respect the "Don't create a user in the network's main site" option.
+						return new WP_Error( 'invalid_user_role', $error_message );
+					}
 				}
 			}
+		} elseif ( isset( $settings['registration-role-field'] ) && ! isset( $roles[ $settings['registration-role-field'] ] )
+			&& 'notCreate' !== $settings['registration-role-field'] ) { // Respect the "Don't create a user in the network's main site" option.
+			return new WP_Error( 'invalid_user_role', $error_message );
 		}
 	}
 	return true;

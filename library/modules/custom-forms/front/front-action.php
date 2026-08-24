@@ -432,7 +432,7 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 			Forminator_Stripe::restore_pending_checkout_session( $payment_id );
 		}
 
-		if ( is_wp_error( $session ) || ! Forminator_Stripe::is_recoverable_checkout_session( $session ) ) {
+		if ( is_wp_error( $session ) || ! Forminator_Stripe::is_recoverable_checkout_session( $session, true ) ) {
 			Forminator_Stripe::remove_pending_checkout_session( $payment_id );
 
 			wp_send_json_error(

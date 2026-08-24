@@ -241,7 +241,11 @@ class Forminator_Core {
 			foreach ( $form_meta as $meta ) {
 				if ( ! empty( $meta['key'] ) && 'forminator_form_meta' === $meta['key']
 					&& ! empty( $meta['value'] ) ) {
-					$value         = maybe_unserialize( $meta['value'] );
+					$value = maybe_unserialize( $meta['value'] );
+					if ( ! is_array( $value ) ) {
+						// XML-RPC escapes the request arguments before this hook runs.
+						$value = maybe_unserialize( wp_unslash( $meta['value'] ) );
+					}
 					$form_settings = $value['settings'] ?? array();
 					// Check if the current user has the required permissions to create or edit Forminator registration forms.
 					return forminator_check_registration_form_permissions( $form_settings );
@@ -692,14 +696,14 @@ class Forminator_Core {
 		// TODO: Should skip fields that has its own sanitize function.
 		if (
 			false === $force && ( 0 === strpos( $current_key, 'url-' ) ||
-			0 === strpos( $current_key, 'select-' ) ||
-			0 === strpos( $current_key, 'radio-' ) ||
-			0 === strpos( $current_key, 'checkbox-' ) ||
 			0 === strpos( $current_key, 'password-' ) ||
 			0 === strpos( $current_key, 'confirm_password-' ) )
 		) {
 			return $data;
 		}
+		$is_choice_field = false === $force && ( 0 === strpos( $current_key, 'select-' ) ||
+			0 === strpos( $current_key, 'radio-' ) ||
+			0 === strpos( $current_key, 'checkbox-' ) );
 
 		$allow_html = array(
 			'variations',
@@ -734,14 +738,14 @@ class Forminator_Core {
 		);
 
 		$allow_iframe = array( 'variations' );
-		if (
+		if ( ! is_array( $data ) && (
 			in_array( $current_key, $allow_html, true ) ||
 			0 === strpos( $current_key, 'html-' ) ||
 			0 === strpos( $current_key, 'textarea-' ) ||
 			false !== strpos( $current_key, '-post-title' ) ||
 			false !== strpos( $current_key, '-post-content' ) ||
 			false !== strpos( $current_key, '-post-excerpt' )
-		) {
+		) ) {
 			if ( in_array( $current_key, $allow_iframe, true ) ) {
 				// To allow iframes in content.
 				add_filter( 'wp_kses_allowed_html', array( __CLASS__, 'maybe_add_iframe_to_kses_allowed_html' ) );
@@ -750,6 +754,10 @@ class Forminator_Core {
 				return $data;
 			}
 			return trim( wp_kses_post( $data ) );
+		}
+
+		if ( ! is_array( $data ) && $is_choice_field ) {
+			return forminator_normalize_choice_option_value( $data );
 		}
 
 		// Allow line breaks.
@@ -771,7 +779,8 @@ class Forminator_Core {
 			return sanitize_text_field( $data );
 		} else {
 			foreach ( $data as $key => $value ) {
-				$data[ $key ] = self::sanitize_array( $value, $key, $force );
+				$child_key    = $is_choice_field ? $current_key : $key;
+				$data[ $key ] = self::sanitize_array( $value, $child_key, $force );
 			}
 
 			return $data;

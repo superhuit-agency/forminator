@@ -110,10 +110,8 @@ function forminator_submissions_content_details( $detail_item, $inside_group = f
 											echo '</td>';
 									} else {
 										echo '<td style="padding-top: 5px; padding-bottom: 5px;">';
-										if ( strpos( $sub_entry['key'], 'textarea' ) !== false ) {
-											$sub_entry['value'] = forminator_format_html( $sub_entry['value'] );
-										}
-										echo wp_kses_post( $sub_entry['value'] );
+										// PHPCS:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+										echo forminator_submissions_render_entry_value( $sub_entry, $sub_entry['value'] );
 										if ( 1 !== $sub_key && 2 < $end && 'group' === $detail_item['type'] ) {
 											echo '<span class="sui-accordion-open-indicator fui-mobile-only" aria-hidden="true"><i class="sui-icon-chevron-down"></i></span>';
 										}
@@ -156,7 +154,10 @@ function forminator_submissions_content_details( $detail_item, $inside_group = f
 															if ( empty( $sub_entry['sub_entries'] ) ) {
 																?>
 																<span class="sui-description">
-																	<?php echo wp_kses_post( $sub_entry['value'] ); ?>
+																	<?php
+																	// PHPCS:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+																	echo forminator_submissions_render_entry_value( $sub_entry, $sub_entry['value'] );
+																	?>
 																</span>
 																<?php
 															} else {
@@ -208,7 +209,9 @@ function forminator_submissions_content_details( $detail_item, $inside_group = f
 
 					<?php if ( 'textarea' === $detail_item['type'] && ( isset( $detail_item['rich'] ) && 'true' === $detail_item['rich'] ) ) { ?>
 
-						<div class="fui-rich-textarea"><?php echo wp_kses_post( forminator_format_html( $detail_item['value'] ) ); ?></div>
+						<div class="fui-rich-textarea">
+							<?php echo wp_kses_post( forminator_format_html( $detail_item['value'] ) ); ?>
+						</div>
 
 						<?php
 					} elseif ( 'number' === $detail_item['type'] || 'currency' === $detail_item['type'] || ( 'calculation' === $detail_item['type'] && is_numeric( $detail_item['value'] ) ) ) {
@@ -225,7 +228,16 @@ function forminator_submissions_content_details( $detail_item, $inside_group = f
 
 					<?php } elseif ( 'postdata' === $detail_item['type'] ) { ?>
 
-						<span class="sui-description"><?php echo wp_kses_post( forminator_balance_table_tag( $detail_item['value'] ) ); ?></span>
+						<span class="sui-description"><?php echo wp_kses_post( forminator_format_html( $detail_item['value'] ) ); ?></span>
+
+					<?php } elseif ( in_array( $detail_item['type'], array( 'radio', 'select', 'checkbox' ), true ) ) { ?>
+
+						<span class="sui-description">
+							<?php
+							// PHPCS:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+							echo forminator_submissions_render_entry_value( $detail_item, $detail_item['value'] );
+							?>
+						</span>
 
 					<?php } else { ?>
 
@@ -250,7 +262,12 @@ function forminator_submissions_content_details( $detail_item, $inside_group = f
 									</span>
 								</div>
 								<div class="sui-col-md-9">
-									<span class="sui-description"><?php echo wp_kses_post( $sub_entry['value'] ); ?></span>
+									<span class="sui-description">
+										<?php
+										// PHPCS:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+										echo forminator_submissions_render_entry_value( $sub_entry, $sub_entry['value'] );
+										?>
+									</span>
 								</div>
 							</div>
 						</div>
@@ -266,6 +283,31 @@ function forminator_submissions_content_details( $detail_item, $inside_group = f
 	</div>
 
 	<?php
+}
+
+/**
+ * Render submission entry value with appropriate escaping.
+ *
+ * @since 1.57.1
+ *
+ * @param array  $entry_item Entry item with type, key, and rich properties.
+ * @param string $value      Field value.
+ *
+ * @return string Escaped value ready for output.
+ */
+function forminator_submissions_render_entry_value( $entry_item, $value ) {
+	$type = isset( $entry_item['type'] ) ? $entry_item['type'] : '';
+
+	if ( in_array( $type, array( 'radio', 'select', 'checkbox' ), true ) ) {
+		return esc_html( $value );
+	}
+
+	if ( ( isset( $entry_item['rich'] ) && 'true' === $entry_item['rich'] ) ||
+		( isset( $entry_item['key'] ) && false !== strpos( $entry_item['key'], 'textarea' ) ) ) {
+		return wp_kses_post( forminator_format_html( $value ) );
+	}
+
+	return wp_kses_post( $value );
 }
 
 /**

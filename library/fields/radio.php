@@ -461,8 +461,9 @@ class Forminator_Radio extends Forminator_Field {
 	 * @param array|string $data Data.
 	 */
 	public function validate( $field, $data ) {
-		$id = self::get_property( 'element_id', $field );
-		if ( ! empty( $data ) && false === array_search( strval( htmlspecialchars_decode( $data ) ), array_map( 'strval', array_column( $field['options'], 'value' ) ), true ) ) {
+		$id            = self::get_property( 'element_id', $field );
+		$option_values = array_map( 'forminator_normalize_choice_option_value', array_column( $field['options'], 'value' ) );
+		if ( ! empty( $data ) && false === array_search( forminator_normalize_choice_option_value( $data ), $option_values, true ) ) {
 			$this->validation_message[ $id ] = apply_filters(
 				'forminator_radio_field_nonexistent_validation_message',
 				esc_html__( 'Selected value does not exist.', 'forminator' ),
@@ -511,14 +512,9 @@ class Forminator_Radio extends Forminator_Field {
 	 */
 	public function sanitize( $field, $data ) {
 		$original_data = $data;
-		// Due to members' request to allow html, we now use wp_kses_post for sanitization of this field.
-		if ( is_array( $data ) ) {
-			foreach ( $data as $key => $val ) {
-				$data[ $key ] = is_scalar( $val ) ? trim( wp_kses_post( $val ) ) : '';
-			}
-		} else {
-			$data = trim( wp_kses_post( $data ) );
-		}
+
+		$data = $this->sanitize_choice_data( $data );
+
 		return apply_filters( 'forminator_field_single_sanitize', $data, $field, $original_data );
 	}
 

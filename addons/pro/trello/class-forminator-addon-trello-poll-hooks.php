@@ -146,7 +146,10 @@ class Forminator_Trello_Poll_Hooks extends Forminator_Integration_Poll_Hooks {
 
 			if ( isset( $connection_settings['due_date'] ) && ! empty( $connection_settings['due_date'] ) ) {
 				$due_date    = $connection_settings['due_date'];
-				$args['due'] = $due_date;
+				$parsed_date = date_create( $due_date );
+				if ( false !== $parsed_date ) {
+					$args['due'] = date_format( $parsed_date, 'c' );
+				}
 			}
 
 			if ( isset( $connection_settings['position'] ) ) {

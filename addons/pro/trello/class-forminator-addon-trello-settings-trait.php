@@ -375,6 +375,7 @@ trait Forminator_Trello_Settings_Trait {
 			'card_description'       => $this->get_multi_id_settings( $multi_id, 'card_description', "{quiz_answer}\n{quiz_result}" ),
 			'card_description_error' => '',
 			'due_date'               => $this->get_multi_id_settings( $multi_id, 'due_date' ),
+			'due_date_error'         => '',
 			'position'               => $this->get_multi_id_settings( $multi_id, 'position', 'bottom' ),
 			'position_error'         => '',
 			'positions'              => $positions,
@@ -487,19 +488,19 @@ trait Forminator_Trello_Settings_Trait {
 				$input_exceptions = new Forminator_Integration_Settings_Exception();
 
 				if ( empty( $card_name ) ) {
-					$input_exceptions->add_input_exception( 'Please specify card name.', 'card_name_error' );
+					$input_exceptions->add_input_exception( esc_html__( 'Please specify card name.', 'forminator' ), 'card_name_error' );
 				}
 
 				if ( empty( $card_description ) ) {
-					$input_exceptions->add_input_exception( 'Please specify card description.', 'card_description_error' );
+					$input_exceptions->add_input_exception( esc_html__( 'Please specify card description.', 'forminator' ), 'card_description_error' );
 				}
 
 				if ( empty( $position ) ) {
-					$input_exceptions->add_input_exception( 'Please specify position.', 'position_error' );
+					$input_exceptions->add_input_exception( esc_html__( 'Please specify position.', 'forminator' ), 'position_error' );
 				}
 
 				if ( ! in_array( $position, array_keys( $positions ), true ) ) {
-					$input_exceptions->add_input_exception( 'Please pick valid position.', 'position_error' );
+					$input_exceptions->add_input_exception( esc_html__( 'Please pick valid position.', 'forminator' ), 'position_error' );
 				}
 
 				// optional label.
@@ -508,7 +509,7 @@ trait Forminator_Trello_Settings_Trait {
 					foreach ( $label_ids as $label_id ) {
 						// phpcs:ignore WordPress.PHP.StrictInArray.MissingTrueStrict
 						if ( ! in_array( $label_id, $labels_keys ) ) {
-							$input_exceptions->add_input_exception( 'Please pick valid label.', 'label_ids_error' );
+							$input_exceptions->add_input_exception( esc_html__( 'Please pick valid label.', 'forminator' ), 'label_ids_error' );
 						}
 					}
 				} else {
@@ -521,11 +522,18 @@ trait Forminator_Trello_Settings_Trait {
 					foreach ( $member_ids as $member_id ) {
 						// phpcs:ignore WordPress.PHP.StrictInArray.MissingTrueStrict
 						if ( ! in_array( $member_id, $members_keys ) ) {
-							$input_exceptions->add_input_exception( 'Please pick valid member.', 'member_ids_error' );
+							$input_exceptions->add_input_exception( esc_html__( 'Please pick valid member.', 'forminator' ), 'member_ids_error' );
 						}
 					}
 				} else {
 					$member_ids = array();
+				}
+
+				if ( ! empty( $due_date ) && false === strpos( $due_date, '{' ) ) {
+					$parsed_date = date_create_from_format( 'j F Y', $due_date );
+					if ( false === $parsed_date ) {
+						$input_exceptions->add_input_exception( esc_html__( 'Please enter a valid due date.', 'forminator' ), 'due_date_error' );
+					}
 				}
 
 				if ( $input_exceptions->input_exceptions_is_available() ) {

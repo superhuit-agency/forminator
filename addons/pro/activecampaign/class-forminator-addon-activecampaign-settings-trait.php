@@ -317,7 +317,7 @@ trait Forminator_Activecampaign_Settings_Trait {
 
 				$input_exceptions = new Forminator_Integration_Settings_Exception();
 				if ( empty( $fields_map['email'] ) ) {
-					$input_exceptions->add_input_exception( 'Please assign field for Email Address', 'email_error' );
+					$input_exceptions->add_input_exception( esc_html__( 'Please assign field for Email Address', 'forminator' ), 'email_error' );
 				}
 
 				foreach ( $fields as $key => $title ) {

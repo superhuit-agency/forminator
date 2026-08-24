@@ -2536,9 +2536,10 @@ class Forminator_Stripe extends Forminator_Field {
 	 * @since 1.56
 	 *
 	 * @param mixed $session Checkout Session object.
+	 * @param bool  $allow_completed_paid Whether to allow a completed paid session that is still tracked locally.
 	 * @return bool
 	 */
-	public static function is_recoverable_checkout_session( $session ): bool {
+	public static function is_recoverable_checkout_session( $session, bool $allow_completed_paid = false ): bool {
 		if ( ! is_object( $session ) || empty( $session->id ) ) {
 			return false;
 		}
@@ -2546,19 +2547,19 @@ class Forminator_Stripe extends Forminator_Field {
 		$session_status = isset( $session->status ) ? (string) $session->status : '';
 		$payment_status = isset( $session->payment_status ) ? (string) $session->payment_status : '';
 
-		if ( 'paid' === $payment_status ) {
-			return true;
+		if ( 'expired' === $session_status ) {
+			return false;
 		}
 
-		if ( 'expired' === $session_status || 'complete' === $session_status ) {
-			return false;
+		if ( 'complete' === $session_status ) {
+			return $allow_completed_paid && 'paid' === $payment_status;
 		}
 
 		if ( 'unpaid' === $payment_status ) {
 			return false;
 		}
 
-		return 'paid' !== $payment_status;
+		return true;
 	}
 
 	/**

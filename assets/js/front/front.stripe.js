@@ -983,7 +983,7 @@
 			if ( Object.keys(address).length ) {
 				billingDetails.address = address;
 			}
-			
+
 			return Object.keys(billingDetails).length ? billingDetails : null;
 		},
 
@@ -1692,7 +1692,7 @@
 			var $target_message = this._form.find('.forminator-response-message');
 			var wasSubmitIntent = ! this.intent;
 
-			$target_message.html('<p>' + message + '</p>');
+			$target_message.empty().append($('<p></p>').text(message));
 			this.unfrozeForm($target_message);
 
 			if ( wasSubmitIntent ) {

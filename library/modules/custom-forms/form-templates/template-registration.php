@@ -192,8 +192,8 @@ class Forminator_Template_Registration extends Forminator_Template {
 			'payment_require_ssl'               => 'true,',
 			'submission-file'                   => 'delete',
 			'options'                           => array(),
-			// Site Registration.
-			'site-registration'                 => 'enable',
+			// Site Registration. Only the main site can create sites, so it stays off everywhere else.
+			'site-registration'                 => forminator_is_main_site() ? 'enable' : 'disable',
 			'site-registration-name-field'      => 'text-1',
 			'site-registration-title-field'     => 'text-1',
 			'site-registration-role-field'      => 'administrator',
