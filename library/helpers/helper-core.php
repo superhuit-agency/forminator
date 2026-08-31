@@ -2312,3 +2312,65 @@ function forminator_get_server_url( string $path = '' ): string {
 
 	return $base . $path;
 }
+
+/**
+ * Unserialize data without instantiating PHP objects.
+ *
+ * Entry meta and similar visitor-influenced values must not use maybe_unserialize(),
+ * which allows arbitrary class instantiation (PHP Object Injection).
+ *
+ * @since 1.57.2
+ *
+ * @param mixed $data Data that might be serialized.
+ * @return mixed Unserialized data with objects blocked, the original value if not serialized, or false on failure / rejected object payloads.
+ */
+function forminator_safe_maybe_unserialize( $data ) {
+	if ( ! is_serialized( $data ) ) {
+		return $data;
+	}
+
+	$data = trim( $data );
+
+	// Reject top-level object / enum payloads without touching unserialize().
+	// Note: 'C' is already blocked by is_serialized(); 'E' is not covered by allowed_classes => false.
+	// Return false (same as a failed unserialize) so callers that index the result as an array
+	// keep the previous soft-fail behavior instead of TypeError on a string.
+	$token = $data[0];
+	if ( 'O' === $token || 'E' === $token ) {
+		return false;
+	}
+
+	// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_unserialize, WordPress.PHP.NoSilencedErrors.Discouraged -- allowed_classes false blocks object injection; silence matches WP maybe_unserialize().
+	$unserialized = @unserialize( $data, array( 'allowed_classes' => false ) );
+
+	// Distinguish failed unserialize from a stored boolean false (`b:0;`).
+	if ( false === $unserialized && 'b:0;' !== $data ) {
+		return false;
+	}
+
+	return forminator_strip_incomplete_classes( $unserialized );
+}
+
+/**
+ * Replace __PHP_Incomplete_Class instances with an empty string.
+ *
+ * Produced when unserialize() encounters disallowed classes.
+ *
+ * @since 1.57.2
+ *
+ * @param mixed $value Value that may contain incomplete class instances.
+ * @return mixed Value with incomplete classes removed.
+ */
+function forminator_strip_incomplete_classes( $value ) {
+	if ( $value instanceof __PHP_Incomplete_Class ) {
+		return '';
+	}
+
+	if ( is_array( $value ) ) {
+		foreach ( $value as $key => $item ) {
+			$value[ $key ] = forminator_strip_incomplete_classes( $item );
+		}
+	}
+
+	return $value;
+}

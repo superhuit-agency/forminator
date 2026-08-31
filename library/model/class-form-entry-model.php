@@ -355,17 +355,10 @@ class Forminator_Form_Entry_Model {
 		$sql             = "SELECT `meta_id`, `meta_key`, `meta_value` FROM {$table_meta_name} WHERE `entry_id` = %d";
 		$results         = $db->get_results( $db->prepare( $sql, $this->entry_id ) );
 		foreach ( $results as $result ) {
-			$meta_value = $result->meta_value;
-			// Form UID is visitor-controlled, so only unwrap serialized string values.
-			if ( 'form_uid' === $result->meta_key ) {
-				$meta_value = is_serialized_string( $meta_value ) ? maybe_unserialize( $meta_value ) : $meta_value;
-			} else {
-				$meta_value = is_array( $meta_value ) ? array_map( 'maybe_unserialize', $meta_value ) : maybe_unserialize( $meta_value );
-			}
-
+			// Entry meta is visitor-influenced; never instantiate PHP objects on load.
 			$this->meta_data[ $result->meta_key ] = array(
 				'id'    => $result->meta_id,
-				'value' => $meta_value,
+				'value' => forminator_safe_maybe_unserialize( $result->meta_value ),
 			);
 		}
 
@@ -2625,7 +2618,8 @@ class Forminator_Form_Entry_Model {
 		$updated_meta = array(
 			'entry_id'   => $this->entry_id,
 			'meta_key'   => $meta_key, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
-			'meta_value' => $default_value, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+			// Mirror set_fields(): serialize consistently so raw object payloads are never stored as-is.
+			'meta_value' => maybe_serialize( $default_value ), // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 		);
 
 		if ( ! empty( $date_updated ) ) {

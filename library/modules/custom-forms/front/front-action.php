@@ -390,6 +390,16 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 			);
 		}
 
+		// A Checkout Session that already produced an entry can never be recovered again.
+		if ( Forminator_Stripe::is_consumed_checkout_session( $payment_id ) ) {
+			wp_send_json_error(
+				array(
+					'message'     => esc_html__( 'Checkout Session ID is not valid', 'forminator' ),
+					'recoverable' => false,
+				)
+			);
+		}
+
 		$this->init_properties();
 		self::check_fields_visibility();
 

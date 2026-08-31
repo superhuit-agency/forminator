@@ -279,7 +279,7 @@ class Forminator_Reports {
 					if ( ! empty( $payment_data ) ) {
 						$payment_value = array_map(
 							function ( $payment ) {
-								return maybe_unserialize( $payment->meta_value );
+								return forminator_safe_maybe_unserialize( $payment->meta_value );
 							},
 							$payment_data
 						);

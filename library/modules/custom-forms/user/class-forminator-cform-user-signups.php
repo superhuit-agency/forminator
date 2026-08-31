@@ -97,7 +97,7 @@ class Forminator_CForm_User_Signups {
 			$this->$key = $value;
 		}
 
-		$this->meta     = maybe_unserialize( $signup->meta );
+		$this->meta     = forminator_safe_maybe_unserialize( $signup->meta );
 		$this->entry    = new Forminator_Form_Entry_Model( $this->meta['entry_id'] );
 		$this->form     = Forminator_Base_Form_Model::get_model( $this->meta['form_id'] );
 		$this->settings = $this->form->settings;
