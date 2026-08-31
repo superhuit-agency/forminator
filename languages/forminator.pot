@@ -2,9 +2,9 @@
 # This file is distributed under the same license as the Forminator package.
 msgid ""
 msgstr ""
-"Project-Id-Version: Forminator 1.57.1\n"
+"Project-Id-Version: Forminator 1.57.2\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/build\n"
-"POT-Creation-Date: 2026-08-18 11:16:42+00:00\n"
+"POT-Creation-Date: 2026-08-27 08:18:43+00:00\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -157,7 +157,7 @@ msgstr ""
 #: addons/pro/activecampaign/class-forminator-addon-activecampaign-settings-trait.php:273
 #: addons/pro/hubspot/class-forminator-addon-hubspot-settings-trait.php:105
 #: admin/locale.php:1276 library/field-autofill-providers/class-wp-user.php:71
-#: library/fields/name.php:92 library/model/class-form-entry-model.php:594
+#: library/fields/name.php:92 library/model/class-form-entry-model.php:587
 #: library/modules/custom-forms/form-templates/template-contact-form.php:53
 #: library/modules/custom-forms/form-templates/template-contact-form.php:55
 #: library/modules/custom-forms/form-templates/template-leads.php:80
@@ -172,7 +172,7 @@ msgstr ""
 #: addons/pro/activecampaign/class-forminator-addon-activecampaign-settings-trait.php:274
 #: addons/pro/hubspot/class-forminator-addon-hubspot-settings-trait.php:106
 #: admin/locale.php:1278 library/field-autofill-providers/class-wp-user.php:75
-#: library/fields/name.php:94 library/model/class-form-entry-model.php:596
+#: library/fields/name.php:94 library/model/class-form-entry-model.php:589
 #: library/modules/custom-forms/form-templates/template-contact-form.php:57
 #: library/modules/custom-forms/form-templates/template-leads.php:84
 #: library/modules/custom-forms/form-templates/template-newsletter.php:57
@@ -949,7 +949,7 @@ msgid ""
 msgstr ""
 
 #: addons/pro/e-signature/e-signature.php:107
-#: library/model/class-form-entry-model.php:1588
+#: library/model/class-form-entry-model.php:1581
 msgid "(no filename)"
 msgstr ""
 
@@ -2377,7 +2377,7 @@ msgstr ""
 #: addons/pro/trello/class-forminator-addon-trello-form-hooks.php:275
 #: addons/pro/trello/class-forminator-addon-trello-form-hooks.php:290
 #: library/helpers/helper-fields.php:1893
-#: library/model/class-form-entry-model.php:1884
+#: library/model/class-form-entry-model.php:1877
 msgid "Edit Post"
 msgstr ""
 
@@ -3438,7 +3438,7 @@ msgstr ""
 #: library/addon/admin/class-integration-admin-ajax.php:97
 #: library/class-export.php:194 library/helpers/helper-core.php:148
 #: library/helpers/helper-core.php:162
-#: library/modules/custom-forms/front/front-action.php:3676
+#: library/modules/custom-forms/front/front-action.php:3686
 msgid "Invalid request, you are not allowed to do that action."
 msgstr ""
 
@@ -4708,7 +4708,7 @@ msgstr ""
 #: admin/classes/class-admin-l10n.php:317 admin/locale.php:453
 #: library/field-autofill-providers/class-wp-post.php:59
 #: library/helpers/helper-fields.php:1890
-#: library/model/class-form-entry-model.php:1877
+#: library/model/class-form-entry-model.php:1870
 #: library/modules/polls/admin/admin-loader.php:195
 #: library/modules/quizzes/admin/admin-loader.php:577
 #: library/render/class-widget.php:127
@@ -5786,25 +5786,25 @@ msgid "null"
 msgstr ""
 
 #: admin/locale.php:9 library/fields/date.php:89
-#: library/model/class-form-entry-model.php:591
+#: library/model/class-form-entry-model.php:584
 msgid "Day"
 msgstr ""
 
 #: admin/locale.php:10 library/fields/date.php:91
-#: library/model/class-form-entry-model.php:592
+#: library/model/class-form-entry-model.php:585
 msgid "Month"
 msgstr ""
 
 #: admin/locale.php:11 library/fields/date.php:93
-#: library/model/class-form-entry-model.php:590
+#: library/model/class-form-entry-model.php:583
 msgid "Year"
 msgstr ""
 
-#: admin/locale.php:12 library/model/class-form-entry-model.php:581
+#: admin/locale.php:12 library/model/class-form-entry-model.php:574
 msgid "Hour"
 msgstr ""
 
-#: admin/locale.php:13 library/model/class-form-entry-model.php:582
+#: admin/locale.php:13 library/model/class-form-entry-model.php:575
 msgid "Minute"
 msgstr ""
 
@@ -6558,7 +6558,7 @@ msgid "10 January 2020"
 msgstr ""
 
 #: admin/locale.php:413 library/fields/time.php:91
-#: library/model/class-form-entry-model.php:583
+#: library/model/class-form-entry-model.php:576
 msgid "AM/PM"
 msgstr ""
 
@@ -6852,7 +6852,7 @@ msgid "Retake"
 msgstr ""
 
 #: admin/locale.php:496 library/helpers/helper-fields.php:1899
-#: library/model/class-form-entry-model.php:1910
+#: library/model/class-form-entry-model.php:1903
 #: library/modules/quizzes/admin/admin-loader.php:659
 msgid "Content"
 msgstr ""
@@ -7283,7 +7283,7 @@ msgstr ""
 msgid "Do not Send Email"
 msgstr ""
 
-#: admin/locale.php:606 library/model/class-form-entry-model.php:1539
+#: admin/locale.php:606 library/model/class-form-entry-model.php:1532
 msgid "Send Email"
 msgstr ""
 
@@ -10064,7 +10064,7 @@ msgid "Submission limit"
 msgstr ""
 
 #: admin/locale.php:1277 library/fields/name.php:93
-#: library/model/class-form-entry-model.php:595
+#: library/model/class-form-entry-model.php:588
 #: library/modules/custom-forms/form-templates/template-contact-form.php:56
 #: library/modules/custom-forms/form-templates/template-leads.php:83
 #: library/modules/custom-forms/form-templates/template-newsletter.php:56
@@ -10073,7 +10073,7 @@ msgid "Middle Name"
 msgstr ""
 
 #: admin/locale.php:1279 library/fields/name.php:91
-#: library/model/class-form-entry-model.php:593
+#: library/model/class-form-entry-model.php:586
 #: library/modules/custom-forms/form-templates/template-contact-form.php:54
 #: library/modules/custom-forms/form-templates/template-leads.php:81
 #: library/modules/custom-forms/form-templates/template-newsletter.php:54
@@ -12059,7 +12059,7 @@ msgid "px"
 msgstr ""
 
 #: admin/locale.php:1733 library/fields/stripe-payment-element.php:104
-#: library/fields/stripe.php:161
+#: library/fields/stripe.php:248
 msgid "Credit / Debit Card"
 msgstr ""
 
@@ -12856,7 +12856,7 @@ msgid "Choose whether to allow this field to be used in calculations or not."
 msgstr ""
 
 #: admin/locale.php:1915 library/helpers/helper-fields.php:1909
-#: library/model/class-form-entry-model.php:1940
+#: library/model/class-form-entry-model.php:1933
 msgid "Excerpt"
 msgstr ""
 
@@ -13905,7 +13905,7 @@ msgid "Apartment, suite, etc."
 msgstr ""
 
 #: admin/locale.php:2154 library/fields/address.php:102
-#: library/model/class-form-entry-model.php:585
+#: library/model/class-form-entry-model.php:578
 msgid "City"
 msgstr ""
 
@@ -13918,7 +13918,7 @@ msgid "ZIP / Postal code"
 msgstr ""
 
 #: admin/locale.php:2157 library/fields/address.php:105
-#: library/model/class-form-entry-model.php:584
+#: library/model/class-form-entry-model.php:577
 msgid "Country"
 msgstr ""
 
@@ -14040,7 +14040,7 @@ msgid ""
 "WordPress sites."
 msgstr ""
 
-#: admin/locale.php:2183 library/fields/stripe.php:3106
+#: admin/locale.php:2183 library/fields/stripe.php:3748
 msgid "Subscription"
 msgstr ""
 
@@ -14071,7 +14071,7 @@ msgstr ""
 
 #: admin/locale.php:2190
 #: admin/views/custom-form/entries/content-details.php:328
-#: library/fields/stripe.php:3103
+#: library/fields/stripe.php:3745
 #: library/modules/custom-forms/front/front-mail.php:825
 msgid "One Time"
 msgstr ""
@@ -14700,7 +14700,7 @@ msgid "Email input label"
 msgstr ""
 
 #: admin/locale.php:2330
-#: library/modules/custom-forms/front/front-action.php:2001
+#: library/modules/custom-forms/front/front-action.php:2011
 msgid "Send draft link to"
 msgstr ""
 
@@ -14709,7 +14709,7 @@ msgid "Placeholder (Optional)"
 msgstr ""
 
 #: admin/locale.php:2332
-#: library/modules/custom-forms/front/front-action.php:2002
+#: library/modules/custom-forms/front/front-action.php:2012
 msgid "E.g., johndoe@gmail.com"
 msgstr ""
 
@@ -14718,7 +14718,7 @@ msgid "Send link button label"
 msgstr ""
 
 #: admin/locale.php:2334
-#: library/modules/custom-forms/front/front-action.php:2003
+#: library/modules/custom-forms/front/front-action.php:2013
 msgid "Send draft link"
 msgstr ""
 
@@ -17453,7 +17453,7 @@ msgid ""
 msgstr ""
 
 #: admin/views/settings/payments/section-stripe.php:46
-#: library/fields/stripe-payment-element.php:76 library/fields/stripe.php:133
+#: library/fields/stripe-payment-element.php:76 library/fields/stripe.php:220
 msgid "Stripe"
 msgstr ""
 
@@ -18184,7 +18184,7 @@ msgid "Failed to disconnected from this module"
 msgstr ""
 
 #: library/addon/admin/class-integration-admin-ajax.php:370
-#: library/modules/custom-forms/front/front-action.php:1768
+#: library/modules/custom-forms/front/front-action.php:1778
 #. translators: %s: Required field
 #. translators: %s: Field name
 msgid "Field %s is required"
@@ -18575,7 +18575,7 @@ msgid "Invalid nonce."
 msgstr ""
 
 #: library/class-export.php:210
-#: library/modules/custom-forms/front/front-action.php:3716
+#: library/modules/custom-forms/front/front-action.php:3726
 #: library/modules/custom-forms/user/class-forminator-cform-user-data.php:97
 #: library/modules/custom-forms/user/class-forminator-cform-user-data.php:249
 msgid "Invalid form ID."
@@ -18700,8 +18700,8 @@ msgid "Integration is not activable"
 msgstr ""
 
 #: library/class-migration.php:1130
-#: library/fields/stripe-payment-element.php:120 library/fields/stripe.php:186
-#: library/fields/stripe.php:923
+#: library/fields/stripe-payment-element.php:120 library/fields/stripe.php:273
+#: library/fields/stripe.php:1010
 msgid "Plan 1"
 msgstr ""
 
@@ -18849,7 +18849,7 @@ msgstr ""
 msgid "This field is required. Please select the country."
 msgstr ""
 
-#: library/fields/address.php:101 library/model/class-form-entry-model.php:588
+#: library/fields/address.php:101 library/model/class-form-entry-model.php:581
 msgid "Street Address"
 msgstr ""
 
@@ -19258,24 +19258,24 @@ msgstr ""
 msgid "This field is required. Please enter the post title."
 msgstr ""
 
-#: library/fields/postdata.php:108 library/model/class-form-entry-model.php:597
+#: library/fields/postdata.php:108 library/model/class-form-entry-model.php:590
 #: library/modules/custom-forms/form-templates/template-post.php:53
 msgid "Post Title"
 msgstr ""
 
-#: library/fields/postdata.php:109 library/model/class-form-entry-model.php:598
+#: library/fields/postdata.php:109 library/model/class-form-entry-model.php:591
 #: library/modules/custom-forms/form-templates/template-post.php:54
 msgid "Post Content"
 msgstr ""
 
-#: library/fields/postdata.php:110 library/model/class-form-entry-model.php:599
+#: library/fields/postdata.php:110 library/model/class-form-entry-model.php:592
 #: library/modules/custom-forms/form-templates/template-post.php:55
 msgid "Post Excerpt"
 msgstr ""
 
 #: library/fields/postdata.php:112 library/helpers/helper-fields.php:1930
-#: library/model/class-form-entry-model.php:1971
-#: library/model/class-form-entry-model.php:1988
+#: library/model/class-form-entry-model.php:1964
+#: library/model/class-form-entry-model.php:1981
 #: library/modules/custom-forms/form-templates/template-post.php:57
 msgid "Category"
 msgstr ""
@@ -19334,94 +19334,96 @@ msgstr ""
 msgid "The slider should be less than %1$s and greater than %2$s."
 msgstr ""
 
-#: library/fields/stripe.php:475 library/fields/stripe.php:1956
+#: library/fields/stripe.php:562 library/fields/stripe.php:2048
 msgid "This field is required to complete your payment."
 msgstr ""
 
-#: library/fields/stripe.php:994
+#: library/fields/stripe.php:1081
 msgid "Unable to process checkout. Amount is below the minimum payment allowed."
 msgstr ""
 
-#: library/fields/stripe.php:998
+#: library/fields/stripe.php:1085
 msgid "Unable to initialize checkout. Please try again."
 msgstr ""
 
-#: library/fields/stripe.php:1233
+#: library/fields/stripe.php:1320
 msgid "Payment already succeeded."
 msgstr ""
 
-#: library/fields/stripe.php:1259
+#: library/fields/stripe.php:1346
 msgid "Your Payment ID is empty, please reload the page and try again!"
 msgstr ""
 
-#: library/fields/stripe.php:1286
+#: library/fields/stripe.php:1373
 msgid "The selected Payment Method is not supported."
 msgstr ""
 
-#: library/fields/stripe.php:1290 library/fields/stripe.php:1460
-#: library/fields/stripe.php:1522 library/fields/stripe.php:1880
-#: library/modules/custom-forms/front/front-action.php:1326
+#: library/fields/stripe.php:1377 library/fields/stripe.php:1547
+#: library/fields/stripe.php:1609 library/fields/stripe.php:1972
+#: library/modules/custom-forms/front/front-action.php:1336
 msgid "Payment amount should be greater than 0."
 msgstr ""
 
-#: library/fields/stripe.php:1295
+#: library/fields/stripe.php:1382
 msgid "Your Payment ID is empty!"
 msgstr ""
 
-#: library/fields/stripe.php:1300
+#: library/fields/stripe.php:1387
 msgid "Your Payment Method is empty!"
 msgstr ""
 
-#: library/fields/stripe.php:1377
-#: library/modules/custom-forms/front/front-action.php:1369
+#: library/fields/stripe.php:1464
+#: library/modules/custom-forms/front/front-action.php:1379
 msgid "Forminator Stripe Subscription Add-on is required to submit this form."
 msgstr ""
 
-#: library/fields/stripe.php:1394
+#: library/fields/stripe.php:1481
 msgid ""
 "Please update the Forminator Stripe Subscription Add-on to the latest "
 "version to submit this form."
 msgstr ""
 
-#: library/fields/stripe.php:1617 library/fields/stripe.php:1633
-#: library/fields/stripe.php:2237 library/fields/stripe.php:2247
-#: library/fields/stripe.php:2266 library/fields/stripe.php:2279
-#: library/modules/custom-forms/front/front-action.php:426
+#: library/fields/stripe.php:1704 library/fields/stripe.php:1720
+#: library/fields/stripe.php:2329 library/fields/stripe.php:2339
+#: library/fields/stripe.php:2358 library/fields/stripe.php:2371
+#: library/fields/stripe.php:2401 library/fields/stripe.php:2411
+#: library/modules/custom-forms/front/front-action.php:397
+#: library/modules/custom-forms/front/front-action.php:436
 msgid "Checkout Session ID is not valid"
 msgstr ""
 
-#: library/fields/stripe.php:1641 library/fields/stripe.php:1652
-#: library/fields/stripe.php:2287 library/fields/stripe.php:2298
+#: library/fields/stripe.php:1728 library/fields/stripe.php:1739
+#: library/fields/stripe.php:2379 library/fields/stripe.php:2390
 #: library/helpers/helper-core.php:505
-#: library/modules/custom-forms/front/front-action.php:440
+#: library/modules/custom-forms/front/front-action.php:450
 msgid "Payment failed. Please try again."
 msgstr ""
 
-#: library/fields/stripe.php:2097
+#: library/fields/stripe.php:2189
 msgid "Payment Intent object is not valid Payment object."
 msgstr ""
 
-#: library/fields/stripe.php:2102
+#: library/fields/stripe.php:2194
 msgid "Payment Intent ID is not valid!"
 msgstr ""
 
-#: library/fields/stripe.php:2108 library/fields/stripe.php:2127
+#: library/fields/stripe.php:2200 library/fields/stripe.php:2219
 msgid "Payment Intent ID is not valid"
 msgstr ""
 
-#: library/fields/stripe.php:2207 library/fields/stripe.php:2214
+#: library/fields/stripe.php:2299 library/fields/stripe.php:2306
 msgid "Checkout Session object is not valid."
 msgstr ""
 
-#: library/fields/stripe.php:2222 library/fields/stripe.php:2229
+#: library/fields/stripe.php:2314 library/fields/stripe.php:2321
 msgid "Checkout Session ID is not valid!"
 msgstr ""
 
-#: library/fields/stripe.php:2623 library/fields/stripe.php:2731
+#: library/fields/stripe.php:3265 library/fields/stripe.php:3373
 msgid "Stripe Payment ID does not exist."
 msgstr ""
 
-#: library/fields/stripe.php:2666
+#: library/fields/stripe.php:3308
 #: library/modules/custom-forms/front/front-action.php:387
 msgid "Stripe Checkout Session ID does not exist."
 msgstr ""
@@ -20022,29 +20024,29 @@ msgid "here"
 msgstr ""
 
 #: library/helpers/helper-fields.php:1869
-#: library/model/class-form-entry-model.php:1599
+#: library/model/class-form-entry-model.php:1592
 msgid "View File"
 msgstr ""
 
 #: library/helpers/helper-fields.php:1886
-#: library/model/class-form-entry-model.php:1875
+#: library/model/class-form-entry-model.php:1868
 msgid "(no title)"
 msgstr ""
 
 #: library/helpers/helper-fields.php:1953
-#: library/model/class-form-entry-model.php:2095
+#: library/model/class-form-entry-model.php:2088
 msgid "Tag"
 msgstr ""
 
 #: library/helpers/helper-fields.php:1965
-#: library/model/class-form-entry-model.php:2124
+#: library/model/class-form-entry-model.php:2117
 #: library/modules/quizzes/admin/admin-loader.php:583
 #: library/modules/quizzes/admin/admin-loader.php:672
 msgid "Featured image"
 msgstr ""
 
 #: library/helpers/helper-fields.php:1976
-#: library/model/class-form-entry-model.php:2155
+#: library/model/class-form-entry-model.php:2148
 msgid "Custom fields"
 msgstr ""
 
@@ -23968,39 +23970,39 @@ msgstr ""
 msgid "Unfortunately this %s has expired."
 msgstr ""
 
-#: library/model/class-form-entry-model.php:586
+#: library/model/class-form-entry-model.php:579
 msgid "State"
 msgstr ""
 
-#: library/model/class-form-entry-model.php:587
+#: library/model/class-form-entry-model.php:580
 msgid "Zip"
 msgstr ""
 
-#: library/model/class-form-entry-model.php:589
+#: library/model/class-form-entry-model.php:582
 msgid "Address Line 2"
 msgstr ""
 
-#: library/model/class-form-entry-model.php:600
+#: library/model/class-form-entry-model.php:593
 msgid "Post Image"
 msgstr ""
 
-#: library/model/class-form-entry-model.php:601
+#: library/model/class-form-entry-model.php:594
 msgid "Post Category"
 msgstr ""
 
-#: library/model/class-form-entry-model.php:602
+#: library/model/class-form-entry-model.php:595
 msgid "Post Tags"
 msgstr ""
 
-#: library/model/class-form-entry-model.php:603
+#: library/model/class-form-entry-model.php:596
 msgid "Product ID"
 msgstr ""
 
-#: library/model/class-form-entry-model.php:604
+#: library/model/class-form-entry-model.php:597
 msgid "Product Quantity"
 msgstr ""
 
-#: library/model/class-form-entry-model.php:1560
+#: library/model/class-form-entry-model.php:1553
 msgid "View Website"
 msgstr ""
 
@@ -24321,8 +24323,8 @@ msgstr ""
 #: library/modules/custom-forms/form-templates/template-post.php:92
 #: library/modules/custom-forms/form-templates/template-quote.php:153
 #: library/modules/custom-forms/form-templates/template-registration.php:109
-#: library/modules/custom-forms/front/front-action.php:2100
-#: library/modules/custom-forms/front/front-action.php:2465
+#: library/modules/custom-forms/front/front-action.php:2110
+#: library/modules/custom-forms/front/front-action.php:2475
 msgid "Error: Your form is not valid, please fix the errors!"
 msgstr ""
 
@@ -24495,97 +24497,97 @@ msgid ""
 msgstr ""
 
 #: library/modules/custom-forms/front/front-action.php:330
-#: library/modules/custom-forms/front/front-action.php:399
+#: library/modules/custom-forms/front/front-action.php:409
 msgid "Error: Stripe field doesn't exist in your form!"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:410
+#: library/modules/custom-forms/front/front-action.php:420
 msgid "Stripe Checkout is not enabled for this form."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:724
+#: library/modules/custom-forms/front/front-action.php:734
 msgid "Whoops, the passcode you entered was incorrect or expired."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:1215
+#: library/modules/custom-forms/front/front-action.php:1225
 msgid ""
 "The form is empty and cannot be saved as a draft. Please fill out at least "
 "one form field and try again."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:1218
-#: library/modules/custom-forms/front/front-action.php:2067
+#: library/modules/custom-forms/front/front-action.php:1228
+#: library/modules/custom-forms/front/front-action.php:2077
 msgid "At least one field must be filled out to submit the form."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:1466
-#: library/modules/custom-forms/front/front-action.php:2633
+#: library/modules/custom-forms/front/front-action.php:1476
+#: library/modules/custom-forms/front/front-action.php:2643
 msgid "Payment failed, please try again!"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:1489
+#: library/modules/custom-forms/front/front-action.php:1499
 msgid ""
 "This payment requires additional authentication! Please follow the "
 "instructions."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:1505
+#: library/modules/custom-forms/front/front-action.php:1515
 msgid ""
 "This payment requires 3D Secure authentication! Please follow the "
 "instructions."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:1601
+#: library/modules/custom-forms/front/front-action.php:1611
 #: library/modules/custom-forms/front/front-render.php:3154
 msgid "SSL required to submit this form, please check your URL."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:2356
+#: library/modules/custom-forms/front/front-action.php:2366
 msgid "Upload field ID is missing."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:2368
+#: library/modules/custom-forms/front/front-action.php:2378
 msgid "Upload field doesn't exist in your form!"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:3528
+#: library/modules/custom-forms/front/front-action.php:3538
 msgid "There was an error saving the post data. Please try again"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:3562
+#: library/modules/custom-forms/front/front-action.php:3572
 msgid "Please try again."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:3577
+#: library/modules/custom-forms/front/front-action.php:3587
 msgid "Your code has been sent to your email."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:3690
+#: library/modules/custom-forms/front/front-action.php:3700
 msgid "Email is required."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:3702
+#: library/modules/custom-forms/front/front-action.php:3712
 msgid "Please enter a valid email."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:3734
+#: library/modules/custom-forms/front/front-action.php:3744
 msgid ""
 "We've sent the resume form link to your email address. Please check your "
 "spam folder if you can't find the link in your inbox."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:3735
+#: library/modules/custom-forms/front/front-action.php:3745
 msgid "Change email"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:3740
+#: library/modules/custom-forms/front/front-action.php:3750
 msgid ""
 "We couldn't send the form resume link to your email at this time. Click on "
 "the link below to resend it or manually copy and save the link in a safe "
 "place."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:3741
+#: library/modules/custom-forms/front/front-action.php:3751
 msgid "Resend link"
 msgstr ""
 

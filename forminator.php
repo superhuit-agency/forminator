@@ -1,14 +1,14 @@
 <?php
 /**
  * Plugin Name: Forminator
- * Version: 1.57.1
+ * Version: 1.57.2
  * Plugin URI:  https://wpmudev.com/project/forminator/
  * Description: Build powerful, customizable forms with ease using Forminator’s drag-and-drop builder, conditional logic, payment support, real-time analytics, and seamless integrations—no coding needed.
  * Author: WPMU DEV
  * Author URI: https://wpmudev.com
  * Update URI: wordpress.org/plugins/forminator/
  * Requires at least: 6.4
- * Tested up to: 7.0
+ * Tested up to: 7.1
  * Requires PHP: 7.4
  * Text Domain: forminator
  * Domain Path: /languages/

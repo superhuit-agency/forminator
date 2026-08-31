@@ -54,6 +54,93 @@ class Forminator_Stripe extends Forminator_Field {
 	public const CHECKOUT_SESSION_UPLOADED_FILES = 'forminator_uploaded_files_on_checkout_sessions';
 
 	/**
+	 * Option key prefix for Checkout Session IDs that already produced an entry.
+	 *
+	 * @since 1.57.2
+	 *
+	 * @var string
+	 */
+	public const CONSUMED_CHECKOUT_SESSION_OPTION_PREFIX = 'forminator_stripe_consumed_checkout_session_';
+
+	/**
+	 * Option key for consumed Checkout Session IDs tracked for cleanup.
+	 *
+	 * @since 1.57.2
+	 *
+	 * @var string
+	 */
+	public const CONSUMED_CHECKOUT_SESSION_CLEANUP_OPTION_KEY = 'forminator_stripe_consumed_checkout_session_cleanup';
+
+	/**
+	 * Option key prefix for individual pending PaymentIntent IDs.
+	 *
+	 * @since 1.57.2
+	 *
+	 * @var string
+	 */
+	public const PAYMENT_INTENT_OPTION_PREFIX = 'forminator_stripe_payment_intent_';
+
+	/**
+	 * Option key for pending PaymentIntent IDs tracked for cleanup.
+	 *
+	 * @since 1.57.2
+	 *
+	 * @var string
+	 */
+	public const PAYMENT_INTENT_CLEANUP_OPTION_KEY = 'forminator_stripe_payment_intent_cleanup';
+
+	/**
+	 * Option key prefix for PaymentIntent IDs that already produced an entry.
+	 *
+	 * @since 1.57.2
+	 *
+	 * @var string
+	 */
+	public const CONSUMED_PAYMENT_INTENT_OPTION_PREFIX = 'forminator_stripe_consumed_payment_intent_';
+
+	/**
+	 * Option key for consumed PaymentIntent IDs tracked for cleanup.
+	 *
+	 * @since 1.57.2
+	 *
+	 * @var string
+	 */
+	public const CONSUMED_PAYMENT_INTENT_CLEANUP_OPTION_KEY = 'forminator_stripe_consumed_payment_intent_cleanup';
+
+	/**
+	 * Option key prefix marking a PaymentIntent whose claim is held by a request.
+	 *
+	 * @since 1.57.2
+	 *
+	 * @var string
+	 */
+	public const PAYMENT_INTENT_CLAIM_HELD_OPTION_PREFIX = 'forminator_stripe_payment_intent_claim_held_';
+
+	/**
+	 * Checkout Sessions claimed by this request, keyed by Checkout Session ID.
+	 *
+	 * The value tells whether the entry reached storage, which decides if the session is
+	 * recorded as consumed or handed back for a retry when the submission ends.
+	 *
+	 * @since 1.57.2
+	 *
+	 * @var array
+	 */
+	private static $claimed_checkout_sessions = array();
+
+	/**
+	 * PaymentIntents claimed by this request, keyed by PaymentIntent ID.
+	 *
+	 * The value tells whether the entry reached storage, which decides if the PaymentIntent
+	 * is recorded as consumed or handed back for a retry when the submission ends.
+	 *
+	 * @since 1.57.2
+	 *
+	 * @var array
+	 */
+	private static $claimed_payment_intents = array();
+
+	/**
 	 * Name
 	 *
 	 * @var string
@@ -1729,9 +1816,11 @@ class Forminator_Stripe extends Forminator_Field {
 		 * @param bool  $force Force payment intent generation.
 		 * @param array $field Field.
 		 */
-		$force = apply_filters( 'forminator_stripe_force_payment_intent', $force, $field );
-		if ( ! $force && ! empty( $saved_payment_intents[ $payment_intent_key ] ) ) {
-			$id = $saved_payment_intents[ $payment_intent_key ];
+		$force     = apply_filters( 'forminator_stripe_force_payment_intent', $force, $field );
+		$cached_id = $saved_payment_intents[ $payment_intent_key ] ?? '';
+
+		if ( ! $force && ! empty( $cached_id ) && ! self::is_consumed_payment_intent( $cached_id ) ) {
+			$id = $cached_id;
 		} else {
 			$payment_intent = $this->generate_paymentIntent( $amount, $field );
 
@@ -1739,6 +1828,9 @@ class Forminator_Stripe extends Forminator_Field {
 
 			$saved_payment_intents[ $payment_intent_key ] = $id;
 			update_option( 'forminator_stripe_payment_intents', $saved_payment_intents );
+
+			// Only on generation, so a reused ID cannot re-arm a claimed marker.
+			self::set_pending_payment_intent( $id );
 		}
 
 		return $id;
@@ -2229,7 +2321,7 @@ class Forminator_Stripe extends Forminator_Field {
 				throw new Exception( esc_html__( 'Checkout Session ID is not valid!', 'forminator' ) );
 			}
 
-			if ( ! self::is_valid_checkout_session( $session->id ) ) {
+			if ( ! self::is_claimable_checkout_session( $session->id ) ) {
 				forminator_maybe_log(
 					__METHOD__,
 					array(
@@ -2299,6 +2391,27 @@ class Forminator_Stripe extends Forminator_Field {
 				);
 			}
 
+			// Claim the Checkout Session before the entry is created so one payment can
+			// only ever produce one entry, even for concurrent submissions.
+			if ( ! self::is_valid_checkout_session( $session->id ) ) {
+				forminator_maybe_log(
+					__METHOD__,
+					array(
+						'action'        => 'checkout_session_entry_already_handled',
+						'error_message' => esc_html__( 'Checkout Session ID is not valid', 'forminator' ),
+						'payment_id'    => Forminator_CForm_Front_Action::$prepared_data['paymentid'] ?? '',
+						'form_id'       => $expected_form_id,
+						'field_id'      => self::get_property( 'element_id', $field, '' ),
+						'session_id'    => $session->id,
+					)
+				);
+
+				return new WP_Error(
+					'forminator_stripe_checkout_session_already_handled',
+					esc_html__( 'Checkout Session ID is not valid', 'forminator' )
+				);
+			}
+
 			$entry_data['status'] = 'COMPLETED';
 
 			$payment_intent = $session->payment_intent ?? '';
@@ -2335,27 +2448,317 @@ class Forminator_Stripe extends Forminator_Field {
 	 * @return bool
 	 */
 	private static function is_valid_payment_intent( $intent_id ): bool {
-		$payment_intents = get_option( 'forminator_stripe_payment_intents', array() );
-
-		if ( is_array( $payment_intents ) && in_array( $intent_id, $payment_intents, true ) ) {
-			// Remove payment intent after handling it.
-			add_action(
-				'forminator_after_handle_form',
-				function () use ( $intent_id ) {
-					$option_key      = 'forminator_stripe_payment_intents';
-					$payment_intents = get_option( $option_key, array() );
-					$payment_intents = array_diff( $payment_intents, array( $intent_id ) );
-					update_option( $option_key, $payment_intents );
-				}
-			);
-
-			return true;
+		if ( empty( $intent_id ) || self::is_consumed_payment_intent( $intent_id ) ) {
+			return false;
 		}
-		return false;
+
+		if ( ! self::claim_pending_payment_intent( $intent_id ) ) {
+			return false;
+		}
+
+		self::$claimed_payment_intents[ $intent_id ] = false;
+
+		// The entry and its payment meta are on their way to storage, the payment is spent.
+		add_action(
+			'forminator_custom_form_submit_before_set_fields',
+			function () use ( $intent_id ) {
+				if ( isset( self::$claimed_payment_intents[ $intent_id ] ) ) {
+					self::$claimed_payment_intents[ $intent_id ] = true;
+				}
+			}
+		);
+
+		add_action(
+			'forminator_after_handle_form',
+			function () use ( $intent_id ) {
+				self::settle_payment_intent( $intent_id );
+			}
+		);
+
+		// Covers submissions that end before forminator_after_handle_form is reached.
+		add_action(
+			'shutdown',
+			function () use ( $intent_id ) {
+				self::settle_payment_intent( $intent_id );
+			}
+		);
+
+		return true;
+	}
+
+	/**
+	 * Settle a PaymentIntent claimed by this request.
+	 *
+	 * The PaymentIntent is only recorded as consumed once its entry reached storage. When
+	 * the submission failed before that, the pending marker is handed back so the customer
+	 * can retry the payment they already made.
+	 *
+	 * @since 1.57.2
+	 *
+	 * @param string $intent_id PaymentIntent ID.
+	 * @return void
+	 */
+	private static function settle_payment_intent( $intent_id ) {
+		if ( ! isset( self::$claimed_payment_intents[ $intent_id ] ) ) {
+			return;
+		}
+
+		$entry_stored = self::$claimed_payment_intents[ $intent_id ];
+		unset( self::$claimed_payment_intents[ $intent_id ] );
+
+		if ( ! $entry_stored ) {
+			delete_option( self::get_payment_intent_claim_held_option_key( $intent_id ) );
+			self::set_pending_payment_intent( $intent_id, true );
+
+			return;
+		}
+
+		self::mark_payment_intent_consumed( $intent_id );
+		self::remove_pending_payment_intent( $intent_id );
+	}
+
+	/**
+	 * Claim the pending PaymentIntent marker for the current request.
+	 *
+	 * The delete_option() call only reports success for the request that actually removed
+	 * the row, so concurrent submissions of the same PaymentIntent cannot all claim it.
+	 *
+	 * @since 1.57.2
+	 *
+	 * @param string $intent_id PaymentIntent ID.
+	 * @return bool
+	 */
+	private static function claim_pending_payment_intent( $intent_id ): bool {
+		if ( empty( $intent_id ) ) {
+			return false;
+		}
+
+		if ( ! delete_option( self::get_payment_intent_option_key( $intent_id ) )
+			&& ! self::is_untracked_payment_intent( $intent_id ) ) {
+			return false;
+		}
+
+		return self::hold_payment_intent_claim( $intent_id );
+	}
+
+	/**
+	 * Check for a PaymentIntent this release never gave a pending marker.
+	 *
+	 * Releases before the marker existed tracked pending PaymentIntents only as values in
+	 * a single option, so one created back then still has to be claimable exactly once.
+	 *
+	 * @since 1.57.2
+	 *
+	 * @param string $intent_id PaymentIntent ID.
+	 * @return bool
+	 */
+	private static function is_untracked_payment_intent( $intent_id ): bool {
+		$tracked = get_option( self::PAYMENT_INTENT_CLEANUP_OPTION_KEY, array() );
+
+		if ( is_array( $tracked ) && isset( $tracked[ $intent_id ] ) ) {
+			return false;
+		}
+
+		$saved_intents = get_option( 'forminator_stripe_payment_intents', array() );
+
+		return is_array( $saved_intents ) && in_array( $intent_id, $saved_intents, true );
+	}
+
+	/**
+	 * Take the single use lock for a PaymentIntent claim.
+	 *
+	 * The unique index on option_name makes this insert fail for anyone racing us, so only
+	 * one request can ever hold the claim for a given PaymentIntent.
+	 *
+	 * @since 1.57.2
+	 *
+	 * @param string $intent_id PaymentIntent ID.
+	 * @return bool
+	 */
+	private static function hold_payment_intent_claim( $intent_id ): bool {
+		global $wpdb;
+
+		$option_name = self::get_payment_intent_claim_held_option_key( $intent_id );
+
+		// Losing the race is expected, so keep the duplicate key error out of the log.
+		$suppressed = $wpdb->suppress_errors();
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- Must fail on a duplicate key, which the options API cannot express.
+		$inserted = $wpdb->insert(
+			$wpdb->options,
+			array(
+				'option_name'  => $option_name,
+				'option_value' => (string) time(),
+				'autoload'     => 'off',
+			),
+			array( '%s', '%s', '%s' )
+		);
+
+		$wpdb->suppress_errors( $suppressed );
+
+		if ( ! $inserted ) {
+			return false;
+		}
+
+		wp_cache_delete( $option_name, 'options' );
+
+		$notoptions = wp_cache_get( 'notoptions', 'options' );
+		if ( is_array( $notoptions ) && isset( $notoptions[ $option_name ] ) ) {
+			unset( $notoptions[ $option_name ] );
+			wp_cache_set( 'notoptions', $notoptions, 'options' );
+		}
+
+		return true;
+	}
+
+	/**
+	 * Build the option key marking a held PaymentIntent claim.
+	 *
+	 * @since 1.57.2
+	 *
+	 * @param string $intent_id PaymentIntent ID.
+	 * @return string
+	 */
+	private static function get_payment_intent_claim_held_option_key( $intent_id ): string {
+		return self::PAYMENT_INTENT_CLAIM_HELD_OPTION_PREFIX . md5( $intent_id );
+	}
+
+	/**
+	 * Store a pending PaymentIntent marker.
+	 *
+	 * @since 1.57.2
+	 *
+	 * @param string $intent_id PaymentIntent ID.
+	 * @param bool   $force     Re-arm even while a claim is held, used by settle failure.
+	 * @return void
+	 */
+	private static function set_pending_payment_intent( $intent_id, $force = false ) {
+		if ( empty( $intent_id ) || self::is_consumed_payment_intent( $intent_id ) ) {
+			return;
+		}
+
+		// Never re-arm an intent a request is still holding, only settle failure may force it.
+		if ( ! $force && false !== get_option( self::get_payment_intent_claim_held_option_key( $intent_id ), false ) ) {
+			return;
+		}
+
+		update_option(
+			self::get_payment_intent_option_key( $intent_id ),
+			array(
+				'created_at' => time(),
+			),
+			false
+		);
+
+		$payment_intents               = get_option( self::PAYMENT_INTENT_CLEANUP_OPTION_KEY, array() );
+		$payment_intents               = is_array( $payment_intents ) ? $payment_intents : array();
+		$payment_intents[ $intent_id ] = time();
+		update_option( self::PAYMENT_INTENT_CLEANUP_OPTION_KEY, $payment_intents, false );
+	}
+
+	/**
+	 * Remove a PaymentIntent from local tracking once it produced an entry.
+	 *
+	 * @since 1.57.2
+	 *
+	 * @param string $intent_id PaymentIntent ID.
+	 * @return void
+	 */
+	private static function remove_pending_payment_intent( $intent_id ) {
+		if ( empty( $intent_id ) ) {
+			return;
+		}
+
+		delete_option( self::get_payment_intent_option_key( $intent_id ) );
+		delete_option( self::get_payment_intent_claim_held_option_key( $intent_id ) );
+
+		$payment_intents = get_option( self::PAYMENT_INTENT_CLEANUP_OPTION_KEY, array() );
+		if ( is_array( $payment_intents ) && isset( $payment_intents[ $intent_id ] ) ) {
+			unset( $payment_intents[ $intent_id ] );
+			update_option( self::PAYMENT_INTENT_CLEANUP_OPTION_KEY, $payment_intents, false );
+		}
+
+		$option_key    = 'forminator_stripe_payment_intents';
+		$saved_intents = get_option( $option_key, array() );
+		if ( is_array( $saved_intents ) && in_array( $intent_id, $saved_intents, true ) ) {
+			update_option( $option_key, array_diff( $saved_intents, array( $intent_id ) ) );
+		}
+	}
+
+	/**
+	 * Check whether a PaymentIntent ID already produced an entry.
+	 *
+	 * @since 1.57.2
+	 *
+	 * @param string $intent_id PaymentIntent ID.
+	 * @return bool
+	 */
+	private static function is_consumed_payment_intent( $intent_id ): bool {
+		if ( empty( $intent_id ) ) {
+			return false;
+		}
+
+		return false !== get_option( self::get_consumed_payment_intent_option_key( $intent_id ), false );
+	}
+
+	/**
+	 * Record a PaymentIntent ID as consumed so it can never be replayed.
+	 *
+	 * @since 1.57.2
+	 *
+	 * @param string $intent_id PaymentIntent ID.
+	 * @return void
+	 */
+	private static function mark_payment_intent_consumed( $intent_id ) {
+		if ( empty( $intent_id ) ) {
+			return;
+		}
+
+		update_option(
+			self::get_consumed_payment_intent_option_key( $intent_id ),
+			array(
+				'consumed_at' => time(),
+			),
+			false
+		);
+
+		$consumed_intents               = get_option( self::CONSUMED_PAYMENT_INTENT_CLEANUP_OPTION_KEY, array() );
+		$consumed_intents               = is_array( $consumed_intents ) ? $consumed_intents : array();
+		$consumed_intents[ $intent_id ] = time();
+		update_option( self::CONSUMED_PAYMENT_INTENT_CLEANUP_OPTION_KEY, $consumed_intents, false );
+	}
+
+	/**
+	 * Build the option key for a pending PaymentIntent ID.
+	 *
+	 * @since 1.57.2
+	 *
+	 * @param string $intent_id PaymentIntent ID.
+	 * @return string
+	 */
+	private static function get_payment_intent_option_key( $intent_id ): string {
+		return self::PAYMENT_INTENT_OPTION_PREFIX . md5( $intent_id );
+	}
+
+	/**
+	 * Build the option key for a consumed PaymentIntent ID.
+	 *
+	 * @since 1.57.2
+	 *
+	 * @param string $intent_id PaymentIntent ID.
+	 * @return string
+	 */
+	private static function get_consumed_payment_intent_option_key( $intent_id ): string {
+		return self::CONSUMED_PAYMENT_INTENT_OPTION_PREFIX . md5( $intent_id );
 	}
 
 	/**
 	 * Check if checkout session is valid
+	 *
+	 * The pending marker is claimed here, before the entry is created, so two concurrent
+	 * submissions of the same Checkout Session cannot both be accepted. The session is
+	 * recorded as consumed later, in settle_checkout_session(), once the entry reaches
+	 * storage.
 	 *
 	 * @since 1.56
 	 *
@@ -2363,18 +2766,161 @@ class Forminator_Stripe extends Forminator_Field {
 	 * @return bool
 	 */
 	public static function is_valid_checkout_session( $session_id ): bool {
-		if ( self::has_pending_checkout_session( $session_id ) ) {
-			add_action(
-				'forminator_after_handle_form',
-				function () use ( $session_id ) {
-					self::remove_pending_checkout_session( $session_id );
-				}
-			);
-
-			return true;
+		if ( empty( $session_id ) || self::is_consumed_checkout_session( $session_id ) ) {
+			return false;
 		}
 
-		return false;
+		if ( ! self::claim_pending_checkout_session( $session_id ) ) {
+			return false;
+		}
+
+		self::$claimed_checkout_sessions[ $session_id ] = false;
+
+		// The entry and its payment meta are on their way to storage, the payment is spent.
+		add_action(
+			'forminator_custom_form_submit_before_set_fields',
+			function () use ( $session_id ) {
+				if ( isset( self::$claimed_checkout_sessions[ $session_id ] ) ) {
+					self::$claimed_checkout_sessions[ $session_id ] = true;
+				}
+			}
+		);
+
+		add_action(
+			'forminator_after_handle_form',
+			function () use ( $session_id ) {
+				self::settle_checkout_session( $session_id );
+			}
+		);
+
+		// Covers submissions that end before forminator_after_handle_form is reached.
+		add_action(
+			'shutdown',
+			function () use ( $session_id ) {
+				self::settle_checkout_session( $session_id );
+			}
+		);
+
+		return true;
+	}
+
+	/**
+	 * Settle a Checkout Session claimed by this request.
+	 *
+	 * The session is only recorded as consumed once its entry reached storage. When the
+	 * submission failed before that, the pending marker is handed back so the customer can
+	 * retry the payment they already made.
+	 *
+	 * @since 1.57.2
+	 *
+	 * @param string $session_id Checkout Session ID.
+	 * @return void
+	 */
+	private static function settle_checkout_session( $session_id ) {
+		if ( ! isset( self::$claimed_checkout_sessions[ $session_id ] ) ) {
+			return;
+		}
+
+		$entry_stored = self::$claimed_checkout_sessions[ $session_id ];
+		unset( self::$claimed_checkout_sessions[ $session_id ] );
+
+		if ( ! $entry_stored ) {
+			self::restore_pending_checkout_session( $session_id );
+
+			return;
+		}
+
+		self::mark_checkout_session_consumed( $session_id );
+		self::remove_pending_checkout_session( $session_id );
+	}
+
+	/**
+	 * Check whether a Checkout Session may still be claimed for entry creation.
+	 *
+	 * Unlike is_valid_checkout_session() this never consumes the marker, so a payment
+	 * that has not settled yet can still be retried.
+	 *
+	 * @since 1.57.2
+	 *
+	 * @param string $session_id Checkout Session ID.
+	 * @return bool
+	 */
+	private static function is_claimable_checkout_session( $session_id ): bool {
+		return self::has_pending_checkout_session( $session_id ) && ! self::is_consumed_checkout_session( $session_id );
+	}
+
+	/**
+	 * Claim the pending Checkout Session marker for the current request.
+	 *
+	 * The delete_option() call only reports success for the request that actually removed
+	 * the row, so concurrent submissions of the same Checkout Session cannot all claim it.
+	 *
+	 * @since 1.57.2
+	 *
+	 * @param string $session_id Checkout Session ID.
+	 * @return bool
+	 */
+	private static function claim_pending_checkout_session( $session_id ): bool {
+		if ( empty( $session_id ) ) {
+			return false;
+		}
+
+		return (bool) delete_option( self::get_checkout_session_option_key( $session_id ) );
+	}
+
+	/**
+	 * Check whether a Checkout Session ID already produced an entry.
+	 *
+	 * @since 1.57.2
+	 *
+	 * @param string $session_id Checkout Session ID.
+	 * @return bool
+	 */
+	public static function is_consumed_checkout_session( $session_id ): bool {
+		if ( empty( $session_id ) ) {
+			return false;
+		}
+
+		return false !== get_option( self::get_consumed_checkout_session_option_key( $session_id ), false );
+	}
+
+	/**
+	 * Record a Checkout Session ID as consumed so it can never be replayed.
+	 *
+	 * @since 1.57.2
+	 *
+	 * @param string $session_id Checkout Session ID.
+	 * @return void
+	 */
+	private static function mark_checkout_session_consumed( $session_id ) {
+		if ( empty( $session_id ) ) {
+			return;
+		}
+
+		update_option(
+			self::get_consumed_checkout_session_option_key( $session_id ),
+			array(
+				'consumed_at' => time(),
+			),
+			false
+		);
+
+		$consumed_sessions                = get_option( self::CONSUMED_CHECKOUT_SESSION_CLEANUP_OPTION_KEY, array() );
+		$consumed_sessions                = is_array( $consumed_sessions ) ? $consumed_sessions : array();
+		$consumed_sessions[ $session_id ] = time();
+		update_option( self::CONSUMED_CHECKOUT_SESSION_CLEANUP_OPTION_KEY, $consumed_sessions, false );
+	}
+
+	/**
+	 * Build the option key for a consumed Checkout Session ID.
+	 *
+	 * @since 1.57.2
+	 *
+	 * @param string $session_id Checkout Session ID.
+	 * @return string
+	 */
+	private static function get_consumed_checkout_session_option_key( $session_id ): string {
+		return self::CONSUMED_CHECKOUT_SESSION_OPTION_PREFIX . md5( $session_id );
 	}
 
 	/**
@@ -2431,7 +2977,7 @@ class Forminator_Stripe extends Forminator_Field {
 	 * @return void
 	 */
 	public static function restore_pending_checkout_session( $session_id ) {
-		if ( empty( $session_id ) ) {
+		if ( empty( $session_id ) || self::is_consumed_checkout_session( $session_id ) ) {
 			return;
 		}
 
@@ -2499,6 +3045,9 @@ class Forminator_Stripe extends Forminator_Field {
 	 * @return void
 	 */
 	public function cleanup_checkout_sessions() {
+		self::cleanup_consumed_checkout_sessions();
+		self::cleanup_payment_intents();
+
 		$checkout_sessions = get_option( self::CHECKOUT_SESSION_CLEANUP_OPTION_KEY, array() );
 
 		if ( empty( $checkout_sessions ) || ! is_array( $checkout_sessions ) ) {
@@ -2528,6 +3077,99 @@ class Forminator_Stripe extends Forminator_Field {
 		if ( ! empty( $expired_sessions ) ) {
 			self::remove_checkout_session_uploaded_files_data( $expired_sessions );
 		}
+	}
+
+	/**
+	 * Remove abandoned pending PaymentIntent markers and expired consumed PaymentIntent IDs.
+	 *
+	 * @since 1.57.2
+	 *
+	 * @return void
+	 */
+	private static function cleanup_payment_intents() {
+		$payment_intents = get_option( self::PAYMENT_INTENT_CLEANUP_OPTION_KEY, array() );
+
+		if ( ! empty( $payment_intents ) && is_array( $payment_intents ) ) {
+			/**
+			 * Filter how long abandoned Stripe PaymentIntent markers are retained.
+			 *
+			 * @since 1.57.2
+			 *
+			 * @param int $retention Retention time in seconds.
+			 */
+			$pending_retention = apply_filters( 'forminator_stripe_payment_intent_retention', DAY_IN_SECONDS );
+
+			foreach ( $payment_intents as $intent_id => $created_at ) {
+				if ( ! is_numeric( $created_at ) || time() - (int) $created_at > $pending_retention ) {
+					unset( $payment_intents[ $intent_id ] );
+					delete_option( self::get_payment_intent_option_key( $intent_id ) );
+					// A request that died mid claim leaves its claim-held flag behind.
+					delete_option( self::get_payment_intent_claim_held_option_key( $intent_id ) );
+				}
+			}
+
+			update_option( self::PAYMENT_INTENT_CLEANUP_OPTION_KEY, $payment_intents, false );
+		}
+
+		$consumed_intents = get_option( self::CONSUMED_PAYMENT_INTENT_CLEANUP_OPTION_KEY, array() );
+
+		if ( empty( $consumed_intents ) || ! is_array( $consumed_intents ) ) {
+			return;
+		}
+
+		/**
+		 * Filter how long consumed Stripe PaymentIntent IDs are retained.
+		 *
+		 * @since 1.57.2
+		 *
+		 * @param int $retention Retention time in seconds.
+		 */
+		$consumed_retention = apply_filters( 'forminator_stripe_consumed_payment_intent_retention', 6 * MONTH_IN_SECONDS );
+
+		foreach ( $consumed_intents as $intent_id => $consumed_at ) {
+			if ( ! is_numeric( $consumed_at ) || time() - (int) $consumed_at > $consumed_retention ) {
+				unset( $consumed_intents[ $intent_id ] );
+				delete_option( self::get_consumed_payment_intent_option_key( $intent_id ) );
+			}
+		}
+
+		update_option( self::CONSUMED_PAYMENT_INTENT_CLEANUP_OPTION_KEY, $consumed_intents, false );
+	}
+
+	/**
+	 * Remove expired entries from the consumed Checkout Session ledger.
+	 *
+	 * Consumed IDs are retained far longer than pending markers because a completed
+	 * Checkout Session stays replayable on Stripe's side.
+	 *
+	 * @since 1.57.2
+	 *
+	 * @return void
+	 */
+	private static function cleanup_consumed_checkout_sessions() {
+		$consumed_sessions = get_option( self::CONSUMED_CHECKOUT_SESSION_CLEANUP_OPTION_KEY, array() );
+
+		if ( empty( $consumed_sessions ) || ! is_array( $consumed_sessions ) ) {
+			return;
+		}
+
+		/**
+		 * Filter how long consumed Stripe Checkout Session IDs are retained.
+		 *
+		 * @since 1.57.2
+		 *
+		 * @param int $retention Retention time in seconds.
+		 */
+		$retention = apply_filters( 'forminator_stripe_consumed_checkout_session_retention', 6 * MONTH_IN_SECONDS );
+
+		foreach ( $consumed_sessions as $session_id => $consumed_at ) {
+			if ( ! is_numeric( $consumed_at ) || time() - (int) $consumed_at > $retention ) {
+				unset( $consumed_sessions[ $session_id ] );
+				delete_option( self::get_consumed_checkout_session_option_key( $session_id ) );
+			}
+		}
+
+		update_option( self::CONSUMED_CHECKOUT_SESSION_CLEANUP_OPTION_KEY, $consumed_sessions, false );
 	}
 
 	/**

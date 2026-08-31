@@ -440,7 +440,7 @@ class Forminator_Admin_Report_Page {
 		$payment_data = Forminator_Form_Entry_Model::payment_amount( $form_id, $previous_start, $end_date );
 		if ( ! empty( $payment_data ) ) {
 			foreach ( $payment_data as $data ) {
-				$meta_value = maybe_unserialize( $data->meta_value );
+				$meta_value = forminator_safe_maybe_unserialize( $data->meta_value );
 				if ( $data->date_created >= $start_date && $data->date_created <= $end_date ) {
 					$payments['selected_payment'] += $meta_value['amount'];
 					if ( 'stripe-1' === $data->meta_key || 'stripe-ocs-1' === $data->meta_key ) {
