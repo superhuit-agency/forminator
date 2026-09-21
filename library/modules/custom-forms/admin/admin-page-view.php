@@ -41,6 +41,23 @@ class Forminator_CForm_Page extends Forminator_Admin_Module_Edit_Page {
 		if ( 'true' !== filter_input( INPUT_GET, 'migrate_stripe' ) || ! $form_id ) {
 			return false;
 		}
+
+		// This updates form meta, so it needs its own CSRF token.
+		$nonce = Forminator_Core::sanitize_text_field( 'migrate_stripe_nonce' );
+		if ( ! $nonce || ! wp_verify_nonce( $nonce, 'forminator_migrate_stripe' ) ) {
+			return false;
+		}
+
+		// The nonce only proves the request is genuine, it does not authorize the user.
+		if ( ! forminator_is_user_allowed( 'forminator-cform' ) ) {
+			return false;
+		}
+
+		// Only migrate an actual form, never an arbitrary post.
+		if ( 'forminator_forms' !== get_post_type( $form_id ) ) {
+			return false;
+		}
+
 		$meta   = get_post_meta( $form_id, Forminator_Base_Form_Model::META_KEY, true );
 		$fields = ! empty( $meta['fields'] ) ? $meta['fields'] : array();
 

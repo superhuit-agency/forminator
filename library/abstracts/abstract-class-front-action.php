@@ -554,6 +554,10 @@ abstract class Forminator_Front_Action {
 		$message                = forminator_replace_form_data( $message, static::$module_object );
 		$message                = forminator_replace_variables( $message, $form_id );
 		$autofill_email         = isset( $response['first_email'] ) ? $response['first_email'] : '';
+		$draft_email_token      = '';
+		if ( ! empty( $response['enable_email_link'] ) ) {
+			$draft_email_token = Forminator_CForm_Front_Action::issue_draft_email_token( $response['draft_id'] );
+		}
 
 		ob_start();
 		?>
@@ -613,8 +617,7 @@ abstract class Forminator_Front_Action {
 						<input type="hidden" name="action" value="forminator_email_draft_link">
 						<input type="hidden" name="form_id" value="<?php echo esc_attr( $form_id ); ?>">
 						<input type="hidden" name="draft_id" value="<?php echo esc_attr( $response['draft_id'] ); ?>">
-						<input type="hidden" name="draft_link" value="<?php echo esc_url( $draft_link ); ?>">
-						<input type="hidden" name="retention_period" value="<?php echo esc_attr( $response['retention_period'] ); ?>">
+						<input type="hidden" name="draft_email_token" value="<?php echo esc_attr( $draft_email_token ); ?>">
 					</form>
 				<?php } ?>
 			</div>
@@ -982,6 +985,31 @@ abstract class Forminator_Front_Action {
 		}
 
 		$post_data = $this->remove_uploads_uid( $post_data );
+		$post_data = self::sanitize_post_current_url( $post_data );
+
+		return $post_data;
+	}
+
+	/**
+	 * Sanitize posted current_url
+	 *
+	 * Normalize with esc_url_raw() and strip_shortcodes(). Do not strip raw '['/']'
+	 * so query-array params and IPv6 URL literals stay intact.
+	 *
+	 * @since 1.57.3
+	 *
+	 * @param array $post_data Posted data.
+	 *
+	 * @return array
+	 */
+	protected static function sanitize_post_current_url( $post_data ) {
+		if ( empty( $post_data['current_url'] ) ) {
+			return $post_data;
+		}
+
+		$current_url              = esc_url_raw( wp_unslash( $post_data['current_url'] ) );
+		$current_url              = strip_shortcodes( $current_url );
+		$post_data['current_url'] = $current_url;
 
 		return $post_data;
 	}

@@ -377,9 +377,23 @@ class Forminator_Slider extends Forminator_Field {
 		if ( ! $is_empty ) {
 			$max = self::get_max_limit( $field );
 			$min = self::get_min_limit( $field );
-			if ( self::is_range_slider( $field ) && ( (
-					$min > $data['min'] || $max < $data['min'] || $min > $data['max'] || $max < $data['max'] || $data['min'] > $data['max']
-				) || ( ! is_array( $data ) && ( ( $min > $data ) || ( $max < $data ) ) ) ) ) {
+
+			if ( self::is_range_slider( $field ) ) {
+				// Range slider: both handles must be numeric and within bounds.
+				$out_of_bounds = ! is_array( $data )
+					|| ! is_numeric( $data['min'] ) || ! is_numeric( $data['max'] )
+					|| $min > $data['min'] || $max < $data['min']
+					|| $min > $data['max'] || $max < $data['max']
+					|| $data['min'] > $data['max'];
+			} else {
+				// Single slider: value must be a numeric scalar within bounds. Without
+				// this a single slider skipped bounds entirely, so an out-of-range or
+				// non-numeric value (e.g. slider-1=0.50 or slider-1[]=x) passed.
+				$out_of_bounds = ! is_scalar( $data ) || ! is_numeric( $data )
+					|| $min > $data || $max < $data;
+			}
+
+			if ( $out_of_bounds ) {
 				$validation_message = /* translators: 1: Minimum value, 2: Maximum value */ sprintf( esc_html__( 'The slider should be less than %1$s and greater than %2$s.', 'forminator' ), $max, $min );
 
 				$this->validation_message[ $sub_id ] = sprintf(

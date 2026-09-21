@@ -3,7 +3,7 @@ Contributors: WPMUDEV
 Tags: contact form, custom form, forms, payment form, WordPress form plugin
 Requires at least: 6.4
 Tested up to: 7.1
-Stable tag: 1.57.1
+Stable tag: 1.57.2
 Requires PHP: 7.4
 License: GPL v3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
@@ -230,6 +230,20 @@ We take plugin security incredibly seriously; if you have a bug or vulnerability
 6. Publish Polls with Real-time Stats
 
 == Changelog ==
+
+= 1.57.3 ( 2026-09-17 ) =
+
+- Enhancement: Support Stripe Adaptive Pricing for dynamic payment amounts
+- Enhancement: Support payment descriptions for PayPal
+- Enhancement: Add a filter to customize the CSS class of the `forminator-row` section
+- Fix: Prevent leading apostrophes from being added to string cells in Google Sheets
+- Fix: Prevent the deactivation survey modal from stacking on the Plugins page
+
+
+= 1.57.2.1 ( 2026-09-17 ) =
+
+- Fix: Security improvements (props: Karthik Ramakrishnan, Dion Mulaj, vuxvinh)
+
 
 = 1.57.2 ( 2026-08-27 ) =
 

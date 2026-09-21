@@ -1007,11 +1007,33 @@ class Forminator_Postdata extends Forminator_Field {
 				set_post_thumbnail( $post_id, $image['attachment_id'] );
 			}
 
-			if ( ! empty( $post_meta ) ) {
+			if ( ! empty( $post_meta ) && is_array( $post_meta ) ) {
+				$allowed_keys = $this->get_allowed_custom_meta_keys( $field );
+				$meta_written = false;
+
 				foreach ( $post_meta as $meta ) {
-					add_post_meta( $post_id, $meta['key'], $meta['value'] );
+					if ( ! is_array( $meta ) || empty( $meta['key'] ) || ! isset( $meta['value'] ) ) {
+						continue;
+					}
+
+					$meta_key = $meta['key'];
+
+					// Only persist keys the form defines; reject protected meta outright.
+					if ( ! in_array( $meta_key, $allowed_keys, true ) ) {
+						continue;
+					}
+
+					if ( is_protected_meta( $meta_key, 'post' ) ) {
+						continue;
+					}
+
+					add_post_meta( $post_id, $meta_key, $meta['value'] );
+					$meta_written = true;
 				}
-				add_post_meta( $post_id, '_has_forminator_meta', true );
+
+				if ( $meta_written ) {
+					add_post_meta( $post_id, '_has_forminator_meta', true );
+				}
 			}
 
 			do_action( 'forminator_post_data_field_post_saved', $post_id, $field, $data, $this );
@@ -1020,6 +1042,50 @@ class Forminator_Postdata extends Forminator_Field {
 		}
 
 		return false;
+	}
+
+	/**
+	 * Custom meta keys allowed by the Post Data field settings.
+	 *
+	 * @since 1.57.3
+	 *
+	 * @param array $field Field settings.
+	 * @return string[]
+	 */
+	private function get_allowed_custom_meta_keys( $field ) {
+		$keys = array();
+
+		// Match handle_postdata_field: only when custom fields are enabled.
+		$has_custom_fields = self::get_property( 'post_custom_fields', $field, false );
+		if ( empty( $has_custom_fields ) ) {
+			// Legacy property used by the front-end renderer.
+			$has_custom_fields = self::get_property( 'post_custom', $field, false );
+		}
+		if ( empty( $has_custom_fields ) ) {
+			return $keys;
+		}
+
+		$custom_meta = self::get_property( 'options', $field, array() );
+
+		if ( empty( $custom_meta ) || ! is_array( $custom_meta ) ) {
+			return $keys;
+		}
+
+		foreach ( $custom_meta as $meta ) {
+			if ( empty( $meta['label'] ) || ! is_string( $meta['label'] ) ) {
+				continue;
+			}
+
+			// Match sanitize_text_field() applied to post-custom keys in sanitize().
+			$label = sanitize_text_field( $meta['label'] );
+			if ( '' === $label ) {
+				continue;
+			}
+
+			$keys[] = $label;
+		}
+
+		return array_values( array_unique( $keys ) );
 	}
 
 	/**

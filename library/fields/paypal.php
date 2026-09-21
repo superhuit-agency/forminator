@@ -90,19 +90,20 @@ class Forminator_PayPal extends Forminator_Field {
 		}
 
 		return array(
-			'mode'             => 'sandbox',
-			'currency'         => $default_currency,
-			'amount_type'      => 'fixed',
-			'label'            => 'checkout',
-			'color'            => 'gold',
-			'shape'            => 'rect',
-			'layout'           => 'vertical',
-			'tagline'          => 'true',
-			'shipping_address' => 'disable',
-			'locale'           => 'en_US',
-			'debug_mode'       => 'disable',
-			'height'           => '40',
-			'options'          => array(),
+			'mode'                => 'sandbox',
+			'currency'            => $default_currency,
+			'amount_type'         => 'fixed',
+			'label'               => 'checkout',
+			'color'               => 'gold',
+			'shape'               => 'rect',
+			'layout'              => 'vertical',
+			'tagline'             => 'true',
+			'shipping_address'    => 'disable',
+			'locale'              => 'en_US',
+			'debug_mode'          => 'disable',
+			'height'              => '40',
+			'product_description' => '',
+			'options'             => array(),
 		);
 	}
 
@@ -120,21 +121,20 @@ class Forminator_PayPal extends Forminator_Field {
 		$this->field         = $field;
 		$this->form_settings = $settings;
 
-		$element_name        = self::get_property( 'element_id', $field );
-		$field_id            = $element_name . '-field';
-		$mode                = self::get_property( 'mode', $field, 'sandbox' );
-		$currency            = self::get_property( 'currency', $field, $this->get_default_currency() );
-		$amount_type         = self::get_property( 'amount_type', $field, 'fixed' );
-		$amount              = self::get_property( 'amount', $field, '0' );
-		$amount_variable     = self::get_property( 'variable', $field, '' );
-		$logo                = self::get_property( 'logo', $field, '' );
-		$company_name        = esc_html( self::get_property( 'company_name', $field, '' ) );
-		$product_description = esc_html( self::get_property( 'product_description', $field, '' ) );
-		$customer_email      = self::get_property( 'customer_email', $field, '' );
-		$checkout_label      = esc_html( self::get_property( 'checkout_label', $field, '' ) );
-		$collect_address     = esc_html( self::get_property( 'collect_address', $field, 'none', 'string' ) );
-		$verify_zip          = esc_html( self::get_property( 'verify_zip', $field, false, 'bool' ) );
-		$language            = self::get_property( 'language', $field, 'en' );
+		$element_name    = self::get_property( 'element_id', $field );
+		$field_id        = $element_name . '-field';
+		$mode            = self::get_property( 'mode', $field, 'sandbox' );
+		$currency        = self::get_property( 'currency', $field, $this->get_default_currency() );
+		$amount_type     = self::get_property( 'amount_type', $field, 'fixed' );
+		$amount          = self::get_property( 'amount', $field, '0' );
+		$amount_variable = self::get_property( 'variable', $field, '' );
+		$logo            = self::get_property( 'logo', $field, '' );
+		$company_name    = esc_html( self::get_property( 'company_name', $field, '' ) );
+		$customer_email  = self::get_property( 'customer_email', $field, '' );
+		$checkout_label  = esc_html( self::get_property( 'checkout_label', $field, '' ) );
+		$collect_address = esc_html( self::get_property( 'collect_address', $field, 'none', 'string' ) );
+		$verify_zip      = esc_html( self::get_property( 'verify_zip', $field, false, 'bool' ) );
+		$language        = self::get_property( 'language', $field, 'en' );
 
 		$attr = array(
 			'type'              => 'hidden',
@@ -156,10 +156,6 @@ class Forminator_PayPal extends Forminator_Field {
 
 		if ( ! empty( $company_name ) ) {
 			$attr['data-name'] = esc_html( $company_name );
-		}
-
-		if ( ! empty( $company_name ) ) {
-			$attr['data-description'] = esc_html( $product_description );
 		}
 
 		if ( ! empty( $customer_email ) ) {
@@ -401,6 +397,45 @@ class Forminator_PayPal extends Forminator_Field {
 		$transaction_link = apply_filters( 'forminator_field_paypal_linkify_transaction_id', $transaction_link, $transaction_id, $meta_value );
 
 		return $transaction_link;
+	}
+
+	/**
+	 * Get payment description with merge tags applied.
+	 *
+	 * PayPal limits purchase unit descriptions to 127 characters.
+	 *
+	 * @since 1.58.0
+	 *
+	 * @param array $field Field.
+	 *
+	 * @return string
+	 */
+	public function get_payment_description( $field ) {
+		$description = self::get_property( 'product_description', $field, '' );
+		if ( empty( $description ) ) {
+			return '';
+		}
+
+		$description = forminator_replace_form_data( $description, Forminator_Front_Action::$module_object );
+		$description = wp_strip_all_tags( $description );
+		$description = trim( $description );
+
+		if ( '' === $description ) {
+			return '';
+		}
+
+		$description = mb_substr( $description, 0, 127 );
+
+		/**
+		 * Filter PayPal payment description before it is sent to PayPal.
+		 *
+		 * @since 1.58.0
+		 *
+		 * @param string                        $description   Payment description.
+		 * @param array                         $field           PayPal field settings.
+		 * @param Forminator_Form_Model|null    $module_object   Form model.
+		 */
+		return apply_filters( 'forminator_paypal_payment_description', $description, $field, Forminator_Front_Action::$module_object );
 	}
 
 	/**

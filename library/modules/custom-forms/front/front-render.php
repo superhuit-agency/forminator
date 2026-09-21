@@ -978,6 +978,21 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 	}
 
 	/**
+	 * Filter CSS classes of a forminator-row wrapper.
+	 *
+	 * @since 1.58.0
+	 *
+	 * @param string $classes Row CSS classes.
+	 * @param array  $fields  Row fields.
+	 * @param array  $wrapper Wrapper data. Empty for submit and PayPal rows.
+	 *
+	 * @return string
+	 */
+	private function filter_row_classes( $classes, $fields, $wrapper = array() ) {
+		return apply_filters( 'forminator_cform_row_classes', $classes, $this->model->id, $fields, $wrapper );
+	}
+
+	/**
 	 * Return before wrapper markup
 	 *
 	 * @since 1.0
@@ -987,14 +1002,18 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 	 * @return mixed
 	 */
 	public function render_wrapper_before( $wrapper ) {
-		$class = 'forminator-row';
-		$style = '';
+		$class  = 'forminator-row';
+		$style  = '';
+		$fields = isset( $wrapper['fields'] ) ? $wrapper['fields'] : array();
+
 		if ( $this->is_only_hidden( $wrapper ) ) {
 			$class .= ' forminator-hidden';
-		} elseif ( isset( $wrapper['fields'] ) && $this->is_only_invisible_field( $wrapper['fields'] ) ) {
+		} elseif ( ! empty( $fields ) && $this->is_only_invisible_field( $fields ) ) {
 			// Remove margin for wrappers with only invisible fields.
 			$style = ' style="margin: 0;"';
 		}
+
+		$class = $this->filter_row_classes( $class, $fields, $wrapper );
 
 		$html = sprintf( '<div class="%1$s"%2$s>', esc_attr( $class ), $style );
 
@@ -2349,7 +2368,9 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 			$class .= ' ' . $custom_class;
 		}
 
-		$html .= '<div class="forminator-row forminator-row-last">';
+		$row_classes = $this->filter_row_classes( 'forminator-row forminator-row-last', array( $this->get_submit_field() ) );
+
+		$html .= sprintf( '<div class="%s">', esc_attr( $row_classes ) );
 
 		$html .= '<div class="forminator-col">';
 
@@ -2404,9 +2425,10 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 
 				if ( 'paypal' === $field_type ) {
 
-					$id = Forminator_Field::get_property( 'element_id', $field_array );
+					$id          = Forminator_Field::get_property( 'element_id', $field_array );
+					$row_classes = $this->filter_row_classes( 'forminator-row forminator-paypal-row', array( $field_array ) );
 
-					$html  = '<div class="forminator-row forminator-paypal-row">';
+					$html  = sprintf( '<div class="%s">', esc_attr( $row_classes ) );
 					$html .= '<div class="forminator-col forminator-col-12">';
 					$html .= '<div class="forminator-field">';
 					$html .= '<div id="paypal-button-container-' . $form_id . '_' . self::$uid . '" class="' . esc_attr( $id ) . '-payment forminator-button-paypal">';

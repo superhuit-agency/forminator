@@ -241,10 +241,17 @@ class Forminator_Core {
 			foreach ( $form_meta as $meta ) {
 				if ( ! empty( $meta['key'] ) && 'forminator_form_meta' === $meta['key']
 					&& ! empty( $meta['value'] ) ) {
-					$value = maybe_unserialize( $meta['value'] );
+					$value = forminator_safe_maybe_unserialize( $meta['value'] );
 					if ( ! is_array( $value ) ) {
 						// XML-RPC escapes the request arguments before this hook runs.
-						$value = maybe_unserialize( wp_unslash( $meta['value'] ) );
+						$value = forminator_safe_maybe_unserialize( wp_unslash( $meta['value'] ) );
+					}
+					// Reject object payloads and other non-array values so they are not stored and later deserialized.
+					if ( ! is_array( $value ) ) {
+						return new WP_Error(
+							'invalid_form_meta',
+							esc_html__( 'Invalid form meta data.', 'forminator' )
+						);
 					}
 					$form_settings = $value['settings'] ?? array();
 					// Check if the current user has the required permissions to create or edit Forminator registration forms.
@@ -687,8 +694,22 @@ class Forminator_Core {
 	 * @return array|string
 	 */
 	public static function sanitize_array( $data, $current_key = '', $force = false ) {
+		// Unslash once; per-level unslashing lets encoded payloads bypass wp_kses. See FOR-6607.
 		$data = wp_unslash( $data );
 
+		return self::sanitize_array_recursive( $data, $current_key, $force );
+	}
+
+	/**
+	 * Recursively sanitize data that the caller has already unslashed.
+	 *
+	 * @param array  $data Data (already unslashed).
+	 * @param string $current_key Current key.
+	 * @param bool   $force Force sanitization.
+	 *
+	 * @return array|string
+	 */
+	private static function sanitize_array_recursive( $data, $current_key = '', $force = false ) {
 		if ( ! is_array( $data ) ) {
 			$data = forminator_remove_zero_width_chars( $data );
 		}
@@ -780,7 +801,7 @@ class Forminator_Core {
 		} else {
 			foreach ( $data as $key => $value ) {
 				$child_key    = $is_choice_field ? $current_key : $key;
-				$data[ $key ] = self::sanitize_array( $value, $child_key, $force );
+				$data[ $key ] = self::sanitize_array_recursive( $value, $child_key, $force );
 			}
 
 			return $data;

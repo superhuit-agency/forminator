@@ -142,6 +142,7 @@ class Forminator_Admin_Data {
 			'dismissNoticeNonce'             => wp_create_nonce( 'forminator_dismiss_notice' ),
 			'formProcessNonce'               => forminator_is_user_allowed( 'forminator-cform' ) ? wp_create_nonce( 'forminator_form_request' ) : '',
 			'formExportNonce'                => wp_create_nonce( 'forminator_popup_export_form' ),
+			'migrateStripeNonce'             => forminator_is_user_allowed( 'forminator-cform' ) ? wp_create_nonce( 'forminator_migrate_stripe' ) : '',
 			'pollProcessNonce'               => forminator_is_user_allowed( 'forminator-poll' ) ? wp_create_nonce( 'forminator_poll_request' ) : '',
 			'pollExportNonce'                => wp_create_nonce( 'forminator_popup_export_poll' ),
 			'quizProcessNonce'               => forminator_is_user_allowed( 'forminator-quiz' ) ? wp_create_nonce( 'forminator_quiz_request' ) : '',

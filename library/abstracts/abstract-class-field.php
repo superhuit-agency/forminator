@@ -2074,6 +2074,9 @@ abstract class Forminator_Field {
 		$field_type            = isset( $field_settings['type'] ) ? $field_settings['type'] : '';
 		if ( in_array( $field_type, $precision_field_types, true ) ) {
 			$precision = self::get_calculable_precision( $field_settings );
+			// Guard against non-scalar input (e.g. an injected array); floatval()
+			// would coerce it to 1 and manufacture a bogus amount.
+			$value = is_scalar( $value ) ? $value : 0;
 			return number_format( floatval( $value ), $precision, '.', '' );
 		}
 
@@ -2310,6 +2313,11 @@ abstract class Forminator_Field {
 	 * @return string
 	 */
 	public static function forminator_replace_number( $field, $number ) {
+		// Treat non-scalar input as 0 so it never reaches payment or condition code.
+		if ( ! is_scalar( $number ) ) {
+			return 0;
+		}
+
 		$separator  = self::get_property( 'separators', $field, 'blank' );
 		$separators = self::forminator_separators( $separator, $field );
 
