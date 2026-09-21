@@ -837,6 +837,9 @@
 						if ( data.success ) {
 							if ( res.draft_mail_sent ) {
 								emailResponse.removeClass( 'draft-error' ).addClass( 'draft-success' );
+								if ( res.draft_email_token ) {
+									form.find( 'input[name="draft_email_token"]' ).val( res.draft_email_token );
+								}
 							} else {
 								emailResponse.removeClass( 'draft-success' ).addClass( 'draft-error' );
 							}

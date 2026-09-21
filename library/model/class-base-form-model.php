@@ -1412,6 +1412,14 @@ abstract class Forminator_Base_Form_Model {
 				throw new Exception( esc_html__( 'Invalid format of import data name', 'forminator' ) );
 			}
 
+			// create_from_import_data() writes posts directly and skips save(), so enforce
+			// registration role checks here for every import path (including quiz lead forms).
+			$validate = forminator_validate_registration_form_settings( $meta['settings'] );
+			if ( is_wp_error( $validate ) ) {
+				// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Exception message is already escaped.
+				throw new Exception( $validate->get_error_message() );
+			}
+
 			if ( $name ) {
 				$meta['settings']['formName'] = $name;
 			}

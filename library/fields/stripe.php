@@ -1885,15 +1885,6 @@ class Forminator_Stripe extends Forminator_Field {
 	 * @return bool
 	 */
 	public static function is_adaptive_pricing_configured( $field ) {
-		$payments = self::get_property( 'payments', $field, array() );
-
-		foreach ( $payments as $payment ) {
-			// Adaptive Pricing is only safe when Stripe receives a fixed source amount.
-			if ( ! empty( self::get_plan_dependent_fields( $payment ) ) ) {
-				return false;
-			}
-		}
-
 		return 'checkout_session' === self::get_payment_api( $field )
 			&& filter_var( self::get_property( 'adaptive_pricing', $field, false ), FILTER_VALIDATE_BOOLEAN );
 	}

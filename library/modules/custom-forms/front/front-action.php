@@ -234,6 +234,11 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 				)
 			);
 
+			$payment_description = $field_object->get_payment_description( $paypal_field );
+			if ( ! empty( $payment_description ) ) {
+				$data['form_data']['purchase_units'][0]['description'] = $payment_description;
+			}
+
 			$data = $this->get_temporary_country_code( $data );
 			$data = $this->get_state_code( $data );
 
@@ -2387,7 +2392,10 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 			wp_send_json_error( $response );
 		}
 
-		unset( $response['file_path'] );
+		// Do not return filesystem path or public URL; only the stored filename is needed client-side.
+		$stored_name = isset( $response['file_name'] ) ? $response['file_name'] : '';
+		unset( $response['file_path'], $response['file_url'], $response['file_name'] );
+		$response['stored_name'] = $stored_name;
 
 		wp_send_json_success( $response );
 	}
@@ -3067,6 +3075,11 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 				}
 			}
 		}
+		// Never trust client-supplied post-custom; rebuild from field settings only.
+		if ( isset( self::$prepared_data[ $field_id ]['post-custom'] ) ) {
+			unset( self::$prepared_data[ $field_id ]['post-custom'] );
+		}
+
 		$custom_vars = Forminator_Field::get_property( 'post_custom_fields', $field_settings );
 		$custom_meta = Forminator_Field::get_property( 'options', $field_settings );
 		if ( empty( $custom_vars ) || empty( $custom_meta ) || self::$is_draft || self::$is_abandoned ) {
@@ -3677,21 +3690,34 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 	/**
 	 * Draft link email submission
 	 *
+	 * Builds the draft link and retention period server-side from the stored draft.
+	 * Recipient comes from the send-draft form (same pattern as admin resend).
+	 * A one-time send token is consumed on use and rotated after success.
+	 *
 	 * @since 1.17.0
 	 */
 	public function submit_email_draft_link() {
 		$draft_id = Forminator_Core::sanitize_text_field( 'draft_id' );
 		$nonce    = 'forminator_nonce_email_draft_link_' . $draft_id;
-		if ( ! check_ajax_referer( $nonce, $nonce ) ) {
+		if ( ! check_ajax_referer( $nonce, $nonce, false ) ) {
 			wp_send_json_error( esc_html__( 'Invalid request, you are not allowed to do that action.', 'forminator' ) );
 		}
 
-		$submitted_data = Forminator_Core::sanitize_array( $_POST );
-		$form_id        = $submitted_data['form_id'];
-		$email          = $submitted_data['email-1'];
+		$email = Forminator_Core::sanitize_text_field( 'email-1' );
+		$token = Forminator_Core::sanitize_text_field( 'draft_email_token' );
+
+		$draft_entry = new Forminator_Form_Entry_Model( $draft_id );
+		if ( empty( $draft_entry->entry_id ) || empty( $draft_entry->form_id ) || empty( $draft_entry->draft_id ) ) {
+			wp_send_json_error( esc_html__( 'Draft entry was not found.', 'forminator' ) );
+		}
+
+		$form_id           = (int) $draft_entry->form_id;
+		$submitted_form_id = absint( Forminator_Core::sanitize_text_field( 'form_id' ) );
+		if ( $submitted_form_id && $submitted_form_id !== $form_id ) {
+			wp_send_json_error( esc_html__( 'Invalid request, you are not allowed to do that action.', 'forminator' ) );
+		}
 
 		if ( empty( $email ) ) {
-
 			wp_send_json_error(
 				array(
 					'field'   => 'email-1',
@@ -3702,8 +3728,7 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 					),
 				)
 			);
-		} elseif ( ! filter_var( $email, FILTER_VALIDATE_EMAIL ) ) {
-
+		} elseif ( ! is_email( $email ) ) {
 			wp_send_json_error(
 				array(
 					'field'   => 'email-1',
@@ -3716,9 +3741,18 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 			);
 		}
 
-		// Send email.
+		$stored_token = get_transient( self::get_draft_email_token_key( $draft_entry->draft_id ) );
+		if ( empty( $token ) || empty( $stored_token ) || ! hash_equals( (string) $stored_token, $token ) ) {
+			wp_send_json_error( esc_html__( 'Invalid request, you are not allowed to do that action.', 'forminator' ) );
+		}
+
+		// Consume immediately so the same pair cannot be replayed in parallel.
+		delete_transient( self::get_draft_email_token_key( $draft_entry->draft_id ) );
+
 		$custom_form = Forminator_Form_Model::model()->load( $form_id );
 		if ( ! is_object( $custom_form ) ) {
+			// Restore token so a legitimate retry is still possible after a hard failure.
+			set_transient( self::get_draft_email_token_key( $draft_entry->draft_id ), $token, DAY_IN_SECONDS );
 			wp_send_json_error(
 				array(
 					'message' => apply_filters(
@@ -3730,21 +3764,55 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 			);
 		}
 
+		$settings          = $custom_form->settings;
+		$save_and_continue = isset( $settings['use_save_and_continue'] ) ? filter_var( $settings['use_save_and_continue'], FILTER_VALIDATE_BOOLEAN ) : false;
+		$enable_email_link = isset( $settings['sc_email_link'] ) ? filter_var( $settings['sc_email_link'], FILTER_VALIDATE_BOOLEAN ) : true;
+		if ( ! $save_and_continue || ! $enable_email_link ) {
+			set_transient( self::get_draft_email_token_key( $draft_entry->draft_id ), $token, DAY_IN_SECONDS );
+			wp_send_json_error( esc_html__( 'Invalid request, you are not allowed to do that action.', 'forminator' ) );
+		}
+
+		$draft_page_id = absint( $draft_entry->get_meta( '_draft_page_id', 0 ) );
+		if ( empty( $draft_page_id ) ) {
+			set_transient( self::get_draft_email_token_key( $draft_entry->draft_id ), $token, DAY_IN_SECONDS );
+			wp_send_json_error( esc_html__( 'Could not determine the page for this draft. The draft link cannot be reconstructed.', 'forminator' ) );
+		}
+
+		$draft_link = self::get_draft_link( $draft_entry->draft_id, $draft_page_id );
+		$retention  = isset( $settings['sc_draft_retention'] ) ? $settings['sc_draft_retention'] : 30;
+
+		$submitted_data = array(
+			'email-1'          => $email,
+			'draft_link'       => $draft_link,
+			'retention_period' => $retention,
+			'action'           => 'forminator_email_draft_link',
+		);
+
 		$draft_notifications = $this->get_draft_notification( $custom_form->notifications, $submitted_data );
+		if ( empty( $draft_notifications ) ) {
+			set_transient( self::get_draft_email_token_key( $draft_entry->draft_id ), $token, DAY_IN_SECONDS );
+			wp_send_json_error( esc_html__( 'No draft email notification is configured for this form.', 'forminator' ) );
+		}
+
 		unset( $custom_form->notifications );
 		$custom_form->notifications[] = $draft_notifications;
 		$forminator_mail_sender       = new Forminator_CForm_Front_Mail();
-		$draft_entry                  = new Forminator_Form_Entry_Model( $draft_id );
 		$mail_sent                    = $forminator_mail_sender->process_mail( $custom_form, $draft_entry, $submitted_data );
-		$response['draft_mail_sent']  = $mail_sent;
+		$response                     = array(
+			'draft_mail_sent' => $mail_sent,
+		);
 
 		if ( $mail_sent ) {
+			// Issue a fresh token for optional "Change email" without replaying the old pair.
+			$response['draft_email_token']  = self::issue_draft_email_token( $draft_entry->draft_id );
 			$response['draft_mail_message'] = sprintf(
 				'<p>%s</p><a href="#" class="draft-resend-mail">%s</a>',
 				esc_html__( 'We\'ve sent the resume form link to your email address. Please check your spam folder if you can\'t find the link in your inbox.', 'forminator' ),
 				esc_html__( 'Change email', 'forminator' )
 			);
 		} else {
+			// Keep the same token so "Resend link" can retry.
+			set_transient( self::get_draft_email_token_key( $draft_entry->draft_id ), $token, DAY_IN_SECONDS );
 			$response['draft_mail_message'] = sprintf(
 				'<p>%s</p><a href="#" class="draft-resend-mail">%s</a>',
 				esc_html__( 'We couldn\'t send the form resume link to your email at this time. Click on the link below to resend it or manually copy and save the link in a safe place.', 'forminator' ),
@@ -3753,5 +3821,34 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 		}
 
 		wp_send_json_success( $response );
+	}
+
+	/**
+	 * Transient key for the one-time draft email send token.
+	 *
+	 * @param string $draft_id Draft ID.
+	 *
+	 * @since 1.57.3
+	 *
+	 * @return string
+	 */
+	public static function get_draft_email_token_key( $draft_id ) {
+		return 'forminator_draft_email_token_' . $draft_id;
+	}
+
+	/**
+	 * Issue (or replace) a one-time token used to send the draft resume email.
+	 *
+	 * @param string $draft_id Draft ID.
+	 *
+	 * @since 1.57.3
+	 *
+	 * @return string
+	 */
+	public static function issue_draft_email_token( $draft_id ) {
+		$token = wp_generate_password( 32, false, false );
+		set_transient( self::get_draft_email_token_key( $draft_id ), $token, DAY_IN_SECONDS );
+
+		return $token;
 	}
 }

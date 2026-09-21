@@ -1295,6 +1295,9 @@ function forminator_sanitize_rich_textarea_widget_hooks( $content ) {
 function forminator_get_rich_textarea_allowed_html() {
 	$allowed_html = wp_kses_allowed_html( 'post' );
 
+	// Validate URL attributes so entity-encoded markup cannot ride in them.
+	$url_attributes = wp_kses_uri_attributes();
+
 	foreach ( $allowed_html as $tag => $attributes ) {
 		if ( ! is_array( $attributes ) ) {
 			continue;
@@ -1307,6 +1310,14 @@ function forminator_get_rich_textarea_allowed_html() {
 			$allowed_html[ $tag ]['class'] = array(
 				'value_callback' => 'forminator_is_allowed_rich_textarea_class_attribute',
 			);
+		}
+
+		foreach ( $url_attributes as $url_attribute ) {
+			if ( isset( $allowed_html[ $tag ][ $url_attribute ] ) ) {
+				$allowed_html[ $tag ][ $url_attribute ] = array(
+					'value_callback' => 'forminator_is_allowed_rich_textarea_url_attribute',
+				);
+			}
 		}
 	}
 
@@ -1328,6 +1339,36 @@ function forminator_is_allowed_rich_textarea_class_attribute( $class_value ) {
 		if ( preg_match( '/^(sui|fui)-/i', $class_name ) ) {
 			return false;
 		}
+	}
+
+	return true;
+}
+
+/**
+ * Check whether a URL attribute value is safe for public rich-text admin output.
+ *
+ * Kses keeps entity-encoded values verbatim, so client-side code can decode them
+ * back into a breakout. Legitimate URLs percent-encode these, so reject any value
+ * that decodes to an angle bracket, quote or backtick.
+ *
+ * @since 1.57.3
+ *
+ * @param string $url_value URL attribute value.
+ * @return bool
+ */
+function forminator_is_allowed_rich_textarea_url_attribute( $url_value ) {
+	$decoded = (string) $url_value;
+
+	// Decode until stable to catch multi-encoded characters. Decoding only ever
+	// shortens the string, so this converges.
+	do {
+		$previous = $decoded;
+		$decoded  = html_entity_decode( $previous, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+	} while ( $decoded !== $previous );
+
+	// These characters can break out of a downstream HTML/JS sink.
+	if ( preg_match( '/[<>"\'`]/', $decoded ) ) {
+		return false;
 	}
 
 	return true;

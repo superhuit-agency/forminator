@@ -808,7 +808,7 @@ class Forminator_Quiz_Front_Action extends Forminator_Front_Action {
 		?>
 
 		<div role="alert" class="forminator-quiz--summary">
-			<?php echo wp_kses_post( wpautop( $text, true ) ); ?>
+			<?php echo wp_kses_post( wpautop( do_shortcode( $text ), true ) ); ?>
 			<?php echo wp_kses_post( self::get_result_quiz_buttons( $model ) ); ?>
 		</div>
 
@@ -867,7 +867,6 @@ class Forminator_Quiz_Front_Action extends Forminator_Front_Action {
 
 		<?php
 		$knowledge_result_html = ob_get_clean();
-		$knowledge_result_html = do_shortcode( $knowledge_result_html );
 
 		/**
 		 * Filter to modify knowledge results

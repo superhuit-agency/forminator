@@ -31,7 +31,7 @@ $sui_body_class   = "sui-$sanitize_version";
 							<?php esc_html_e( 'Deactivate Forminator?', 'forminator' ); ?>
 						</h3>
 
-						<button class="sui-button-icon sui-button-float--right forminator-dismiss-deactivation-survey" data-type="dismiss" data-modal-close>
+						<button type="button" class="sui-button-icon sui-button-float--right forminator-dismiss-deactivation-survey" data-type="dismiss">
 							<span class="sui-icon-close sui-md" aria-hidden="true"></span>
 							<span class="sui-screen-reader-text"><?php esc_html_e( 'Close this dialog.', 'forminator' ); ?></span>
 						</button>
