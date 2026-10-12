@@ -217,7 +217,6 @@ class Forminator_CForm_Front_Mail extends Forminator_Mail {
 
 		try {
 			$data          = Forminator_CForm_Front_Action::$prepared_data;
-			$notifications = $custom_form->notifications;
 
 			if (
 			empty( $data ) && ! empty( $submitted_data ) &&
@@ -323,10 +322,10 @@ class Forminator_CForm_Front_Mail extends Forminator_Mail {
 			do_action( 'forminator_custom_form_mail_before_send_mail', $this, $custom_form, $data, $entry );
 
 			// Process Email.
-			if ( ! empty( $notifications ) ) {
+			if ( ! empty( $custom_form->notifications ) ) {
 				$this->init();
 				// Process admin mail.
-				foreach ( $notifications as $notification ) {
+				foreach ( $custom_form->notifications as $notification ) {
 					// If notification is stripe-payment-failed type, skip if entry status is not failed.
 					if ( 'failed' !== $entry->status &&
 						isset( $notification['type'] ) && 'stripe-payment-failed' === $notification['type'] ) {
