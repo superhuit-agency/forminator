@@ -86,6 +86,9 @@ class Forminator_Quiz_Front_Action extends Forminator_Front_Action {
 				// Do not allow if the quiz has leads and has already been submitted.
 				if ( intval( $this->model->id ) !== intval( $old_entry->form_id ) || false !== $old_entry->get_meta( 'entry' ) ) {
 					$invalid_request = true;
+				} elseif ( ! self::is_entry_owner( $old_entry ) ) {
+					// Do not allow if the request did not create the entry.
+					$invalid_request = true;
 				}
 			}
 			if ( $invalid_request ) {
@@ -113,6 +116,30 @@ class Forminator_Quiz_Front_Action extends Forminator_Front_Action {
 		} else {
 			$this->process_knowledge_submit_multiple_answers( $this->model, $is_preview );
 		}
+	}
+
+	/**
+	 * Check that the request created the pending lead entry
+	 *
+	 * The token is issued when the lead entry is stored and is only known to that visitor.
+	 *
+	 * @since 1.58
+	 *
+	 * @param Forminator_Form_Entry_Model $entry Pending lead entry.
+	 *
+	 * @return bool
+	 */
+	private static function is_entry_owner( $entry ) {
+		$stored = $entry->get_meta( 'entry_token' );
+		if ( empty( $stored ) ) {
+			return false;
+		}
+
+		$token = isset( self::$prepared_data['entry_token'] )
+			? sanitize_text_field( self::$prepared_data['entry_token'] )
+			: '';
+
+		return ! empty( $token ) && hash_equals( (string) $stored, $token );
 	}
 
 	/**
@@ -177,15 +204,17 @@ class Forminator_Quiz_Front_Action extends Forminator_Front_Action {
 			);
 		}
 
+		$quiz_result = array(
+			array(
+				'name'  => 'entry',
+				'value' => $result_data,
+			),
+		);
+
 		$entry = $this->save_form_entry(
 			$model,
 			// why on earth it saved like this.
-			array(
-				array(
-					'name'  => 'entry',
-					'value' => $result_data,
-				),
-			),
+			$quiz_result,
 			$is_preview
 		);
 		$entries  = new Forminator_Form_Entry_Model( $entry->entry_id );
@@ -195,9 +224,9 @@ class Forminator_Quiz_Front_Action extends Forminator_Front_Action {
 		$result->set_entry( $entry_id );
 		$result->set_postdata();
 
-		// Email.
-		$forminator_mail_sender = new Forminator_Quiz_Front_Mail();
-		$forminator_mail_sender->process_mail( $model, $entries, $final_res );
+		if ( ! empty( $entries ) && 'pending' !== $entries->status ) {
+			$this->post_submission_process( $entries, $quiz_result );
+		}
 
 		// dont push history on preview.
 		$result_url = ! $is_preview ? $result->build_permalink() : '';
@@ -576,11 +605,12 @@ class Forminator_Quiz_Front_Action extends Forminator_Front_Action {
 		self::$prepared_data['final_result'] = $right_counter;
 
 		if ( $is_finish && ! is_null( $entry ) ) {
-			// Email.
-			$forminator_mail_sender = new Forminator_Quiz_Front_Mail();
-			$forminator_mail_sender->process_mail( $model, $entries );
 			// Replace quiz form data.
 			$final_text = forminator_replace_quiz_form_data( $final_text, $model, $entry );
+		}
+
+		if ( ! empty( $entries ) && 'pending' !== $entries->status ) {
+			$this->post_submission_process( $entries, $result_data );
 		}
 
 		// Don't push history on preview.
@@ -761,11 +791,12 @@ class Forminator_Quiz_Front_Action extends Forminator_Front_Action {
 		self::$prepared_data['final_result'] = $total_counter;
 
 		if ( $is_finish && ! is_null( $entry ) ) {
-			// Email.
-			$forminator_mail_sender = new Forminator_Quiz_Front_Mail();
-			$forminator_mail_sender->process_mail( $model, $entries );
 			// Replace quiz form data.
 			$final_text = forminator_replace_quiz_form_data( $final_text, $model, $entry );
+		}
+
+		if ( ! empty( $entries ) && 'pending' !== $entries->status ) {
+			$this->post_submission_process( $entries, $result_data );
 		}
 
 		// Don't push history on preview.
@@ -808,7 +839,7 @@ class Forminator_Quiz_Front_Action extends Forminator_Front_Action {
 		?>
 
 		<div role="alert" class="forminator-quiz--summary">
-			<?php echo wp_kses_post( wpautop( $text, true ) ); ?>
+			<?php echo wp_kses_post( wpautop( do_shortcode( $text ), true ) ); ?>
 			<?php echo wp_kses_post( self::get_result_quiz_buttons( $model ) ); ?>
 		</div>
 
@@ -867,7 +898,6 @@ class Forminator_Quiz_Front_Action extends Forminator_Front_Action {
 
 		<?php
 		$knowledge_result_html = ob_get_clean();
-		$knowledge_result_html = do_shortcode( $knowledge_result_html );
 
 		/**
 		 * Filter to modify knowledge results
@@ -891,6 +921,102 @@ class Forminator_Quiz_Front_Action extends Forminator_Front_Action {
 	 */
 	public function save_entry() {
 		$this->submit_quizzes();
+	}
+
+	/**
+	 * Run post submission process
+	 *
+	 * @param Forminator_Form_Entry_Model $entry Form Entry.
+	 * @return bool
+	 */
+	public function run_post_submission_process( $entry ) {
+		static::$module_object = Forminator_Base_Form_Model::get_model( $entry->form_id );
+		if ( ! static::$module_object ) {
+			forminator_maybe_log( __METHOD__, esc_html__( 'Error: Module object is corrupted!', 'forminator' ), $entry );
+			return false;
+		}
+
+		try {
+			self::$module_id = $entry->form_id;
+			// Get the quiz result from the entry meta as after payment submission/redirection, the quiz result is not available in the request.
+			$quiz_result = $entry->get_meta( 'entry' );
+			// Process integrated addons, create WP posts, user registration and emails.
+			$this->post_submission_process( $entry, $quiz_result );
+			return true;
+		} catch ( Exception $e ) {
+			forminator_maybe_log( __METHOD__, $e->getMessage(), $entry );
+			return false;
+		}
+	}
+
+	/**
+	 * Check if entry id is valid
+	 *
+	 * @param mixed $entry_id Entry ID.
+	 * @return bool
+	 */
+	private function is_valid_entry_id( $entry_id ) {
+		$entry = new Forminator_Form_Entry_Model( $entry_id );
+		return ! empty( $entry ) && ! empty( $entry->entry_id );
+	}
+
+	/**
+	 * Post submission process
+	 *
+	 * @param Forminator_Form_Entry_Model $entry Form Entry.
+	 * @param array                       $quiz_result Quiz result.
+	 *
+	 * @return void
+	 */
+	private function post_submission_process( $entry, $quiz_result ) {
+		$quiz_settings = static::$module_object->settings;
+		if ( $quiz_settings['hasLeads'] && ! empty( $quiz_settings['leadsId'] ) ) {
+			Forminator_CForm_Front_Action::maybe_create_post_for_lead_form( $entry, $quiz_settings['leadsId'] );
+		}
+		$quiz_entry       = $entry->get_meta( 'entry', null );
+		$is_prevent_store = static::$module_object->is_prevent_store();
+		// Emails and addons should only be processed if the entry is not empty or store submission is off - Only the lead form entry is saved, and the quiz entry may not have been submitted yet.
+		if ( ! empty( $quiz_entry ) || ( $is_prevent_store && empty( $entry->entry_id ) ) ) {
+			// Reset the module object to the quiz form model, as it might have been changed by the lead form model.
+			static::$module_object = Forminator_Base_Form_Model::get_model( self::$module_id );
+
+			$addon_data = array(
+				array(
+					'name'  => 'entry',
+					'value' => $quiz_result,
+				),
+			);
+			// ADDON add_entry_fields.
+			$addon_data = self::attach_addons_add_entry_fields( $addon_data, $entry );
+
+			// Remove the entry values from the addon data to avoid duplicate entry data being saved in the database.
+			// As the method attach_addons_add_entry_fields() merges the addon result with the $addon_data. We already saved the entry values in the database.
+			$addon_data = array_filter(
+				$addon_data,
+				function ( $item ) {
+					return 'entry' !== $item['name'];
+				}
+			);
+
+			$entry->set_fields( $addon_data );
+
+			// ADDON after_entry_saved.
+			self::attach_addons_after_entry_saved( $entry );
+
+			// Email.
+			$forminator_mail_sender = new Forminator_Quiz_Front_Mail();
+			if ( 'nowrong' === static::$module_object->quiz_type ) {
+				$quiz_result = $quiz_entry[0]['value']['result'] ?? array();
+				$forminator_mail_sender->process_mail( static::$module_object, $entry, $quiz_result );
+			} else {
+				$forminator_mail_sender->process_mail( static::$module_object, $entry );
+			}
+
+			if ( $is_prevent_store && $this->is_valid_entry_id( $entry->entry_id ) ) {
+				// Delete entry if prevent store is enabled.
+				$entry->delete();
+			}
+		}
 	}
 
 	/**
@@ -931,7 +1057,11 @@ class Forminator_Quiz_Front_Action extends Forminator_Front_Action {
 		}
 
 		$is_prevent_store = $quiz->is_prevent_store();
-		if ( $is_preview || $is_prevent_store || $entry->save( null, $data_entry ) ) {
+
+		// If prevent store is enabled and entry id is not valid then we should not store the entry.
+		$prevent_store = $is_prevent_store && ! $this->is_valid_entry_id( $data_entry );
+
+		if ( $is_preview || $prevent_store || $entry->save( null, $data_entry ) ) {
 			$field_data_array = array(
 				array(
 					'name'  => 'entry',
@@ -947,9 +1077,6 @@ class Forminator_Quiz_Front_Action extends Forminator_Front_Action {
 				),
 			);
 
-			// ADDON add_entry_fields.
-			$added_data_array = self::attach_addons_add_entry_fields( $field_data_array, $entry );
-
 			/**
 			 * Action called before setting fields to database
 			 *
@@ -960,10 +1087,7 @@ class Forminator_Quiz_Front_Action extends Forminator_Front_Action {
 			 * @param array                       $field_data - the entry data.
 			 */
 			do_action( 'forminator_quizzes_submit_before_set_fields', $entry, $quiz_id, $field_data );
-			$entry->set_fields( $added_data_array );
-
-			// ADDON after_entry_saved.
-			self::attach_addons_after_entry_saved( $entry );
+			$entry->set_fields( $field_data_array );
 		}
 
 		return $entry;

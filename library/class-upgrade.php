@@ -74,6 +74,9 @@ class Forminator_Upgrade {
 			if ( $old_version ) {
 				self::maybe_enable_place_api_notice( $old_version );
 			}
+
+			// Create Stripe webhook endpoint if not exists.
+			Forminator_Gateway_Stripe::maybe_create_webhook_endpoint();
 		}
 	}
 

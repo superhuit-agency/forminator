@@ -98,7 +98,8 @@ class Forminator_Database_Tables {
 				`custom_prefix` VARCHAR(191) NOT NULL DEFAULT '',
 				`is_spam` TINYINT(1) NOT NULL DEFAULT 0,
 				`date_created` datetime NOT NULL default '0000-00-00 00:00:00',
-				`status` ENUM('active','spam','draft','abandoned') NOT NULL DEFAULT 'active',
+				`date_updated` datetime NOT NULL default '0000-00-00 00:00:00',
+				`status` ENUM('active','spam','draft','abandoned','pending','failed') NOT NULL DEFAULT 'active',
 				PRIMARY KEY (`entry_id`),
 				KEY `entry_is_spam` (`is_spam` ASC ),
 				KEY `entry_status` (`status`),
@@ -210,26 +211,6 @@ class Forminator_Database_Tables {
 		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery.NoCaching
 
 		update_option( $option_key, time() );
-	}
-
-	/**
-	 * Delete custom tables
-	 *
-	 * @deprecated on 1.1 use forminator_drop_custom_tables on uninstall.php
-	 * @since 1.0
-	 */
-	public static function uninstall_database_tables() {
-		_deprecated_function( __METHOD__, '1.1', 'forminator_drop_custom_tables' );
-		global $wpdb;
-		$tables = self::table_names( $wpdb );
-		$wpdb->hide_errors();
-
-		foreach ( $tables as $table_name ) {
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Caching is not required while dropping the table.
-			if ( ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name ) ) === $table_name ) ) {
-				$wpdb->query( $wpdb->prepare( 'DROP TABLE %s', $table_name ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.SchemaChange
-			}
-		}
 	}
 
 	/**

@@ -126,22 +126,6 @@ class Forminator_Quiz_Admin extends Forminator_Admin_Module {
 	}
 
 	/**
-	 * Highlight parent page in sidebar
-	 *
-	 * @deprecated 1.1 No longer used because this function override prohibited WordPress global of $plugin_page
-	 * @since      1.0
-	 *
-	 * @param string $file File.
-	 *
-	 * @return mixed
-	 */
-	public function highlight_admin_parent( $file ) {
-		_deprecated_function( __METHOD__, '1.1', null );
-
-		return $file;
-	}
-
-	/**
 	 * Highlight submenu on admin page
 	 *
 	 * @since 1.1
@@ -727,6 +711,11 @@ class Forminator_Quiz_Admin extends Forminator_Admin_Module {
 			return;
 		}
 
+		// The nonce guards against CSRF, it does not authorize the caller.
+		if ( ! forminator_is_user_allowed( $this->page ) ) {
+			return;
+		}
+
 		// Get module name.
 		$name = Forminator_Core::sanitize_text_field( 'name' );
 
@@ -900,7 +889,7 @@ class Forminator_Quiz_Admin extends Forminator_Admin_Module {
 		$results = array();
 		// Check if results exist.
 		if ( isset( $template->results ) && is_array( $template->results ) ) {
-			$results = forminator_sanitize_array_field( $template->results );
+			$results = forminator_sanitize_array_field( $template->results, true );
 			foreach ( $template->results as $key => $result ) {
 				$description = '';
 				if ( isset( $result['description'] ) ) {
@@ -940,7 +929,7 @@ class Forminator_Quiz_Admin extends Forminator_Admin_Module {
 
 		$notifications = array();
 		if ( isset( $template->notifications ) ) {
-			$notifications = forminator_sanitize_array_field( $template->notifications );
+			$notifications = forminator_sanitize_array_field( $template->notifications, true );
 
 			$count = 0;
 			foreach ( $notifications as $notification ) {

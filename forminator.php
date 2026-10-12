@@ -1,12 +1,11 @@
 <?php
 /**
  * Plugin Name: Forminator
- * Version: 1.57.2
+ * Version: 1.58.1
  * Plugin URI:  https://wpmudev.com/project/forminator/
  * Description: Build powerful, customizable forms with ease using Forminator’s drag-and-drop builder, conditional logic, payment support, real-time analytics, and seamless integrations—no coding needed.
  * Author: WPMU DEV
  * Author URI: https://wpmudev.com
- * Update URI: wordpress.org/plugins/forminator/
  * Requires at least: 6.4
  * Tested up to: 7.1
  * Requires PHP: 7.4
@@ -173,6 +172,7 @@ if ( ! class_exists( 'Forminator' ) ) {
 			as_unschedule_action( 'forminator_daily_cron', array(), 'forminator' );
 			as_unschedule_action( 'forminator_process_report', array(), 'forminator' );
 			as_unschedule_action( 'forminator_general_data_protection_cleanup', array(), 'forminator' );
+			as_unschedule_action( 'forminator_update_stripe_payment_status_cron', array(), 'forminator' );
 		}
 
 		/**

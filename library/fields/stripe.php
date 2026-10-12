@@ -45,15 +45,6 @@ class Forminator_Stripe extends Forminator_Field {
 	public const CHECKOUT_SESSION_CLEANUP_OPTION_KEY = 'forminator_stripe_checkout_session_cleanup';
 
 	/**
-	 * Option key for uploaded files associated with Checkout Sessions.
-	 *
-	 * @since 1.56
-	 *
-	 * @var string
-	 */
-	public const CHECKOUT_SESSION_UPLOADED_FILES = 'forminator_uploaded_files_on_checkout_sessions';
-
-	/**
 	 * Option key prefix for Checkout Session IDs that already produced an entry.
 	 *
 	 * @since 1.57.2
@@ -117,6 +108,34 @@ class Forminator_Stripe extends Forminator_Field {
 	public const PAYMENT_INTENT_CLAIM_HELD_OPTION_PREFIX = 'forminator_stripe_payment_intent_claim_held_';
 
 	/**
+	 * Cookie tying a Stripe payment to the browser that started it.
+	 *
+	 * @var string
+	 */
+	public const PAYMENT_OWNER_COOKIE = 'forminator_stripe_payment_owner';
+
+	/**
+	 * Transient prefix for per-browser display PaymentIntents.
+	 *
+	 * @var string
+	 */
+	private const DISPLAY_INTENT_TRANSIENT_PREFIX = 'forminator_stripe_display_intent_';
+
+	/**
+	 * PaymentIntent statuses a submission can still recover from.
+	 *
+	 * @since 1.58.0
+	 *
+	 * @var array
+	 */
+	private const PENDING_INTENT_STATUSES = array(
+		'requires_payment_method',
+		'requires_confirmation',
+		'requires_action',
+		'processing',
+	);
+
+	/**
 	 * Checkout Sessions claimed by this request, keyed by Checkout Session ID.
 	 *
 	 * The value tells whether the entry reached storage, which decides if the session is
@@ -139,6 +158,20 @@ class Forminator_Stripe extends Forminator_Field {
 	 * @var array
 	 */
 	private static $claimed_payment_intents = array();
+
+	/**
+	 * Payment owner token of the current browser.
+	 *
+	 * @var string
+	 */
+	private static $payment_owner_token = '';
+
+	/**
+	 * Whether the payment owner cookie was sent in this request.
+	 *
+	 * @var bool
+	 */
+	private static $payment_owner_cookie_sent = false;
 
 	/**
 	 * Name
@@ -331,7 +364,8 @@ class Forminator_Stripe extends Forminator_Field {
 		$uniqid                 = Forminator_CForm_Front::$uid;
 		$id_prefix              = $is_ocs ? 'payment-element' : 'card-element';
 		$full_id                = $id_prefix . '-' . $uniqid;
-		$prefix                 = 'basic' === $settings['form-style'] ? 'basic-' : '';
+		$form_style             = $settings['form-style'] ?? 'default';
+		$prefix                 = 'basic' === $form_style ? 'basic-' : '';
 
 		$customer_email         = forminator_clear_field_id( $customer_email );
 		$checkout_email_enabled = filter_var( $checkout_email_enabled, FILTER_VALIDATE_BOOLEAN );
@@ -655,7 +689,7 @@ class Forminator_Stripe extends Forminator_Field {
 	private static function get_layout( $field ) {
 		$layout = self::get_property( 'layout', $field, 'tabs' );
 		if ( 'accordion+radio' === $layout ) {
-			$radios = true;
+			$radios = 'always';
 			$layout = 'accordion';
 		}
 		$data = array(
@@ -665,7 +699,7 @@ class Forminator_Stripe extends Forminator_Field {
 
 		if ( 'accordion' === $layout ) {
 			$data['spacedAccordionItems'] = false;
-			$data['radios']               = ! empty( $radios );
+			$data['radios']               = ! empty( $radios ) ? $radios : 'never';
 		}
 		return $data;
 	}
@@ -857,6 +891,32 @@ class Forminator_Stripe extends Forminator_Field {
 	}
 
 	/**
+	 * Check that a PaymentIntent belongs to the form being submitted
+	 *
+	 * Forminator stamps the form ID into the intent metadata on creation, so a
+	 * client supplied ID from another form is rejected before it is read or updated.
+	 *
+	 * @since 1.58
+	 *
+	 * @param object $intent Stripe PaymentIntent object.
+	 *
+	 * @return bool
+	 */
+	private static function is_payment_intent_of_current_form( $intent ): bool {
+		$expected_form_id = ! empty( Forminator_Front_Action::$module_object->id )
+			? (string) Forminator_Front_Action::$module_object->id
+			: '';
+
+		if ( '' === $expected_form_id ) {
+			return false;
+		}
+
+		$intent_metadata = isset( $intent->metadata ) ? $intent->metadata : null;
+
+		return self::get_form_id_from_stripe_metadata( $intent_metadata ) === $expected_form_id;
+	}
+
+	/**
 	 * Prepare shared Stripe API context values.
 	 *
 	 * @since 1.56
@@ -1020,14 +1080,17 @@ class Forminator_Stripe extends Forminator_Field {
 			'mode'                => 'payment',
 			'ui_mode'             => 'elements',
 			'locale'              => $language,
-			'return_url'          => self::get_return_url(),
+			'return_url'          => self::get_return_url( true ),
 			'client_reference_id' => $form_id,
 		);
 
 		if ( 'false' === $dynamic_methods ) {
 			$options['payment_method_types'] = array( 'card' );
 		} else {
-			$options['excluded_payment_method_types'] = self::get_checkout_session_excluded_payment_methods();
+			$excluded_payment_method_types = self::get_checkout_session_excluded_payment_methods( $form_id );
+			if ( ! empty( $excluded_payment_method_types ) && is_array( $excluded_payment_method_types ) ) {
+				$options['excluded_payment_method_types'] = $excluded_payment_method_types;
+			}
 		}
 
 		// Enable Stripe phone collection only when the saved mapping still points to an active Phone field.
@@ -1142,6 +1205,11 @@ class Forminator_Stripe extends Forminator_Field {
 	 */
 	public function calculate_amount( $amount, $currency ) {
 		$zero_decimal_currencies = self::get_zero_decimal_currencies();
+
+		// Anything but a finite number that fits an integer amount counts as 0, which is never charged.
+		if ( ! is_numeric( $amount ) || ! is_finite( (float) $amount ) || abs( (float) $amount ) >= PHP_INT_MAX / 1000 ) {
+			$amount = 0;
+		}
 
 		// Check if currency is zero decimal, then return the rounded whole-number amount.
 		if ( in_array( $currency, $zero_decimal_currencies, true ) ) {
@@ -1264,7 +1332,7 @@ class Forminator_Stripe extends Forminator_Field {
 			);
 
 			// Wallet preview: set amount for Apple/Google Pay preview from local price × qty (no Stripe API).
-			if ( $is_intent && class_exists( 'Forminator_Stripe_Subscription' ) ) {
+			if ( $is_intent && forminator_is_stripe_addon_compatible() ) {
 				try {
 					$field_object = Forminator_Core::get_field_object( 'stripe' );
 					$payment_plan = $field_object->get_payment_plan( $field );
@@ -1295,8 +1363,9 @@ class Forminator_Stripe extends Forminator_Field {
 		Forminator_Gateway_Stripe::set_stripe_app_info();
 
 		$field_id = Forminator_Field::get_property( 'element_id', $field );
-		$amount   = $submitted_data[ $field_id ] ?? 0;
-		$id       = $submitted_data['paymentid'];
+		// Hidden or unresolved fields are never charged.
+		$amount = in_array( $field_id, Forminator_CForm_Front_Action::$hidden_fields, true ) ? 0 : $this->get_payment_amount( $field );
+		$id     = $submitted_data['paymentid'];
 		if ( ! $amount && ! empty( $submitted_data['stripe_first_payment_intent'] ) ) {
 			// If amount is empty, set it to 1 for payment intent. Anyway, it will be updated during actual payment.
 			$amount = 1;
@@ -1306,15 +1375,28 @@ class Forminator_Stripe extends Forminator_Field {
 		}
 		$payment_method     = filter_var( $field['automatic_payment_methods'], FILTER_VALIDATE_BOOLEAN ) ? 'dynamic' : 'card';
 		$payment_intent_key = $mode . '_' . $currency . '_' . $amount . '_' . substr( $key, -5 ) . '_' . $payment_method;
-		// Check if we already have payment ID, if not generate new one.
-		if ( empty( $id ) ) {
-			$generate_new = ! $is_intent;
-			$id           = $this->get_payment_intent_id( $amount, $field, $payment_intent_key, $generate_new );
+		// Only reuse an intent this browser created.
+		if ( ! empty( $id ) && ! self::is_payment_intent_owner( $id ) ) {
+			$id = '';
 		}
+		// A client supplied ID is untrusted, an empty one comes from our own cache.
+		$is_client_intent_id = ! empty( $id );
+		// Check if we already have payment ID, if not generate new one.
+		if ( ! $is_client_intent_id ) {
+			$generate_new = ! $is_intent;
+			$id           = $this->get_payment_intent_id( $amount, $field, $payment_intent_key, $generate_new, ! $is_intent );
+		}
+
+		$is_foreign_intent = false;
 
 		try {
 			// Retrieve PI object.
 			$intent = \Forminator\Stripe\PaymentIntent::retrieve( $id );
+			// Never expose or modify an intent belonging to another form.
+			$is_foreign_intent = ! self::is_payment_intent_of_current_form( $intent );
+			if ( $is_foreign_intent ) {
+				throw new Exception( esc_html__( 'Payment Intent ID is not valid', 'forminator' ) );
+			}
 			if ( 'succeeded' === $intent->status ) {
 				// throw error if payment intent already succeeded.
 				throw new Exception( esc_html__( 'Payment already succeeded.', 'forminator' ) );
@@ -1331,7 +1413,18 @@ class Forminator_Stripe extends Forminator_Field {
 				)
 			);
 
-			$id = $this->get_payment_intent_id( $amount, $field, $payment_intent_key, true );
+			// A client supplied foreign ID fails closed, a stale cached one is regenerated below.
+			if ( $is_foreign_intent && $is_client_intent_id ) {
+				wp_send_json_error(
+					array(
+						'message'     => esc_html__( 'Payment Intent ID is not valid', 'forminator' ),
+						'errors'      => array(),
+						'paymentPlan' => $this->payment_plan_hash,
+					)
+				);
+			}
+
+			$id = $this->get_payment_intent_id( $amount, $field, $payment_intent_key, true, ! $is_intent );
 
 			$intent = \Forminator\Stripe\PaymentIntent::retrieve( $id );
 		}
@@ -1372,8 +1465,8 @@ class Forminator_Stripe extends Forminator_Field {
 				if ( ! empty( $submitted_data['payment_method_type'] ) && in_array( $submitted_data['payment_method_type'], self::get_unsupported_payment_methods(), true ) ) {
 					throw new Exception( esc_html__( 'The selected Payment Method is not supported.', 'forminator' ) );
 				}
-				// Check payment amount.
-				if ( 0 > $amount ) {
+				// Check payment amount, in the units Stripe charges.
+				if ( 1 > $this->calculate_amount( $amount, $currency ) ) {
 					throw new Exception( esc_html__( 'Payment amount should be greater than 0.', 'forminator' ) );
 				}
 
@@ -1455,7 +1548,7 @@ class Forminator_Stripe extends Forminator_Field {
 		$payment_id = $submitted_data['paymentid'] ?? '';
 
 		if ( ! empty( $this->payment_plan['payment_method'] ) && 'subscription' === $this->payment_plan['payment_method'] ) {
-			if ( ! class_exists( 'Forminator_Stripe_Subscription' ) ) {
+			if ( ! forminator_is_stripe_addon_compatible() ) {
 				wp_send_json_error(
 					array(
 						'message'     => esc_html(
@@ -1471,23 +1564,7 @@ class Forminator_Stripe extends Forminator_Field {
 			}
 
 			$stripe_addon = Forminator_Stripe_Subscription::get_instance();
-
-			if ( ! method_exists( $stripe_addon, 'update_checkout_session' ) ) {
-				wp_send_json_error(
-					array(
-						'message'     => esc_html(
-							apply_filters(
-								'forminator_payment_update_stripe_subscription_addon_error_message',
-								esc_html__( 'Please update the Forminator Stripe Subscription Add-on to the latest version to submit this form.', 'forminator' )
-							)
-						),
-						'errors'      => array(),
-						'paymentPlan' => $this->payment_plan_hash,
-					)
-				);
-			}
-
-			$response = $stripe_addon->update_checkout_session( $this, Forminator_Front_Action::$module_object, $submitted_data, $field, $this->payment_plan );
+			$response     = $stripe_addon->update_checkout_session( $this, Forminator_Front_Action::$module_object, $submitted_data, $field, $this->payment_plan );
 
 			if ( is_wp_error( $response ) ) {
 				wp_send_json_error(
@@ -1511,13 +1588,15 @@ class Forminator_Stripe extends Forminator_Field {
 		}
 
 		$field_id = Forminator_Field::get_property( 'element_id', $field );
-		$amount   = $submitted_data[ $field_id ] ?? 0;
+		// Hidden or unresolved fields are never charged.
+		$amount = in_array( $field_id, Forminator_CForm_Front_Action::$hidden_fields, true ) ? 0 : $this->get_payment_amount( $field );
 
 		if ( empty( $submitted_data['stripe-intent'] ) && ! empty( $payment_id ) ) {
 			$this->retrieve_checkout_session_response( $payment_id, $field );
 		}
 
-		$this->create_checkout_session_response( $amount, $field, empty( $payment_id ) );
+		$allow_default_amount = empty( $payment_id ) || ! empty( $submitted_data['stripe_first_payment_intent'] );
+		$this->create_checkout_session_response( $amount, $field, $allow_default_amount );
 	}
 
 	/**
@@ -1534,14 +1613,14 @@ class Forminator_Stripe extends Forminator_Field {
 		$force_mount_stripe_field = false;
 		$currency                 = self::get_property( 'currency', $field, $this->get_default_currency() );
 
-		if ( 0 >= (float) $amount && $allow_default_amount ) {
+		if ( 1 > $this->calculate_amount( $amount, $currency ) && $allow_default_amount ) {
 			// Initial render still needs a Checkout Session; mark the fallback so submit can rebuild with real pricing.
 			$amount                   = $this->get_checkout_session_render_amount( 1, $currency, $field );
 			$validation_amount        = $this->calculate_amount( $amount, $currency );
 			$force_mount_stripe_field = true;
 		}
 
-		if ( 0 >= (float) $amount ) {
+		if ( 1 > $this->calculate_amount( $amount, $currency ) ) {
 			wp_send_json_error(
 				array(
 					'message'     => esc_html__( 'Payment amount should be greater than 0.', 'forminator' ),
@@ -1603,15 +1682,9 @@ class Forminator_Stripe extends Forminator_Field {
 	 * @param array  $field Field.
 	 */
 	private function retrieve_checkout_session_response( $payment_id, $field ) {
-		if ( 0 >= (float) $this->get_payment_amount( $field ) ) {
-			wp_send_json_error(
-				array(
-					'message'     => esc_html__( 'Payment amount should be greater than 0.', 'forminator' ),
-					'errors'      => array(),
-					'paymentPlan' => $this->payment_plan_hash,
-				)
-			);
-		}
+		// Only the submitting browser may resume the session.
+		$session_data = self::get_pending_checkout_session_data( $payment_id );
+		$return_flow  = ! empty( $session_data ) && ! empty( $session_data['entry_id'] ) && self::is_payment_owner( $session_data['owner'] ?? '' );
 
 		$session = $this->get_checkout_session_by_id( $payment_id, $field );
 
@@ -1625,25 +1698,27 @@ class Forminator_Stripe extends Forminator_Field {
 			);
 		}
 
-		$valid = $this->validate_checkout_session( $session, $field );
+		$form_id_meta     = isset( $session->client_reference_id ) ? (string) $session->client_reference_id : '';
+		$expected_form_id = ! empty( Forminator_Front_Action::$module_object->id ) ? (string) Forminator_Front_Action::$module_object->id : '';
 
-		if ( is_wp_error( $valid ) ) {
-			wp_send_json_error(
+		// If we are returning from a redirect flow and form ID matches, return the session details to the front-end.
+		if ( $return_flow && $form_id_meta === $expected_form_id ) {
+			wp_send_json_success(
 				array(
-					'message'     => $valid->get_error_message(),
-					'errors'      => array(),
-					'paymentPlan' => $this->payment_plan_hash,
+					'paymentid'                      => $session->id,
+					'paymentsecret'                  => $session->client_secret ?? '',
+					'paymentPlan'                    => $this->payment_plan_hash,
+					'paymentApi'                     => 'checkout_session',
+					'checkoutPhoneCollectionEnabled' => $this->is_checkout_phone_collection_enabled( $field ),
 				)
 			);
 		}
 
-		wp_send_json_success(
+		wp_send_json_error(
 			array(
-				'paymentid'                      => $session->id,
-				'paymentsecret'                  => $session->client_secret ?? '',
-				'paymentPlan'                    => $this->payment_plan_hash,
-				'paymentApi'                     => 'checkout_session',
-				'checkoutPhoneCollectionEnabled' => $this->is_checkout_phone_collection_enabled( $field ),
+				'message'     => esc_html__( 'Checkout Session is not valid', 'forminator' ),
+				'errors'      => array(),
+				'paymentPlan' => $this->payment_plan_hash,
 			)
 		);
 	}
@@ -1744,33 +1819,58 @@ class Forminator_Stripe extends Forminator_Field {
 	}
 
 	/**
-	 * Copy current Checkout Session metadata to the generated PaymentIntent.
+	 * Copy Checkout Session metadata/description to the PaymentIntent and Charge.
+	 *
+	 * Modern Checkout creates the PaymentIntent only at confirm, copying description from
+	 * Session create (often with empty merge tags). Prefer the description stored on the
+	 * pending entry; also update the Charge because Dashboard uses the Charge description.
 	 *
 	 * @since 1.56
 	 *
-	 * @param mixed $session Checkout Session object.
-	 * @param array $field Field.
+	 * @param string                           $payment_intent Stripe payment intent ID.
+	 * @param array                            $field Field.
+	 * @param Forminator_Form_Entry_Model|null $entry Optional entry with stored description.
 	 */
-	private function sync_checkout_session_payment_intent_metadata( $session, $field ) {
-		$payment_intent = $session->payment_intent ?? '';
-		if ( is_object( $payment_intent ) ) {
-			$payment_intent = $payment_intent->id ?? '';
-		}
-
+	private function sync_checkout_session_payment_intent_metadata( $payment_intent, $field, $entry = null ) {
 		if ( empty( $payment_intent ) ) {
 			return;
 		}
 
+		$template = trim( (string) self::get_property( 'product_description', $field, '' ) );
+		if ( '' === $template || false === strpos( $template, '{' ) ) {
+			return;
+		}
+
+		$mode = self::get_property( 'mode', $field, 'test' );
+		$key  = $this->get_secret_key( 'test' !== $mode );
+
+		\Forminator\Stripe\Stripe::setApiKey( $key );
+		Forminator_Gateway_Stripe::set_stripe_app_info();
+
 		$metadata_data = $this->build_metadata_context( $field );
-		$context       = $this->build_payment_request_context( $field );
 		$options       = array();
 
 		if ( ! empty( $metadata_data['metadata'] ) ) {
 			$options['metadata'] = $metadata_data['metadata'];
 		}
 
-		if ( '' !== trim( (string) self::get_property( 'product_description', $field, '' ) ) ) {
-			$options['description'] = (string) $context['description'];
+		$description = '';
+		if ( $entry instanceof Forminator_Form_Entry_Model ) {
+			$stored = $entry->get_meta( '_stripe_checkout_payment_description', '' );
+			if ( is_string( $stored ) ) {
+				$description = trim( $stored );
+			}
+		}
+		if ( '' === $description ) {
+			$description = trim(
+				(string) forminator_replace_form_data(
+					$template,
+					Forminator_Front_Action::$module_object
+				)
+			);
+		}
+		if ( '' !== $description ) {
+			$options['description'] = substr( $description, 0, 1000 );
 		}
 
 		if ( empty( $options ) ) {
@@ -1778,10 +1878,36 @@ class Forminator_Stripe extends Forminator_Field {
 		}
 
 		try {
-			\Forminator\Stripe\PaymentIntent::update(
+			\Forminator\Stripe\PaymentIntent::update( $payment_intent, $options );
+
+			if ( empty( $options['description'] ) ) {
+				return;
+			}
+
+			$intent    = \Forminator\Stripe\PaymentIntent::retrieve(
 				$payment_intent,
-				$options
+				array( 'expand' => array( 'latest_charge' ) )
 			);
+			$charge_id = '';
+			if ( ! empty( $intent->latest_charge ) ) {
+				$charge_id = is_object( $intent->latest_charge )
+					? (string) ( $intent->latest_charge->id ?? '' )
+					: (string) $intent->latest_charge;
+			}
+			if ( '' !== $charge_id ) {
+				\Forminator\Stripe\Charge::update(
+					$charge_id,
+					array( 'description' => $options['description'] )
+				);
+				forminator_maybe_log(
+					__METHOD__,
+					array(
+						'payment_intent_id' => $payment_intent,
+						'charge_id'         => $charge_id,
+						'description'       => $options['description'],
+					)
+				);
+			}
 		} catch ( Exception $e ) {
 			forminator_maybe_log(
 				__METHOD__,
@@ -1798,18 +1924,85 @@ class Forminator_Stripe extends Forminator_Field {
 	}
 
 	/**
+	 * Store resolved payment description on the pending entry (form data is available here).
+	 *
+	 * @since 1.58
+	 *
+	 * @param Forminator_Form_Entry_Model|null $entry Entry.
+	 * @param array                            $field Field.
+	 * @return void
+	 */
+	private function store_checkout_payment_description( $entry, $field ) {
+		if ( ! $entry instanceof Forminator_Form_Entry_Model || empty( $entry->entry_id ) ) {
+			return;
+		}
+
+		$template = self::get_property( 'product_description', $field, '' );
+		if ( '' === trim( (string) $template ) ) {
+			return;
+		}
+
+		$description = trim( (string) forminator_replace_form_data( $template, Forminator_Front_Action::$module_object ) );
+
+		if ( '' !== $description ) {
+			$entry->add_meta( '_stripe_checkout_payment_description', substr( $description, 0, 1000 ) );
+			forminator_maybe_log(
+				__METHOD__,
+				array(
+					'entry_id'    => $entry->entry_id,
+					'description' => $description,
+				)
+			);
+		}
+	}
+
+	/**
+	 * Apply stored payment description to the Session PaymentIntent/Charge after confirm.
+	 *
+	 * @since 1.58
+	 *
+	 * @param array                            $field Field.
+	 * @param Forminator_Form_Entry_Model|null $entry Entry.
+	 * @param string                           $session_id Checkout Session ID.
+	 * @return void
+	 */
+	public function apply_stored_checkout_payment_description( $field, $entry, $session_id ) {
+		if ( empty( $session_id ) || ! $entry instanceof Forminator_Form_Entry_Model ) {
+			return;
+		}
+
+		$session = $this->get_checkout_session_by_id( $session_id, $field );
+		if ( is_wp_error( $session ) || ! is_object( $session ) ) {
+			return;
+		}
+
+		$payment_intent_id = self::get_payment_intent( $session->payment_intent ?? '' );
+		if ( ! empty( $payment_intent_id ) ) {
+			forminator_maybe_log(
+				__METHOD__,
+				array(
+					'payment_intent_id' => $payment_intent_id,
+					'session_id'        => $session_id,
+				)
+			);
+			$this->sync_checkout_session_payment_intent_metadata( $payment_intent_id, $field, $entry );
+		}
+	}
+
+	/**
 	 * Get payment intent ID
+	 *
+	 * Display intents are cached per browser, payment intents are always new and owned by the payer.
 	 *
 	 * @param int|float $amount Amount.
 	 * @param array     $field Field.
 	 * @param string    $payment_intent_key Payment intent key.
 	 * @param bool      $force Use saved payment intents or not.
+	 * @param bool      $for_payment Whether the intent will take the payment.
 	 *
 	 * @return string
 	 */
-	private function get_payment_intent_id( $amount, $field, $payment_intent_key, $force = false ): string {
-		$saved_payment_intents = get_option( 'forminator_stripe_payment_intents', array() );
-
+	private function get_payment_intent_id( $amount, $field, $payment_intent_key, $force = false, $for_payment = false ): string {
 		/**
 		 * Filter to force payment intent generation
 		 *
@@ -1817,20 +2010,22 @@ class Forminator_Stripe extends Forminator_Field {
 		 * @param array $field Field.
 		 */
 		$force     = apply_filters( 'forminator_stripe_force_payment_intent', $force, $field );
-		$cached_id = $saved_payment_intents[ $payment_intent_key ] ?? '';
+		$cache_key = self::DISPLAY_INTENT_TRANSIENT_PREFIX . md5( $payment_intent_key . self::get_payment_owner( true ) );
+		$cached_id = $for_payment ? '' : get_transient( $cache_key );
 
 		if ( ! $force && ! empty( $cached_id ) && ! self::is_consumed_payment_intent( $cached_id ) ) {
-			$id = $cached_id;
-		} else {
-			$payment_intent = $this->generate_paymentIntent( $amount, $field );
+			return $cached_id;
+		}
 
-			$id = $payment_intent->id;
+		$payment_intent = $this->generate_paymentIntent( $amount, $field );
 
-			$saved_payment_intents[ $payment_intent_key ] = $id;
-			update_option( 'forminator_stripe_payment_intents', $saved_payment_intents );
+		$id = $payment_intent->id;
 
+		if ( $for_payment ) {
 			// Only on generation, so a reused ID cannot re-arm a claimed marker.
 			self::set_pending_payment_intent( $id );
+		} else {
+			set_transient( $cache_key, $id, DAY_IN_SECONDS );
 		}
 
 		return $id;
@@ -1839,13 +2034,28 @@ class Forminator_Stripe extends Forminator_Field {
 	/**
 	 * Get unsupported payment methods
 	 *
+	 * @param bool $is_checkout_session Whether the payment methods are for a Checkout Session.
+	 * @param bool $only_immediate_confirmation Whether to exclude payment methods that require delayed confirmation.
 	 * @return array
 	 */
-	public static function get_unsupported_payment_methods() {
-		return apply_filters(
-			'forminator_stripe_unsupported_payment_methods',
+	public static function get_unsupported_payment_methods( $is_checkout_session = false, $only_immediate_confirmation = false ) {
+		if ( true === $is_checkout_session ) {
+			// Checkout Sessions support all dynamic payment methods.
+			$unsupported_payment_methods = array();
+
+			if ( true === $only_immediate_confirmation ) {
+				$unsupported_payment_methods = array(
+					'sepa_debit',
+					'multibanco',
+					'boleto',
+					'sofort',
+					'us_bank_account',
+					'bancontact',
+				);
+			}
+		} else {
 			// All Stripe dynamic payment methods without immediate confirmation.
-			array(
+			$unsupported_payment_methods = array(
 				'sepa_debit',
 				'multibanco',
 				'boleto',
@@ -1853,27 +2063,25 @@ class Forminator_Stripe extends Forminator_Field {
 				'ach_debit',
 				'sofort',
 				'funded',
-			)
+			);
+		}
+		return apply_filters(
+			'forminator_stripe_unsupported_payment_methods',
+			$unsupported_payment_methods
 		);
 	}
 
 	/**
 	 * Get unsupported payment methods that are valid for Checkout Sessions.
 	 *
-	 * Checkout Sessions does not accept some legacy Payment Intent method IDs
-	 * in excluded_payment_method_types, so only remove those known invalid
-	 * values from the shared unsupported list.
-	 *
+	 * @param int $form_id Form ID.
 	 * @return array
 	 */
-	public static function get_checkout_session_excluded_payment_methods() {
-		$checkout_unsupported_methods = array(
-			'ach_credit_transfer',
-			'ach_debit',
-			'funded',
-		);
-
-		return array_values( array_diff( self::get_unsupported_payment_methods(), $checkout_unsupported_methods ) );
+	public static function get_checkout_session_excluded_payment_methods( $form_id ) {
+		$custom_form                = Forminator_Base_Form_Model::get_model( $form_id );
+		$settings                   = ( $custom_form instanceof Forminator_Base_Form_Model ) ? $custom_form->settings : array();
+		$allow_only_instant_payment = Forminator_CForm_Front_Action::allow_only_immediate_payments( $settings );
+		return self::get_unsupported_payment_methods( true, $allow_only_instant_payment );
 	}
 
 	/**
@@ -1885,15 +2093,6 @@ class Forminator_Stripe extends Forminator_Field {
 	 * @return bool
 	 */
 	public static function is_adaptive_pricing_configured( $field ) {
-		$payments = self::get_property( 'payments', $field, array() );
-
-		foreach ( $payments as $payment ) {
-			// Adaptive Pricing is only safe when Stripe receives a fixed source amount.
-			if ( ! empty( self::get_plan_dependent_fields( $payment ) ) ) {
-				return false;
-			}
-		}
-
 		return 'checkout_session' === self::get_payment_api( $field )
 			&& filter_var( self::get_property( 'adaptive_pricing', $field, false ), FILTER_VALIDATE_BOOLEAN );
 	}
@@ -1959,12 +2158,13 @@ class Forminator_Stripe extends Forminator_Field {
 			if ( $is_subscription ) {
 				$amount = self::get_property( 'subscription_amount', $this->payment_plan, 0.0 );
 
-				if ( class_exists( 'Forminator_Stripe_Subscription' ) ) {
+				if ( forminator_is_stripe_addon_compatible() ) {
 					$amount = $this->get_subscription_amount( $this->payment_plan, $this, Forminator_CForm_Front_Action::$prepared_data, $field );
 				}
 			}
 
-			if ( 0 >= (float) $amount ) {
+			// Check the amount Stripe charges, e.g. 0.001 rounds to 0.
+			if ( 1 > $this->calculate_amount( $amount, self::get_property( 'currency', $field, $this->get_default_currency() ) ) ) {
 				$dependent_fields = self::get_plan_dependent_fields( $this->payment_plan );
 				$field_id         = ! empty( $dependent_fields ) ? reset( $dependent_fields ) : Forminator_Field::get_property( 'element_id', $field );
 
@@ -2152,16 +2352,326 @@ class Forminator_Stripe extends Forminator_Field {
 	}
 
 	/**
+	 * Validate that a PaymentIntent paid for the current submission.
+	 *
+	 * Intents are confirmed during the submission, so without $require_paid only the states
+	 * that can no longer pay are refused.
+	 *
+	 * @since 1.58.0
+	 *
+	 * @param mixed $intent       PaymentIntent object.
+	 * @param array $field        Field settings.
+	 * @param bool  $require_paid Whether the intent must already have been paid.
+	 *
+	 * @return true|WP_Error
+	 */
+	public function validate_intent_payment( $intent, $field, $require_paid = false ) {
+		$status           = isset( $intent->status ) ? (string) $intent->status : '';
+		$intent_id        = $intent->id ?? '';
+		$expected_form_id = ! empty( Forminator_Front_Action::$module_object->id ) ? (string) Forminator_Front_Action::$module_object->id : '';
+
+		if ( 'succeeded' !== $status ) {
+			if ( ! $require_paid && in_array( $status, self::PENDING_INTENT_STATUSES, true ) ) {
+				return true;
+			}
+
+			forminator_maybe_log(
+				__METHOD__,
+				array(
+					'action'        => 'payment_intent_not_paid',
+					'error_message' => esc_html__( 'Payment failed, please try again!', 'forminator' ),
+					'payment_id'    => Forminator_CForm_Front_Action::$prepared_data['paymentid'] ?? '',
+					'form_id'       => $expected_form_id,
+					'field_id'      => self::get_property( 'element_id', $field, '' ),
+					'require_paid'  => $require_paid,
+					'intent_id'     => $intent_id,
+					'intent_status' => $status,
+				)
+			);
+
+			return new WP_Error(
+				'forminator_stripe_payment_not_completed',
+				esc_html__( 'Payment failed, please try again!', 'forminator' )
+			);
+		}
+
+		// Stripe has to have received the amount the form asked for.
+		$currency        = self::get_property( 'currency', $field, $this->get_default_currency() );
+		$expected_amount = $this->calculate_amount( $this->get_payment_amount( $field ), $currency );
+		$received_amount = isset( $intent->amount_received ) ? (int) $intent->amount_received : 0;
+
+		if ( $received_amount !== (int) $expected_amount ) {
+			forminator_maybe_log(
+				__METHOD__,
+				array(
+					'action'          => 'payment_intent_amount_mismatch',
+					'error_message'   => esc_html__( 'Error! Invalid payment amount!', 'forminator' ),
+					'payment_id'      => Forminator_CForm_Front_Action::$prepared_data['paymentid'] ?? '',
+					'form_id'         => $expected_form_id,
+					'field_id'        => self::get_property( 'element_id', $field, '' ),
+					'intent_id'       => $intent_id,
+					'expected_amount' => $expected_amount,
+					'received_amount' => $received_amount,
+				)
+			);
+
+			return new WP_Error( 'forminator_stripe_error', esc_html__( 'Error! Invalid payment amount!', 'forminator' ) );
+		}
+
+		return true;
+	}
+
+	/**
+	 * Get stripe meta
+	 *
+	 * @param Forminator_Form_Entry_Model $entry Entry.
+	 * @param array                       $field Field.
+	 *
+	 * @return array|false
+	 */
+	public function get_stripe_meta( $entry, $field ) {
+		if ( empty( $entry->meta_data ) ) {
+			return false;
+		}
+		$meta_data  = $entry->meta_data;
+		$element_id = $field['element_id'] ?? '';
+		if ( ! empty( $element_id ) && ! empty( $meta_data[ $element_id ] ) && ! empty( $meta_data[ $element_id ]['value'] ) ) {
+			return $meta_data[ $element_id ]['value'];
+		}
+		return false;
+	}
+
+	/**
+	 * Check if the entry is a subscription entry.
+	 *
+	 * @param array $stripe_meta Stripe meta data.
+	 *
+	 * @return bool
+	 */
+	private function is_subscription_entry( $stripe_meta ) {
+		return isset( $stripe_meta['payment_method'] ) && 'subscription' === $stripe_meta['payment_method'];
+	}
+
+	/**
+	 * Get checkout session by customer ID.
+	 *
+	 * @since 1.58
+	 *
+	 * @param string $customer_id customer ID.
+	 * @param string $mode Mode (test or live).
+	 *
+	 * @return object|false Checkout session object or false if not found.
+	 */
+	public function get_checkout_session_by_customer( $customer_id, $mode ) {
+		$key = $this->get_secret_key( 'test' !== $mode );
+
+		\Forminator\Stripe\Stripe::setApiKey( $key );
+		Forminator_Gateway_Stripe::set_stripe_app_info();
+
+		try {
+			$session = \Forminator\Stripe\Checkout\Session::all(
+				array(
+					'customer' => $customer_id,
+					'limit'    => 1,
+				)
+			);
+			if ( ! empty( $session->data ) && ! empty( $session->data[0] ) ) {
+				return $session->data[0];
+			}
+		} catch ( Exception $e ) {
+			forminator_maybe_log(
+				__METHOD__,
+				array(
+					'action'        => 'Checkout\\Session::all',
+					'error_class'   => get_class( $e ),
+					'error_message' => $e->getMessage(),
+					'error_code'    => $e->getCode(),
+					'customer'      => $customer_id,
+				)
+			);
+		}
+		return false;
+	}
+
+	/**
+	 * Get checkout session by payment intent ID.
+	 *
+	 * @since 1.58
+	 *
+	 * @param string $payment_intent_id Payment intent ID.
+	 * @param string $mode Mode (test or live).
+	 *
+	 * @return object|false Checkout session object or false if not found.
+	 */
+	public function get_checkout_session_by_payment_intent( $payment_intent_id, $mode ) {
+		$key = $this->get_secret_key( 'test' !== $mode );
+
+		\Forminator\Stripe\Stripe::setApiKey( $key );
+		Forminator_Gateway_Stripe::set_stripe_app_info();
+
+		try {
+			$session = \Forminator\Stripe\Checkout\Session::all(
+				array(
+					'payment_intent' => $payment_intent_id,
+					'limit'          => 1,
+				)
+			);
+			if ( ! empty( $session->data ) && ! empty( $session->data[0] ) ) {
+				return $session->data[0];
+			}
+		} catch ( Exception $e ) {
+			forminator_maybe_log(
+				__METHOD__,
+				array(
+					'action'         => 'Checkout\\Session::all',
+					'error_class'    => get_class( $e ),
+					'error_message'  => $e->getMessage(),
+					'error_code'     => $e->getCode(),
+					'payment_intent' => $payment_intent_id,
+				)
+			);
+		}
+		return false;
+	}
+
+	/**
+	 * Set processing transaction info on received webhook event for asynchronous payments.
+	 *
+	 * @since 1.58
+	 *
+	 * @param array                       $field Stripe field.
+	 * @param Forminator_Form_Entry_Model $entry Form entry model.
+	 * @param array                       $event_data Stripe webhook event data.
+	 *
+	 * @return array|false Transaction info or false if not available.
+	 */
+	public function process_pending_transaction( $field, $entry, $event_data ) {
+		$stripe_meta = $this->get_stripe_meta( $entry, $field );
+		if ( empty( $stripe_meta ) ) {
+			return false;
+		}
+		$payment_intent_id = self::get_payment_intent( $event_data['payment_intent'] );
+		// Always sync so merge-tag descriptions stored at pending-submit reach the Charge/PI.
+		$this->sync_checkout_session_payment_intent_metadata( $payment_intent_id, $field, $entry );
+
+		$mode                            = $stripe_meta['mode'] ?? self::get_property( 'mode', $field, 'test' );
+		$stripe_meta['transaction_id']   = $payment_intent_id;
+		$stripe_meta['transaction_link'] = self::get_transanction_link( $mode, $payment_intent_id );
+		$stripe_meta['status']           = 'PROCESSING';
+		return $stripe_meta;
+	}
+
+	/**
+	 * Process transaction info after successful payment.
+	 *
+	 * @since 1.58
+	 *
+	 * @param array                       $field Stripe field.
+	 * @param Forminator_Form_Entry_Model $entry Form entry model.
+	 * @param object                      $custom_form Custom form object.
+	 * @param array                       $event_data Stripe webhook event data.
+	 *
+	 * @return array|false Transaction info or false if not available.
+	 */
+	public function process_successful_transaction( $field, $entry, $custom_form, $event_data ) {
+		$stripe_meta = $this->get_stripe_meta( $entry, $field );
+		if ( empty( $stripe_meta ) ) {
+			return false;
+		}
+		if ( $this->is_subscription_entry( $stripe_meta ) ) {
+			// For recurring payments.
+			if ( class_exists( 'Forminator_Stripe_Subscription' ) ) {
+				$stripe_addon = Forminator_Stripe_Subscription::get_instance();
+				return $stripe_addon->process_subscription_successful_transaction( $event_data, $stripe_meta, $field, $custom_form );
+			}
+		} elseif ( ! empty( $event_data['payment_intent'] ) ) {
+			// For one-time payments.
+			$payment_intent_id = self::get_payment_intent( $event_data['payment_intent'] );
+			// Always sync so merge-tag descriptions stored at pending-submit reach the Charge/PI.
+			$this->sync_checkout_session_payment_intent_metadata( $payment_intent_id, $field, $entry );
+
+			$mode                            = $stripe_meta['mode'] ?? self::get_property( 'mode', $field, 'test' );
+			$stripe_meta['transaction_id']   = $payment_intent_id;
+			$stripe_meta['transaction_link'] = self::get_transanction_link( $mode, $payment_intent_id );
+			if ( true === $event_data['is_session'] ) {
+				$session = $event_data['session'];
+				if ( 'paid' === $session->payment_status || 'no_payment_required' === $session->payment_status ) {
+					$stripe_meta['status'] = 'COMPLETED';
+				} else {
+					// For asynchronous payments, wait for the webhook[checkout.session.async_payment_succeeded] to update the status.
+					$stripe_meta['status'] = 'UNPAID';
+				}
+			} else {
+				$stripe_meta['status'] = 'COMPLETED';
+			}
+			return $stripe_meta;
+		}
+		return false;
+	}
+
+	/**
+	 * Process failed transaction info after successful payment.
+	 *
+	 * @since 1.58
+	 *
+	 * @param array                       $field Stripe field.
+	 * @param Forminator_Form_Entry_Model $entry Form entry model.
+	 * @param object                      $custom_form Custom form object.
+	 * @param array                       $event_data Stripe webhook event data.
+	 *
+	 * @return array|false Transaction info or false if not available.
+	 */
+	public function process_failed_transaction( $field, $entry, $custom_form, $event_data ) {
+		$stripe_meta = $this->get_stripe_meta( $entry, $field );
+		if ( empty( $stripe_meta ) ) {
+			return false;
+		}
+		if ( $this->is_subscription_entry( $stripe_meta ) ) {
+			// For recurring payments.
+			if ( class_exists( 'Forminator_Stripe_Subscription' ) ) {
+				$stripe_addon = Forminator_Stripe_Subscription::get_instance();
+				return $stripe_addon->process_subscription_failed_transaction( $event_data, $stripe_meta, $field, $custom_form );
+			}
+		} elseif ( ! empty( $event_data['payment_intent'] ) ) {
+			// For one-time payments.
+			$payment_intent_id = self::get_payment_intent( $event_data['payment_intent'] );
+			// Always sync so merge-tag descriptions stored at pending-submit reach the Charge/PI.
+			$this->sync_checkout_session_payment_intent_metadata( $payment_intent_id, $field, $entry );
+			$stripe_meta['transaction_id']   = $payment_intent_id;
+			$mode                            = $stripe_meta['mode'] ?? self::get_property( 'mode', $field, 'test' );
+			$stripe_meta['transaction_link'] = self::get_transanction_link( $mode, $payment_intent_id );
+		}
+		$stripe_meta['status'] = 'FAILED';
+		return $stripe_meta;
+	}
+
+	/**
+	 * Get payment intent ID from payment intent object or string.
+	 *
+	 * @since 1.58
+	 *
+	 * @param object $payment_intent Checkout session object.
+	 * @return string Payment intent ID
+	 */
+	public static function get_payment_intent( $payment_intent ) {
+		if ( is_object( $payment_intent ) ) {
+			$payment_intent = $payment_intent->id ?? '';
+		}
+		return $payment_intent;
+	}
+
+	/**
 	 * Process to entry data
 	 *
-	 * @param array $field Field.
+	 * @param array                            $field Field.
+	 * @param Forminator_Form_Entry_Model|null $entry Entry model.
 	 *
 	 * @return array|WP_Error
 	 * @throws Exception When there is an error.
 	 */
-	public function process_to_entry_data( $field ) {
+	public function process_to_entry_data( $field, $entry = null ) {
 		if ( $this->is_checkout_session( $field ) ) {
-			return $this->process_checkout_session_to_entry_data( $field );
+			return $this->process_checkout_session_to_entry_data( $field, $entry );
 		}
 
 		$entry_data = array(
@@ -2219,6 +2729,12 @@ class Forminator_Stripe extends Forminator_Field {
 				return new WP_Error( 'forminator_stripe_error', esc_html__( 'Payment Intent ID is not valid', 'forminator' ) );
 			}
 
+			// An unconfirmed intent is checked again after confirmation.
+			$payment_state = $this->validate_intent_payment( $intent, $field );
+			if ( is_wp_error( $payment_state ) ) {
+				return $payment_state;
+			}
+
 			$entry_data['mode']     = $mode;
 			$entry_data['currency'] = $currency;
 			$entry_data['amount']   = $charge_amount;
@@ -2257,11 +2773,18 @@ class Forminator_Stripe extends Forminator_Field {
 	 *
 	 * @since 1.56
 	 *
-	 * @param array $field Field.
+	 * @param array                            $field Field.
+	 * @param Forminator_Form_Entry_Model|null $entry Entry model.
+	 *
 	 * @throws Exception When the Checkout Session cannot be retrieved or validated.
 	 * @return array|WP_Error
 	 */
-	private function process_checkout_session_to_entry_data( $field ) {
+	private function process_checkout_session_to_entry_data( $field, $entry = null ) {
+		// Check if the entry is valid and pending.
+		if ( empty( $entry ) || 'pending' !== $entry->status ) {
+			throw new Exception( esc_html__( 'Entry object is not valid.', 'forminator' ) );
+		}
+
 		$entry_data = array(
 			'mode'             => '',
 			'product_name'     => '',
@@ -2321,25 +2844,6 @@ class Forminator_Stripe extends Forminator_Field {
 				throw new Exception( esc_html__( 'Checkout Session ID is not valid!', 'forminator' ) );
 			}
 
-			if ( ! self::is_claimable_checkout_session( $session->id ) ) {
-				forminator_maybe_log(
-					__METHOD__,
-					array(
-						'action'        => 'checkout_session_entry_already_handled',
-						'error_message' => esc_html__( 'Checkout Session ID is not valid', 'forminator' ),
-						'payment_id'    => Forminator_CForm_Front_Action::$prepared_data['paymentid'] ?? '',
-						'form_id'       => ! empty( Forminator_Front_Action::$module_object->id ) ? Forminator_Front_Action::$module_object->id : '',
-						'field_id'      => self::get_property( 'element_id', $field, '' ),
-						'session_id'    => $session->id,
-					)
-				);
-
-				return new WP_Error(
-					'forminator_stripe_checkout_session_already_handled',
-					esc_html__( 'Checkout Session ID is not valid', 'forminator' )
-				);
-			}
-
 			$charge_amount     = $this->get_payment_amount( $field );
 			$expected_amount   = $this->calculate_amount( $charge_amount, $currency );
 			$expected_currency = strtoupper( (string) $currency );
@@ -2371,12 +2875,70 @@ class Forminator_Stripe extends Forminator_Field {
 				return new WP_Error( 'forminator_stripe_error', esc_html__( 'Checkout Session ID is not valid', 'forminator' ) );
 			}
 
-			if ( 'paid' !== ( $session->payment_status ?? '' ) ) {
+			// If the entry is still pending, return the session data for later processing.
+			if ( 'unpaid' === ( $session->payment_status ?? '' ) ) {
+				// Claim the Checkout Session before the entry is created so one payment can
+				// only ever produce one entry, even for concurrent submissions.
+				if ( ! self::is_valid_checkout_session( $session->id ) ) {
+					forminator_maybe_log(
+						__METHOD__,
+						array(
+							'action'        => 'checkout_session_entry_already_handled',
+							'error_message' => esc_html__( 'Checkout Session ID is not valid', 'forminator' ),
+							'payment_id'    => Forminator_CForm_Front_Action::$prepared_data['paymentid'] ?? '',
+							'form_id'       => $expected_form_id,
+							'field_id'      => self::get_property( 'element_id', $field, '' ),
+							'session_id'    => $session->id,
+						)
+					);
+
+					return new WP_Error(
+						'forminator_stripe_checkout_session_already_handled',
+						esc_html__( 'Checkout Session ID is not valid', 'forminator' )
+					);
+				}
+
+				$entry_data = array(
+					'status'         => $session->payment_status ?? '',
+					'mode'           => $mode,
+					'currency'       => $currency,
+					'amount'         => $charge_amount,
+					'transaction_id' => '',
+				);
+				if ( ! empty( $this->payment_plan ) ) {
+					$entry_data['product_name'] = $this->payment_plan['plan_name'];
+					$entry_data['payment_type'] = $this->payment_method( $this->payment_plan['payment_method'] );
+					$entry_data['quantity']     = $this->payment_plan['quantity'];
+				}
+
+				// Resolve merge tags while form data is available; applied to PI/Charge after confirm.
+				$this->store_checkout_payment_description( $entry, $field );
+
+				// Add the Checkout Session ID to the entry meta so that it can be used in the webhook handler.
+				$entry->add_meta( '_stripe_checkout_session_id', $session->id );
+
+				// If the session ID already exists, we should not process it again.
+				// This is a safeguard against duplicate entries being created for the same session ID.
+				if ( $entry->is_stripe_checkout_session_id_duplicate( $session->id, $entry->entry_id ) ) {
+					forminator_maybe_log(
+						__METHOD__,
+						array(
+							'action'     => 'is_stripe_checkout_session_id_duplicate',
+							'session_id' => $session->id,
+							'error'      => esc_html__( 'Duplicate entry.', 'forminator' ),
+						)
+					);
+					// If the session ID already exists, we should not process it again.
+					return new WP_Error( 'forminator_stripe_duplicate_entry', esc_html__( 'Checkout Session ID is not valid', 'forminator' ) );
+				}
+
+				return apply_filters( 'forminator_field_stripe_process_to_entry_data', $entry_data, $field, Forminator_Front_Action::$module_object, Forminator_CForm_Front_Action::$prepared_data, Forminator_CForm_Front_Action::$info['field_data_array'] );
+			} else {
 				forminator_maybe_log(
 					__METHOD__,
 					array(
-						'action'         => 'checkout_session_entry_payment_pending',
-						'error_message'  => esc_html__( 'Payment failed. Please try again.', 'forminator' ),
+						'action'         => 'checkout_session_entry_validation_failed',
+						'error_message'  => esc_html__( 'Checkout Session ID is not valid', 'forminator' ),
 						'payment_id'     => Forminator_CForm_Front_Action::$prepared_data['paymentid'] ?? '',
 						'form_id'        => $expected_form_id,
 						'field_id'       => self::get_property( 'element_id', $field, '' ),
@@ -2384,60 +2946,65 @@ class Forminator_Stripe extends Forminator_Field {
 						'payment_status' => $session->payment_status ?? '',
 					)
 				);
-
-				return new WP_Error(
-					'forminator_stripe_checkout_session_pending',
-					esc_html__( 'Payment failed. Please try again.', 'forminator' )
-				);
-			}
-
-			// Claim the Checkout Session before the entry is created so one payment can
-			// only ever produce one entry, even for concurrent submissions.
-			if ( ! self::is_valid_checkout_session( $session->id ) ) {
-				forminator_maybe_log(
-					__METHOD__,
-					array(
-						'action'        => 'checkout_session_entry_already_handled',
-						'error_message' => esc_html__( 'Checkout Session ID is not valid', 'forminator' ),
-						'payment_id'    => Forminator_CForm_Front_Action::$prepared_data['paymentid'] ?? '',
-						'form_id'       => $expected_form_id,
-						'field_id'      => self::get_property( 'element_id', $field, '' ),
-						'session_id'    => $session->id,
-					)
-				);
-
-				return new WP_Error(
-					'forminator_stripe_checkout_session_already_handled',
-					esc_html__( 'Checkout Session ID is not valid', 'forminator' )
-				);
-			}
-
-			$entry_data['status'] = 'COMPLETED';
-
-			$payment_intent = $session->payment_intent ?? '';
-			if ( is_object( $payment_intent ) ) {
-				$payment_intent = $payment_intent->id ?? '';
-			}
-			$this->sync_checkout_session_payment_intent_metadata( $session, $field );
-
-			$entry_data['mode']     = $mode;
-			$entry_data['currency'] = $currency;
-			$entry_data['amount']   = $charge_amount;
-			if ( ! empty( $this->payment_plan ) ) {
-				$entry_data['product_name'] = $this->payment_plan['plan_name'];
-				$entry_data['payment_type'] = $this->payment_method( $this->payment_plan['payment_method'] );
-				$entry_data['quantity']     = $this->payment_plan['quantity'];
-			}
-
-			$entry_data['transaction_id'] = $payment_intent ? $payment_intent : $session->id;
-			if ( $payment_intent ) {
-				$entry_data['transaction_link'] = self::get_transanction_link( $mode, $payment_intent );
+				return new WP_Error( 'forminator_stripe_error', esc_html__( 'Checkout Session ID is not valid', 'forminator' ) );
 			}
 		} catch ( Exception $e ) {
-			$entry_data['error'] = $e->getMessage();
+			return new WP_Error( 'forminator_stripe_error', esc_html( $e->getMessage() ) );
+		}
+	}
+
+	/**
+	 * Get the payment owner of the current browser.
+	 *
+	 * Hash of a random token in an HttpOnly cookie, which survives Stripe redirects but not a shared link.
+	 *
+	 * @param bool $issue Issue the cookie when missing, refresh it otherwise.
+	 * @return string Empty when the browser has no token.
+	 */
+	public static function get_payment_owner( $issue = false ): string {
+		if ( '' === self::$payment_owner_token ) {
+			$token = isset( $_COOKIE[ self::PAYMENT_OWNER_COOKIE ] ) ? sanitize_text_field( wp_unslash( $_COOKIE[ self::PAYMENT_OWNER_COOKIE ] ) ) : '';
+			if ( preg_match( '/^[A-Za-z0-9]{32}$/', $token ) ) {
+				self::$payment_owner_token = $token;
+			}
 		}
 
-		return apply_filters( 'forminator_field_stripe_process_to_entry_data', $entry_data, $field, Forminator_Front_Action::$module_object, Forminator_CForm_Front_Action::$prepared_data, Forminator_CForm_Front_Action::$info['field_data_array'] );
+		if ( $issue && ! self::$payment_owner_cookie_sent ) {
+			if ( '' === self::$payment_owner_token ) {
+				self::$payment_owner_token = wp_generate_password( 32, false, false );
+			}
+
+			// Refresh so it outlives the markers using it.
+			if ( ! headers_sent() ) {
+				self::$payment_owner_cookie_sent = true;
+				setcookie(
+					self::PAYMENT_OWNER_COOKIE,
+					self::$payment_owner_token,
+					array(
+						'expires'  => time() + DAY_IN_SECONDS,
+						'path'     => COOKIEPATH,
+						'domain'   => (string) COOKIE_DOMAIN,
+						'secure'   => is_ssl(),
+						'httponly' => true,
+						'samesite' => 'Lax',
+					)
+				);
+			}
+		}
+
+		return '' === self::$payment_owner_token ? '' : hash( 'sha256', self::$payment_owner_token );
+	}
+
+	/**
+	 * Check that the current browser started the payment.
+	 *
+	 * @param mixed $owner Stored payment owner.
+	 * @return bool
+	 */
+	public static function is_payment_owner( $owner ): bool {
+		$current = self::get_payment_owner();
+
+		return is_string( $owner ) && '' !== $owner && '' !== $current && hash_equals( $owner, $current );
 	}
 
 	/**
@@ -2529,12 +3096,11 @@ class Forminator_Stripe extends Forminator_Field {
 	 * @return bool
 	 */
 	private static function claim_pending_payment_intent( $intent_id ): bool {
-		if ( empty( $intent_id ) ) {
+		if ( empty( $intent_id ) || ! self::is_payment_intent_owner( $intent_id ) ) {
 			return false;
 		}
 
-		if ( ! delete_option( self::get_payment_intent_option_key( $intent_id ) )
-			&& ! self::is_untracked_payment_intent( $intent_id ) ) {
+		if ( ! delete_option( self::get_payment_intent_option_key( $intent_id ) ) ) {
 			return false;
 		}
 
@@ -2542,26 +3108,17 @@ class Forminator_Stripe extends Forminator_Field {
 	}
 
 	/**
-	 * Check for a PaymentIntent this release never gave a pending marker.
+	 * Check that the current browser created the pending PaymentIntent.
 	 *
-	 * Releases before the marker existed tracked pending PaymentIntents only as values in
-	 * a single option, so one created back then still has to be claimable exactly once.
-	 *
-	 * @since 1.57.2
+	 * Display intents and markers without an owner never match.
 	 *
 	 * @param string $intent_id PaymentIntent ID.
 	 * @return bool
 	 */
-	private static function is_untracked_payment_intent( $intent_id ): bool {
-		$tracked = get_option( self::PAYMENT_INTENT_CLEANUP_OPTION_KEY, array() );
+	private static function is_payment_intent_owner( $intent_id ): bool {
+		$marker = get_option( self::get_payment_intent_option_key( $intent_id ), false );
 
-		if ( is_array( $tracked ) && isset( $tracked[ $intent_id ] ) ) {
-			return false;
-		}
-
-		$saved_intents = get_option( 'forminator_stripe_payment_intents', array() );
-
-		return is_array( $saved_intents ) && in_array( $intent_id, $saved_intents, true );
+		return is_array( $marker ) && self::is_payment_owner( $marker['owner'] ?? '' );
 	}
 
 	/**
@@ -2646,6 +3203,8 @@ class Forminator_Stripe extends Forminator_Field {
 			self::get_payment_intent_option_key( $intent_id ),
 			array(
 				'created_at' => time(),
+				// Only the paying browser may claim or update it.
+				'owner'      => self::get_payment_owner( true ),
 			),
 			false
 		);
@@ -2676,12 +3235,6 @@ class Forminator_Stripe extends Forminator_Field {
 		if ( is_array( $payment_intents ) && isset( $payment_intents[ $intent_id ] ) ) {
 			unset( $payment_intents[ $intent_id ] );
 			update_option( self::PAYMENT_INTENT_CLEANUP_OPTION_KEY, $payment_intents, false );
-		}
-
-		$option_key    = 'forminator_stripe_payment_intents';
-		$saved_intents = get_option( $option_key, array() );
-		if ( is_array( $saved_intents ) && in_array( $intent_id, $saved_intents, true ) ) {
-			update_option( $option_key, array_diff( $saved_intents, array( $intent_id ) ) );
 		}
 	}
 
@@ -2770,7 +3323,7 @@ class Forminator_Stripe extends Forminator_Field {
 			return false;
 		}
 
-		if ( ! self::claim_pending_checkout_session( $session_id ) ) {
+		if ( ! self::is_claimable_checkout_session( $session_id ) ) {
 			return false;
 		}
 
@@ -2831,7 +3384,6 @@ class Forminator_Stripe extends Forminator_Field {
 		}
 
 		self::mark_checkout_session_consumed( $session_id );
-		self::remove_pending_checkout_session( $session_id );
 	}
 
 	/**
@@ -2847,25 +3399,6 @@ class Forminator_Stripe extends Forminator_Field {
 	 */
 	private static function is_claimable_checkout_session( $session_id ): bool {
 		return self::has_pending_checkout_session( $session_id ) && ! self::is_consumed_checkout_session( $session_id );
-	}
-
-	/**
-	 * Claim the pending Checkout Session marker for the current request.
-	 *
-	 * The delete_option() call only reports success for the request that actually removed
-	 * the row, so concurrent submissions of the same Checkout Session cannot all claim it.
-	 *
-	 * @since 1.57.2
-	 *
-	 * @param string $session_id Checkout Session ID.
-	 * @return bool
-	 */
-	private static function claim_pending_checkout_session( $session_id ): bool {
-		if ( empty( $session_id ) ) {
-			return false;
-		}
-
-		return (bool) delete_option( self::get_checkout_session_option_key( $session_id ) );
 	}
 
 	/**
@@ -2955,6 +3488,8 @@ class Forminator_Stripe extends Forminator_Field {
 			self::get_checkout_session_option_key( $session_id ),
 			array(
 				'created_at' => time(),
+				// Bind the creating browser, so no other can claim it.
+				'owner'      => self::get_payment_owner( true ),
 			),
 			false
 		);
@@ -2963,6 +3498,74 @@ class Forminator_Stripe extends Forminator_Field {
 		$checkout_sessions                = is_array( $checkout_sessions ) ? $checkout_sessions : array();
 		$checkout_sessions[ $session_id ] = time();
 		update_option( self::CHECKOUT_SESSION_CLEANUP_OPTION_KEY, $checkout_sessions, false );
+	}
+
+	/**
+	 * Update a pending Checkout Session option with the entry ID and form ID.
+	 *
+	 * @since 1.58
+	 *
+	 * @param string                      $session_id Checkout Session ID.
+	 * @param Forminator_Form_Entry_Model $entry Form entry model.
+	 * @return void
+	 */
+	public static function update_pending_checkout_session( $session_id, $entry ) {
+		if ( empty( $session_id ) ) {
+			return;
+		}
+
+		$option_data = get_option( self::get_checkout_session_option_key( $session_id ), false );
+		if ( ! is_array( $option_data ) ) {
+			return;
+		}
+
+		// Only the owning browser may attach an entry.
+		if ( ! self::is_payment_owner( $option_data['owner'] ?? '' ) ) {
+			return;
+		}
+
+		$option_data['owner']      = self::get_payment_owner( true );
+		$option_data['entry_id']   = $entry->entry_id;
+		$option_data['form_id']    = $entry->form_id;
+		$option_data['updated_at'] = time();
+
+		update_option(
+			self::get_checkout_session_option_key( $session_id ),
+			$option_data,
+			false
+		);
+	}
+
+	/**
+	 * Get pending Checkout Session data by session ID.
+	 *
+	 * @since 1.58
+	 *
+	 * @param string $session_id Checkout Session ID.
+	 * @return array|false Option data or false if not found.
+	 */
+	public static function get_pending_checkout_session_data( $session_id ) {
+		if ( empty( $session_id ) ) {
+			return false;
+		}
+
+		return get_option( self::get_checkout_session_option_key( $session_id ), false );
+	}
+
+	/**
+	 * Check whether a pending Checkout Session can be restored.
+	 *
+	 * @since 1.58
+	 *
+	 * @param string $session_id Checkout Session ID.
+	 * @return bool
+	 */
+	public static function can_restore_pending_checkout_session( $session_id ) {
+		$session_data = self::get_pending_checkout_session_data( $session_id );
+		if ( empty( $session_data['entry_id'] ) ) {
+			return true;
+		}
+		return false;
 	}
 
 	/**
@@ -2996,8 +3599,14 @@ class Forminator_Stripe extends Forminator_Field {
 		if ( empty( $session_id ) ) {
 			return false;
 		}
+		$session_option = get_option( self::get_checkout_session_option_key( $session_id ), false );
 
-		return false !== get_option( self::get_checkout_session_option_key( $session_id ), false );
+		// If the option is missing or already has an entry ID or form ID, it is no longer considered pending.
+		if ( false === $session_option || isset( $session_option['entry_id'] ) || isset( $session_option['form_id'] ) ) {
+			return false;
+		}
+
+		return true;
 	}
 
 	/**
@@ -3032,9 +3641,6 @@ class Forminator_Stripe extends Forminator_Field {
 			unset( $checkout_sessions[ $session_id ] );
 			update_option( self::CHECKOUT_SESSION_CLEANUP_OPTION_KEY, $checkout_sessions, false );
 		}
-
-		// Also remove any uploaded files data associated with this Checkout Session.
-		self::remove_checkout_session_uploaded_files_data( $session_id );
 	}
 
 	/**
@@ -3063,20 +3669,14 @@ class Forminator_Stripe extends Forminator_Field {
 		 */
 		$retention = apply_filters( 'forminator_stripe_checkout_session_retention', DAY_IN_SECONDS );
 
-		$expired_sessions = array();
 		foreach ( $checkout_sessions as $session_id => $created_at ) {
 			if ( ! is_numeric( $created_at ) || time() - (int) $created_at > $retention ) {
-				$expired_sessions[] = $session_id;
 				unset( $checkout_sessions[ $session_id ] );
 				delete_option( self::get_checkout_session_option_key( $session_id ) );
 			}
 		}
 
 		update_option( self::CHECKOUT_SESSION_CLEANUP_OPTION_KEY, $checkout_sessions, false );
-
-		if ( ! empty( $expired_sessions ) ) {
-			self::remove_checkout_session_uploaded_files_data( $expired_sessions );
-		}
 	}
 
 	/**
@@ -3087,6 +3687,9 @@ class Forminator_Stripe extends Forminator_Field {
 	 * @return void
 	 */
 	private static function cleanup_payment_intents() {
+		// Old intent cache shared between browsers.
+		delete_option( 'forminator_stripe_payment_intents' );
+
 		$payment_intents = get_option( self::PAYMENT_INTENT_CLEANUP_OPTION_KEY, array() );
 
 		if ( ! empty( $payment_intents ) && is_array( $payment_intents ) ) {
@@ -3194,6 +3797,10 @@ class Forminator_Stripe extends Forminator_Field {
 		}
 
 		if ( 'complete' === $session_status ) {
+			// The asynchronous payment may have complete session status in an unpaid payment status.
+			if ( $allow_completed_paid && 'unpaid' === $payment_status ) {
+				return true;
+			}
 			return $allow_completed_paid && 'paid' === $payment_status;
 		}
 
@@ -3213,10 +3820,10 @@ class Forminator_Stripe extends Forminator_Field {
 	 * @return string
 	 */
 	public static function linkify_transaction_id( $transaction_id, $meta_value ) {
-		$transaction_link = $transaction_id;
+		$transaction_link = esc_html( $transaction_id );
 		if ( isset( $meta_value['transaction_link'] ) && ! empty( $meta_value['transaction_link'] ) ) {
 			$url              = $meta_value['transaction_link'];
-			$transaction_link = '<a href="' . $url . '" target="_blank" rel="noopener noreferrer" title="' . $transaction_id . '">' . $transaction_id . '</a>';
+			$transaction_link = '<a href="' . esc_url( $url ) . '" target="_blank" rel="noopener noreferrer" title="' . esc_attr( $transaction_id ) . '">' . esc_html( $transaction_id ) . '</a>';
 		}
 
 		/**
@@ -3268,6 +3875,11 @@ class Forminator_Stripe extends Forminator_Field {
 			// Check payment amount.
 			$intent = \Forminator\Stripe\PaymentIntent::retrieve( Forminator_CForm_Front_Action::$prepared_data['paymentid'] );
 
+			// Never confirm or return the secret of an intent belonging to another form.
+			if ( ! self::is_payment_intent_of_current_form( $intent ) ) {
+				throw new Exception( esc_html__( 'Payment Intent ID is not valid', 'forminator' ) );
+			}
+
 			return $intent;
 		} catch ( Exception $e ) {
 			return $this->get_error( $e );
@@ -3296,7 +3908,7 @@ class Forminator_Stripe extends Forminator_Field {
 	 * @throws Exception When the Checkout Session cannot be retrieved.
 	 * @return mixed
 	 */
-	private function get_checkout_session_by_id( $session_id, $field ) {
+	public function get_checkout_session_by_id( $session_id, $field ) {
 		$mode = self::get_property( 'mode', $field, 'test' );
 		$key  = $this->get_secret_key( 'test' !== $mode );
 
@@ -3385,9 +3997,10 @@ class Forminator_Stripe extends Forminator_Field {
 	/**
 	 * Get Stripe return URL to pass it in API calls
 	 *
+	 * @param bool $is_checkout_session Whether the return URL is for a checkout session.
 	 * @return string
 	 */
-	public static function get_return_url() {
+	public static function get_return_url( $is_checkout_session = false ) {
 		$return_url = forminator_get_current_url();
 
 		if ( empty( $return_url ) && ! empty( Forminator_CForm_Front_Action::$prepared_data['current_url'] ) ) {
@@ -3403,6 +4016,12 @@ class Forminator_Stripe extends Forminator_Field {
 
 		if ( empty( $return_url ) ) {
 			$return_url = home_url( '/' );
+		}
+
+		if ( true === $is_checkout_session ) {
+			// Add the Stripe Checkout Session ID to the return URL for checkout sessions.
+			// This allows the form to retrieve the session ID after the user is redirected back from Stripe.
+			$return_url = add_query_arg( 'stripe_session_id', '{CHECKOUT_SESSION_ID}', $return_url );
 		}
 
 		return apply_filters( 'forminator_stripe_return_url', $return_url );
@@ -3517,7 +4136,7 @@ class Forminator_Stripe extends Forminator_Field {
 		$amount = $this->get_payment_amount( $field_settings );
 
 		// Subscription plans use subscription_amount_* keys; include live total so paymentPlan hash changes when variable price/qty changes.
-		if ( ! empty( $plan['payment_method'] ) && 'subscription' === $plan['payment_method'] && class_exists( 'Forminator_Stripe_Subscription' ) ) {
+		if ( ! empty( $plan['payment_method'] ) && 'subscription' === $plan['payment_method'] && forminator_is_stripe_addon_compatible() ) {
 			$amount = $this->get_subscription_amount( $plan, $this, Forminator_CForm_Front_Action::$prepared_data, $field_settings );
 		}
 
@@ -3755,123 +4374,192 @@ class Forminator_Stripe extends Forminator_Field {
 	}
 
 	/**
-	 * Check if the checkout session is valid for file upload
+	 * Get Stripe PaymentIntent object by payment ID.
 	 *
-	 * @since 1.56
+	 * @since 1.58
 	 *
-	 * @param string $session_id Checkout Session ID.
-	 * @param array  $field Field.
-	 * @return bool
+	 * @param array  $field Stripe field.
+	 * @param string $payment_id Stripe PaymentIntent ID.
+	 * @return mixed  PaymentIntent object or WP_Error on failure.
 	 */
-	public function is_valid_session_for_file_upload( $session_id, $field ) {
-		$session = $this->get_checkout_session_by_id( $session_id, $field );
-		if ( is_wp_error( $session ) || empty( $session->id ) ) {
-			return false;
+	public function get_stripe_payment_intent( $field, $payment_id ) {
+		$this->setup_stripe_app_info( $field );
+		try {
+			// Check payment amount.
+			$intent = \Forminator\Stripe\PaymentIntent::retrieve( $payment_id );
+
+			return $intent;
+		} catch ( Exception $e ) {
+			return $this->get_error( $e );
 		}
+	}
 
-		$session_status = isset( $session->status ) ? (string) $session->status : '';
-		$payment_status = isset( $session->payment_status ) ? (string) $session->payment_status : '';
-
-		if ( 'expired' === $session_status || 'complete' === $session_status ) {
-			return false;
-		}
-
-		if ( 'paid' !== $payment_status ) {
-			return true;
+	/**
+	 * Get PaymentIntent for a given customer.
+	 *
+	 * @since 1.58
+	 *
+	 * @param array  $field Stripe field.
+	 * @param string $customer_id Stripe Customer ID.
+	 * @return mixed  PaymentIntent object or false if not found.
+	 */
+	public function get_payment_intent_by_customer( $field, $customer_id ) {
+		$this->setup_stripe_app_info( $field );
+		try {
+			$payment_intent = \Forminator\Stripe\PaymentIntent::all(
+				array(
+					'customer' => $customer_id,
+					'limit'    => 1,
+				)
+			);
+			if ( ! empty( $payment_intent->data ) && ! empty( $payment_intent->data[0] ) ) {
+				return $payment_intent->data[0];
+			}
+		} catch ( Exception $e ) {
+			forminator_maybe_log(
+				__METHOD__,
+				array(
+					'action'        => 'Stripe\PaymentIntent::all',
+					'error_class'   => get_class( $e ),
+					'error_message' => $e->getMessage(),
+					'error_code'    => $e->getCode(),
+					'customer'      => $customer_id,
+				)
+			);
 		}
 		return false;
 	}
 
 	/**
-	 * Save uploaded files on checkout session
+	 * Get SetupIntent for a given customer.
 	 *
-	 * @param string $session_id Stripe Checkout Session ID.
-	 * @param array  $uploaded_files Uploaded files data.
-	 * @param string $type Field type.
+	 * @since 1.58
 	 *
-	 * @return void
+	 * @param array  $field Stripe field.
+	 * @param string $customer_id Stripe Customer ID.
+	 * @return mixed  SetupIntent object or false if not found.
 	 */
-	public function add_uploaded_files_on_checkout_session( $session_id, $uploaded_files, $type = 'upload' ) {
-		$saved_files = get_option( self::CHECKOUT_SESSION_UPLOADED_FILES, array() );
-		if ( ! is_array( $saved_files ) ) {
-			$saved_files = array();
+	public function get_setup_intent_by_customer( $field, $customer_id ) {
+		$this->setup_stripe_app_info( $field );
+		try {
+			$setup_intent = \Forminator\Stripe\SetupIntent::all(
+				array(
+					'customer' => $customer_id,
+					'limit'    => 1,
+				)
+			);
+			if ( ! empty( $setup_intent->data ) && ! empty( $setup_intent->data[0] ) ) {
+				return $setup_intent->data[0];
+			}
+		} catch ( Exception $e ) {
+			forminator_maybe_log(
+				__METHOD__,
+				array(
+					'action'        => 'Stripe\SetupIntent::all',
+					'error_class'   => get_class( $e ),
+					'error_message' => $e->getMessage(),
+					'error_code'    => $e->getCode(),
+					'customer'      => $customer_id,
+				)
+			);
 		}
-		$saved_files[ $session_id ][ $type ] = $uploaded_files;
-
-		update_option( self::CHECKOUT_SESSION_UPLOADED_FILES, $saved_files, false );
+		return false;
 	}
 
 	/**
-	 * Get uploaded files on checkout session
+	 * Get the PaymentIntent and SetupIntent to check for a subscription Checkout Session.
 	 *
-	 * @param string $session_id Stripe Checkout Session ID.
-	 * @param string $type Field type.
-	 * @return array
+	 * Uses the session's own subscription, as a customer can hold other payments. Before it exists
+	 * nothing is paid, so the customer's paid intents are ignored.
+	 *
+	 * @param array  $field   Stripe field.
+	 * @param object $session Checkout Session object.
+	 * @return array{payment_intent:mixed,setup_intent:mixed}|WP_Error
 	 */
-	public function get_uploaded_files_on_checkout_session( $session_id, $type = 'upload' ) {
-		$saved_files = get_option( self::CHECKOUT_SESSION_UPLOADED_FILES, array() );
-		if ( ! empty( $saved_files[ $session_id ] ) && ! empty( $saved_files[ $session_id ][ $type ] ) ) {
-			return $saved_files[ $session_id ][ $type ];
-		}
-		return array();
-	}
+	public function get_subscription_intents( $field, $session ) {
+		if ( empty( $session->subscription ) ) {
+			$payment_intent = $this->get_payment_intent_by_customer( $field, $session->customer );
+			if ( empty( $payment_intent ) ) {
+				return array(
+					'payment_intent' => false,
+					'setup_intent'   => $this->get_setup_intent_by_customer( $field, $session->customer ),
+				);
+			}
 
-	/**
-	 * Remove uploaded files data associated with a Checkout Session ID.
-	 *
-	 * @since 1.56
-	 *
-	 * @param string|array $session_id Checkout Session ID.
-	 * @return void
-	 */
-	public static function remove_checkout_session_uploaded_files_data( $session_id ) {
-		$uploaded_files = get_option( self::CHECKOUT_SESSION_UPLOADED_FILES, array() );
-		if ( is_array( $session_id ) ) {
-			foreach ( $session_id as $id ) {
-				if ( isset( $uploaded_files[ $id ] ) ) {
-					self::maybe_delete_file( $uploaded_files[ $id ] );
-					unset( $uploaded_files[ $id ] );
+			return array(
+				'payment_intent' => in_array( $payment_intent->status, array( 'succeeded', 'processing' ), true ) ? false : $payment_intent,
+				'setup_intent'   => false,
+			);
+		}
+
+		$this->setup_stripe_app_info( $field );
+
+		$subscription_id = is_object( $session->subscription ) ? $session->subscription->id : $session->subscription;
+
+		try {
+			$subscription = \Forminator\Stripe\Subscription::retrieve(
+				array(
+					'id'     => $subscription_id,
+					'expand' => array( 'pending_setup_intent' ),
+				)
+			);
+			$invoice_id   = is_object( $subscription->latest_invoice ) ? $subscription->latest_invoice->id : (string) $subscription->latest_invoice;
+
+			$payment_intent_id = '';
+			if ( '' !== $invoice_id ) {
+				$payments = \Forminator\Stripe\InvoicePayment::all( array( 'invoice' => $invoice_id ) );
+				foreach ( $payments->data as $payment ) {
+					$intent_id = self::get_payment_intent( $payment->payment->payment_intent ?? '' );
+					if ( empty( $intent_id ) ) {
+						continue;
+					}
+					// The default payment collects the invoice.
+					if ( ! empty( $payment->is_default ) ) {
+						$payment_intent_id = $intent_id;
+						break;
+					}
+					if ( '' === $payment_intent_id ) {
+						$payment_intent_id = $intent_id;
+					}
 				}
 			}
-		} elseif ( isset( $uploaded_files[ $session_id ] ) ) {
-			self::maybe_delete_file( $uploaded_files[ $session_id ] );
-			unset( $uploaded_files[ $session_id ] );
+
+			$payment_intent = '' !== $payment_intent_id ? \Forminator\Stripe\PaymentIntent::retrieve( $payment_intent_id ) : false;
+
+			return array(
+				'payment_intent' => $payment_intent,
+				'setup_intent'   => empty( $payment_intent ) && is_object( $subscription->pending_setup_intent ) ? $subscription->pending_setup_intent : false,
+			);
+		} catch ( Exception $e ) {
+			forminator_maybe_log(
+				__METHOD__,
+				array(
+					'action'        => 'Subscription::retrieve',
+					'error_class'   => get_class( $e ),
+					'error_message' => $e->getMessage(),
+					'error_code'    => $e->getCode(),
+					'subscription'  => $subscription_id,
+				)
+			);
+
+			return $this->get_error( $e );
 		}
-		update_option( self::CHECKOUT_SESSION_UPLOADED_FILES, $uploaded_files, false );
 	}
 
 	/**
-	 * Delete uploaded files if they are not used as featured images in any post.
+	 * Setup Stripe API key and app info for API calls.
 	 *
-	 * @param array $data Uploaded files data.
+	 * @since 1.58
+	 *
+	 * @param array $field Stripe field.
 	 * @return void
 	 */
-	private static function maybe_delete_file( $data ) {
-		if ( empty( $data['postdata'] ) ) {
-			return;
-		}
-		foreach ( $data['postdata'] as $postdata ) {
-			if ( ! empty( $postdata['attachment_id'] ) ) {
-				$attachment_id = $postdata['attachment_id'];
-				// Check if the attachment is set as a featured image for any post before deleting it.
-				$is_featured = self::is_attachment_featured( $attachment_id );
-				if ( ! $is_featured ) {
-					wp_delete_attachment( $attachment_id, true );
-				}
-			}
-		}
-	}
+	private function setup_stripe_app_info( $field ) {
+		$mode = self::get_property( 'mode', $field, 'test' );
 
-	/**
-	 * Check if an attachment is set as a featured image for any post.
-	 *
-	 * @param int $attachment_id Attachment ID to check.
-	 * @return bool
-	 */
-	private static function is_attachment_featured( $attachment_id ) {
-		global $wpdb;
-		return (bool) $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-			$wpdb->prepare( "SELECT COUNT(*) FROM $wpdb->postmeta WHERE meta_key = '_thumbnail_id' AND meta_value = %d", (int) $attachment_id )
-		);
+		$key = $this->get_secret_key( 'test' !== $mode );
+
+		\Forminator\Stripe\Stripe::setApiKey( $key );
+		Forminator_Gateway_Stripe::set_stripe_app_info();
 	}
 }

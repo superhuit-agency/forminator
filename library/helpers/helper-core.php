@@ -531,6 +531,46 @@ function forminator_localize_data() {
 }
 
 /**
+ * Resolve a safe admin view template path.
+ *
+ * Rejects absolute paths, traversal segments, and stream wrappers, then
+ * requires the resolved file to stay inside admin/views.
+ *
+ * @since 1.58.0
+ *
+ * @param string $path Relative template path without .php.
+ *
+ * @return string|false Absolute file path, or false when unsafe/missing.
+ */
+function forminator_resolve_admin_view_template( $path ) {
+	if ( ! is_string( $path ) || '' === $path ) {
+		return false;
+	}
+
+	// Reject absolute paths, Windows drive paths, traversal, and stream wrappers.
+	if ( preg_match( '#(^[/\\\\]|^[a-zA-Z]:|\\.\\.|://)#', $path ) ) {
+		return false;
+	}
+
+	$views_root = realpath( forminator_plugin_dir() . 'admin/views' );
+	if ( ! $views_root ) {
+		return false;
+	}
+
+	$file_path = realpath( $views_root . DIRECTORY_SEPARATOR . $path . '.php' );
+	if ( ! $file_path ) {
+		return false;
+	}
+
+	$prefix = $views_root . DIRECTORY_SEPARATOR;
+	if ( 0 !== strpos( $file_path, $prefix ) ) {
+		return false;
+	}
+
+	return $file_path;
+}
+
+/**
  * Return existing templates
  *
  * @since 1.0
@@ -541,10 +581,10 @@ function forminator_localize_data() {
  * @return mixed
  */
 function forminator_template( $path, $args = array() ) {
-	$file    = forminator_plugin_dir() . "admin/views/$path.php";
+	$file    = forminator_resolve_admin_view_template( $path );
 	$content = '';
 
-	if ( is_file( $file ) ) {
+	if ( $file ) {
 		ob_start();
 
 		if ( isset( $args['id'] ) ) {
@@ -574,9 +614,7 @@ function forminator_template( $path, $args = array() ) {
  * @return bool
  */
 function forminator_template_exist( $path ) {
-	$file = forminator_plugin_dir() . "admin/views/$path.php";
-
-	return is_file( $file );
+	return false !== forminator_resolve_admin_view_template( $path );
 }
 
 /**
@@ -720,6 +758,25 @@ function forminator_is_stripe_mode_ready( $mode ) {
 	}
 
 	return false;
+}
+
+/**
+ * Check if the Stripe Subscription add-on is installed and meets Forminator's minimum version.
+ *
+ * @since 1.58.0
+ *
+ * @return bool
+ */
+function forminator_is_stripe_addon_compatible() {
+	if ( ! defined( 'FORMINATOR_STRIPE_ADDON' ) || ! defined( 'FORMINATOR_MIN_STRIPE_ADDON_VERSION' ) ) {
+		return false;
+	}
+
+	if ( ! class_exists( 'Forminator_Stripe_Addon' ) || ! class_exists( 'Forminator_Stripe_Subscription' ) ) {
+		return false;
+	}
+
+	return version_compare( FORMINATOR_STRIPE_ADDON, FORMINATOR_MIN_STRIPE_ADDON_VERSION . '-alpha', '>=' );
 }
 
 /**
@@ -998,6 +1055,26 @@ function forminator_is_breakdance_builder_preview() {
 
 	return current_user_can( 'edit_post', $document_id );
 }
+
+/**
+ * Detect whether the current render is a Gutenberg block editor preview.
+ *
+ * The block preview flags its ajax load with `is_block_editor`. Since that comes from
+ * the request, it's paired with the capabilities the preview endpoint already requires.
+ *
+ * @since 1.58.0
+ *
+ * @return bool
+ */
+function forminator_is_block_editor_render() {
+	if ( ! filter_input( INPUT_POST, 'is_block_editor', FILTER_VALIDATE_BOOLEAN ) ) {
+		return false;
+	}
+
+	return current_user_can( 'manage_options' ) || current_user_can( 'edit_pages' )
+		|| current_user_can( 'edit_posts' ) || current_user_can( 'edit_themes' );
+}
+
 /**
  * Detect whether current request comes from any page builder preveiw page
  *
@@ -1324,6 +1401,42 @@ function forminator_get_captcha_languages() {
 			'zu'     => esc_html__( 'Zulu', 'forminator' ),
 		)
 	);
+}
+
+/**
+ * Return a safe CAPTCHA language code from stored settings.
+ *
+ * @since 1.57.1
+ *
+ * @param string $language Language code.
+ * @return string
+ */
+function forminator_sanitize_captcha_language( $language = '' ) {
+	$languages = forminator_get_captcha_languages();
+
+	if ( ! empty( $language ) && array_key_exists( $language, $languages ) ) {
+		return $language;
+	}
+
+	if ( empty( $language ) ) {
+		$language = get_locale();
+	}
+
+	if ( array_key_exists( $language, $languages ) ) {
+		return $language;
+	}
+
+	$locale_language = strtolower( str_replace( '_', '-', $language ) );
+	if ( array_key_exists( $locale_language, $languages ) ) {
+		return $locale_language;
+	}
+
+	$language_code = strtok( $locale_language, '-' );
+	if ( false !== $language_code && array_key_exists( $language_code, $languages ) ) {
+		return $language_code;
+	}
+
+	return 'en';
 }
 
 /**
@@ -1775,20 +1888,143 @@ function forminator_global_tracking() {
 }
 
 /**
+ * Get Forminator capability definitions.
+ *
+ * @return array
+ */
+function forminator_get_capability_definitions() {
+	$capabilities = array(
+		'manage_forminator_modules'      => array(
+			'label'        => __( 'Modules', 'forminator' ),
+			'description'  => __( 'Create, edit, and delete modules (Forms, Polls, Quizzes).', 'forminator' ),
+			'can_tooltip'  => __( 'Can create, edit, and delete modules (Forms, Polls, and Quizzes).', 'forminator' ),
+			'cant_tooltip' => __( 'Can\'t create, edit, and delete modules (Forms, Polls, and Quizzes).', 'forminator' ),
+		),
+		'manage_forminator_templates'    => array(
+			'label'        => __( 'Templates', 'forminator' ),
+			'description'  => __( 'View templates page and manage cloud templates.', 'forminator' ),
+			'can_tooltip'  => __( 'Can create, edit, and delete templates.', 'forminator' ),
+			'cant_tooltip' => __( 'Can\'t create, edit, and delete templates.', 'forminator' ),
+		),
+		'manage_forminator_submissions'  => array(
+			'label'        => __( 'Submissions', 'forminator' ),
+			'description'  => __( 'Access, export, and delete submissions.', 'forminator' ),
+			'can_tooltip'  => __( 'Can view and delete submissions.', 'forminator' ),
+			'cant_tooltip' => __( 'Can\'t view and delete submissions.', 'forminator' ),
+		),
+		'manage_forminator_addons'       => array(
+			'label'        => __( 'Add-ons', 'forminator' ),
+			'description'  => __( 'View, install/uninstall, and configure Add-ons.', 'forminator' ),
+			'can_tooltip'  => __( 'Can configure add-ons.', 'forminator' ),
+			'cant_tooltip' => __( 'Can\'t configure add-ons.', 'forminator' ),
+			'visible'      => ! forminator_addons_disabled(),
+		),
+		'manage_forminator_integrations' => array(
+			'label'        => __( 'Integrations', 'forminator' ),
+			'description'  => __( 'Access and configure global integrations.', 'forminator' ),
+			'can_tooltip'  => __( 'Can configure integrations.', 'forminator' ),
+			'cant_tooltip' => __( 'Can\'t configure integrations.', 'forminator' ),
+		),
+		'manage_forminator_reports'      => array(
+			'label'        => __( 'Reports', 'forminator' ),
+			'description'  => __( 'View reports and schedule email notifications for modules.', 'forminator' ),
+			'can_tooltip'  => __( 'Can configure reports.', 'forminator' ),
+			'cant_tooltip' => __( 'Can\'t configure reports.', 'forminator' ),
+			'visible'      => forminator_global_tracking(),
+		),
+		'manage_forminator_settings'     => array(
+			'label'         => __( 'Settings', 'forminator' ),
+			'description'   => __( 'Access and configure plugin settings.', 'forminator' ),
+			'can_tooltip'   => __( 'Can configure settings except permissions.', 'forminator' ),
+			'cant_tooltip'  => __( 'Can\'t configure settings.', 'forminator' ),
+			'admin_tooltip' => __( 'Can configure all settings.', 'forminator' ),
+		),
+	);
+
+	/**
+	 * Filter the registered Forminator capability definitions.
+	 *
+	 * @since 1.58.0
+	 *
+	 * @param array $capabilities Capability definitions keyed by capability slug.
+	 */
+	$capabilities = apply_filters( 'forminator_capability_definitions', $capabilities );
+
+	if ( ! is_array( $capabilities ) ) {
+		return array();
+	}
+
+	foreach ( array_keys( $capabilities ) as $capability ) {
+		if ( 0 !== strpos( $capability, 'manage_forminator_' ) ) {
+			unset( $capabilities[ $capability ] );
+		}
+	}
+
+	return $capabilities;
+}
+
+/**
  * Get forminator capabilities.
  *
  * @return array
  */
 function forminator_get_capabilities() {
-	return array(
-		'manage_forminator_modules',
-		'manage_forminator_submissions',
-		'manage_forminator_templates',
-		'manage_forminator_addons',
-		'manage_forminator_integrations',
-		'manage_forminator_reports',
-		'manage_forminator_settings',
+	return array_keys( forminator_get_capability_definitions() );
+}
+
+/**
+ * Get the page slug to capability map used by Forminator.
+ *
+ * @return array
+ */
+function forminator_get_permission_cap_map() {
+	$permission_map = array(
+		'forminator'                  => 'manage_forminator_modules',
+		'forminator-cform'            => 'manage_forminator_modules',
+		'forminator-cform-wizard'     => 'manage_forminator_modules',
+		'forminator-cform-view'       => 'manage_forminator_modules',
+		'forminator-poll'             => 'manage_forminator_modules',
+		'forminator-poll-wizard'      => 'manage_forminator_modules',
+		'forminator-poll-view'        => 'manage_forminator_modules',
+		'forminator-quiz'             => 'manage_forminator_modules',
+		'forminator-nowrong-wizard'   => 'manage_forminator_modules',
+		'forminator-knowledge-wizard' => 'manage_forminator_modules',
+		'forminator-quiz-view'        => 'manage_forminator_modules',
+		'forminator-entries'          => 'manage_forminator_submissions',
+		'forminator-templates'        => 'manage_forminator_templates',
+		'forminator-addons'           => 'manage_forminator_addons',
+		'forminator-integrations'     => 'manage_forminator_integrations',
+		'forminator-reports'          => 'manage_forminator_reports',
+		'forminator-settings'         => 'manage_forminator_settings',
 	);
+
+	/**
+	 * Filter the Forminator page slug to capability map.
+	 *
+	 * @since 1.58.0
+	 *
+	 * @param array $permission_map Capability map keyed by Forminator page slug.
+	 */
+	return apply_filters( 'forminator_permission_cap_map', $permission_map );
+}
+
+/**
+ * Normalize one permission rule against the registered capabilities.
+ *
+ * @param array $permission Permission rule.
+ *
+ * @return array
+ */
+function forminator_normalize_permission_rule( $permission ) {
+	if ( ! is_array( $permission ) ) {
+		return array();
+	}
+
+	foreach ( forminator_get_capabilities() as $cap ) {
+		$permission[ $cap ] = ! empty( $permission[ $cap ] );
+	}
+
+	return $permission;
 }
 
 /**
@@ -1804,7 +2040,8 @@ function forminator_apply_capabilities( $subject, $permission ) {
 		return;
 	}
 
-	$caps = forminator_get_capabilities();
+	$permission = forminator_normalize_permission_rule( $permission );
+	$caps       = forminator_get_capabilities();
 
 	foreach ( $caps as $cap ) {
 		if ( $permission[ $cap ] ) {
@@ -1841,51 +2078,27 @@ function forminator_get_permission( $page_slug ) {
 		return $default_cap;
 	}
 
-	// Assign appropriate cap based on page_slug.
-	switch ( $page_slug ) {
-		case 'forminator':
-		case 'forminator-cform':
-		case 'forminator-cform-wizard':
-		case 'forminator-cform-view':
-		case 'forminator-poll':
-		case 'forminator-poll-wizard':
-		case 'forminator-poll-view':
-		case 'forminator-quiz':
-		case 'forminator-nowrong-wizard':
-		case 'forminator-knowledge-wizard':
-		case 'forminator-quiz-view':
-			$cap = 'manage_forminator_modules';
-			break;
-		case 'forminator-entries':
-			$cap = 'manage_forminator_submissions';
-			break;
+	$permission_map = forminator_get_permission_cap_map();
+	$cap            = $permission_map[ $page_slug ] ?? $default_cap;
 
-		case 'forminator-templates':
-			$cap = 'manage_forminator_templates';
-			break;
-
-		case 'forminator-addons':
-			$cap = 'manage_forminator_addons';
-			break;
-		case 'forminator-integrations':
-			$cap = 'manage_forminator_integrations';
-			break;
-		case 'forminator-reports':
-			$cap = 'manage_forminator_reports';
-			break;
-		case 'forminator-settings':
-			$cap = 'manage_forminator_settings';
-			break;
-		default:
-			$cap = $default_cap;
-			break;
-	}
+	/**
+	 * Filter the capability required for a specific Forminator page slug.
+	 *
+	 * @since 1.58.0
+	 *
+	 * @param string $cap         Resolved capability.
+	 * @param string $page_slug   Forminator page slug.
+	 * @param string $default_cap Default admin capability.
+	 * @param array  $permission_map Registered page slug capability map.
+	 */
+	$cap = apply_filters( 'forminator_permission_cap', $cap, $page_slug, $default_cap, $permission_map );
 
 	$user_allowed = false;
 	$role_allowed = false;
 
 	// Check permissions for excluded users.
 	foreach ( $permissions as $permission ) {
+		$permission = forminator_normalize_permission_rule( $permission );
 
 		// If role.
 		if ( 'role' === $permission['permission_type'] ) {
@@ -2373,4 +2586,33 @@ function forminator_strip_incomplete_classes( $value ) {
 	}
 
 	return $value;
+}
+
+/**
+ * Get the default Stripe payment failure notification settings.
+ *
+ * @since 1.58.0
+ *
+ * @return array Notification settings.
+ */
+function forminator_get_stripe_payment_notifications() {
+	return array(
+		'slug'              => 'notification-stripe-payment-failed',
+		'label'             => esc_html__( 'Stripe - Failed Email Notification', 'forminator' ),
+		'enabled'           => 'true',
+		'email-recipients'  => 'default',
+		'recipients'        => get_option( 'admin_email' ),
+		'email-subject'     => esc_html__( 'Payment Failed for {form_name} (submission #{submission_id})', 'forminator' ),
+		'email-editor'      => sprintf(
+			'%1$s <br/><br/>%2$s<br/><ul><li>%3$s</li><li>%4$s</li></ul>',
+			esc_html__( 'A payment attempt for {form_name} could not be completed. The submission details have been saved, but payment processing failed.', 'forminator' ),
+			esc_html__( 'Details:', 'forminator' ),
+			esc_html__( 'Submission ID: #{submission_id}', 'forminator' ),
+			esc_html__( 'Amount: {payment_amount} {payment_currency}', 'forminator' ),
+		),
+		'email-attachment'  => 'true',
+		// Empty fields are replaced with "N/A" by default on new forms @since 1.57.0.
+		'fill-empty-fields' => 'true',
+		'type'              => 'stripe-payment-failed',
+	);
 }

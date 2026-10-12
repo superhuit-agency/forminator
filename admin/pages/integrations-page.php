@@ -210,6 +210,14 @@ class Forminator_Integrations_Page extends Forminator_Admin_Page {
 			return false;
 		}
 
+		/**
+		 * A missing nonce must not skip CSRF validation. Integrations whose provider
+		 * redirects back to a pre registered URL cannot carry one, so they opt out.
+		 */
+		if ( ! $nonce && $addon->section_requires_nonce ) {
+			return false;
+		}
+
 		if ( ! isset( $query_args['section'] ) ) {
 			return false;
 		}

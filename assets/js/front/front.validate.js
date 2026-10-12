@@ -567,8 +567,8 @@
 			item = item.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 			// Support * as wildcard.
 			item = item.replace(/\\\*/g, '.*');
-			// Add end delimiter.
-			const regex = new RegExp(item + '$');
+			// Add end delimiter (case-insensitive; email domains are not case-sensitive).
+			const regex = new RegExp(item + '$', 'i');
 			if (regex.test(email)) {
 				return ! isDeny;
 			}

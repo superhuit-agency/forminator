@@ -145,7 +145,7 @@ class Forminator_GFBlock_Forms extends Forminator_GFBlock_Abstract {
 		$script_src     = forminator_plugin_url() . 'assets/js/library/intlTelInput.min.js';
 		$script_version = FORMINATOR_VERSION;
 
-		wp_enqueue_style( 'intlTelInput-forminator-css', $style_src, array(), $style_version ); // intlTelInput.
+		wp_enqueue_style( 'intlTelInput-forminator', $style_src, array(), $style_version ); // intlTelInput.
 		wp_enqueue_script( 'forminator-intlTelInput', $script_src, array( 'jquery' ), $script_version, false ); // intlTelInput.
 
 		wp_localize_script( 'forminator-front-scripts', 'ForminatorFront', forminator_localize_data() );

@@ -701,12 +701,15 @@ class Forminator_QForm_Front extends Forminator_Render_Form {
 		if ( isset( $form_settings['visual_style'] ) ) {
 			$visual_style = $form_settings['visual_style'];
 		}
+		if ( ! in_array( $visual_style, array( 'list', 'grid' ), true ) ) {
+			$visual_style = 'list';
+		}
 
 		$form_design .= $visual_style;
 
 		$quiz_theme = $this->get_quiz_theme();
 		if ( 'none' !== $quiz_theme ) {
-			$form_design .= ' forminator-design--' . $quiz_theme;
+			$form_design .= ' forminator-design--' . sanitize_html_class( $quiz_theme );
 		}
 
 		return $form_design;
@@ -986,6 +989,11 @@ class Forminator_QForm_Front extends Forminator_Render_Form {
 		 * @param array  $settings   quiz settings.
 		 */
 		$quiz_theme = apply_filters( 'forminator_quiz_theme', $quiz_theme, $quiz_id, $settings );
+
+		$quiz_theme = sanitize_html_class( $quiz_theme );
+		if ( '' === $quiz_theme ) {
+			$quiz_theme = 'default';
+		}
 
 		return $quiz_theme;
 	}
@@ -1284,27 +1292,32 @@ class Forminator_QForm_Front extends Forminator_Render_Form {
 			$form_settings = $this->get_form_settings();
 			$form_design   = $this->get_form_design();
 
-			$quiz_spacing   = 'data-spacing="default"';
-			$quiz_alignment = 'data-alignment="left"';
-
-			if ( isset( $form_settings['quiz-spacing'] ) && ! empty( $form_settings['quiz-spacing'] ) ) {
-				$quiz_spacing = 'data-spacing="' . $form_settings['quiz-spacing'] . '"';
+			$quiz_spacing = ! empty( $form_settings['quiz-spacing'] ) ? (string) $form_settings['quiz-spacing'] : 'default';
+			if ( ! in_array( $quiz_spacing, array( 'default', 'enclosed', 'custom' ), true ) ) {
+				$quiz_spacing = 'default';
 			}
 
-			if ( isset( $form_settings['quiz-alignment'] ) && ! empty( $form_settings['quiz-alignment'] ) ) {
-				$quiz_alignment = 'data-alignment="' . $form_settings['quiz-alignment'] . '"';
+			if ( ! empty( $form_settings['quiz-alignment'] ) ) {
+				$quiz_alignment = (string) $form_settings['quiz-alignment'];
 			} elseif ( false !== strpos( $form_design, 'grid' ) ) {
-
-					$quiz_alignment = 'data-alignment="center"';
+				$quiz_alignment = 'center';
+			} else {
+				$quiz_alignment = 'left';
+			}
+			if ( ! in_array( $quiz_alignment, array( 'left', 'center', 'right' ), true ) ) {
+				$quiz_alignment = 'left';
 			}
 
-			$visual_style = isset( $form_settings['visual_style'] ) ? $form_settings['visual_style'] : 'list';
+			$visual_style = isset( $form_settings['visual_style'] ) ? (string) $form_settings['visual_style'] : 'list';
+			if ( ! in_array( $visual_style, array( 'list', 'grid' ), true ) ) {
+				$visual_style = 'list';
+			}
 
 			$wrapper = sprintf(
-				'<div id="forminator-quiz-leads-%s" class="forminator-ui forminator-quiz-leads forminator-quiz--%s" data-design="%s" data-color-option="default" %s %s>',
+				'<div id="forminator-quiz-leads-%s" class="forminator-ui forminator-quiz-leads forminator-quiz--%s" data-design="%s" data-color-option="default" data-spacing="%s" data-alignment="%s">',
 				esc_attr( $form_settings['form_id'] ),
 				esc_attr( $visual_style ),
-				esc_attr( $this->get_quiz_theme() ),
+				esc_attr( sanitize_html_class( $this->get_quiz_theme() ) ),
 				esc_attr( $quiz_spacing ),
 				esc_attr( $quiz_alignment )
 			);

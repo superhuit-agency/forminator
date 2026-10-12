@@ -31,6 +31,22 @@ class Forminator_CForm_Front_User_Registration extends Forminator_User {
 	private $mail_sender;
 
 	/**
+	 * User the site is about to be created for.
+	 *
+	 * Only set while Core validates the address right before the site is created.
+	 *
+	 * @var WP_User|null
+	 */
+	private $site_owner = null;
+
+	/**
+	 * Whether to automatically log in the user after registration.
+	 *
+	 * @var bool
+	 */
+	private $auto_login = false;
+
+	/**
 	 * Forminator_CForm_Front_User_Registration constructor
 	 */
 	public function __construct() {
@@ -39,7 +55,7 @@ class Forminator_CForm_Front_User_Registration extends Forminator_User {
 		$this->mail_sender = new Forminator_CForm_Front_Mail();
 
 		if ( forminator_is_main_site() ) {
-			add_action( 'forminator_cform_user_registration_validation', array( $this, 'multisite_validation' ), 10, 3 );
+			add_filter( 'forminator_cform_user_registration_validation', array( $this, 'multisite_validation' ), 10, 4 );
 			add_action( 'forminator_cform_user_registered', array( $this, 'create_site' ), 10, 4 );
 		}
 		add_filter( 'forminator_custom_registration_form_errors', array( $this, 'submit_errors' ), 11, 3 );
@@ -153,7 +169,7 @@ class Forminator_CForm_Front_User_Registration extends Forminator_User {
 	 * @param array                       $custom_form Custom form.
 	 * @param Forminator_Form_Entry_Model $entry Form entry model.
 	 *
-	 * @return bool|void
+	 * @return bool|string|void
 	 */
 	public function handle_user_activation( $user_data, $custom_form, $entry ) {
 		global $wpdb;
@@ -176,6 +192,22 @@ class Forminator_CForm_Front_User_Registration extends Forminator_User {
 			'user_data'     => $prepare_user_data,
 		);
 
+		$option_create_site = forminator_get_property( $settings, 'site-registration' );
+		$site_data          = is_multisite() ? $this->get_site_data( $settings, 0, $user_data ) : array();
+		$create_site        = is_multisite()
+			&& isset( $option_create_site )
+			&& 'enable' === $option_create_site
+			&& $site_data
+			&& forminator_is_site_registration_enabled();
+
+		// The signup stores the address as submitted and never re-checks it, so validate it first.
+		if ( $create_site ) {
+			$site_error = $this->get_site_signup_error( $site_data['address'], $site_data['title'] );
+			if ( '' !== $site_error ) {
+				return $site_error;
+			}
+		}
+
 		// Change default text of notifications for other activation methods: 'email' && 'manual'.
 		if ( ! empty( $custom_form->notifications ) ) {
 			$custom_form->notifications = $this->change_notifications( $settings['activation-method'], $custom_form->notifications );
@@ -185,14 +217,7 @@ class Forminator_CForm_Front_User_Registration extends Forminator_User {
 			$this->mail_sender->process_mail( $custom_form, $entry );
 		}
 
-		$option_create_site = forminator_get_property( $settings, 'site-registration' );
-		$site_data          = is_multisite() ? $this->get_site_data( $settings, 0, $user_data ) : array();
-		if ( is_multisite()
-			&& isset( $option_create_site )
-			&& 'enable' === $option_create_site
-			&& $site_data
-			&& forminator_is_site_registration_enabled()
-		) {
+		if ( $create_site ) {
 			if ( ! has_action( 'after_signup_site', 'wpmu_signup_blog_notification' ) ) {
 				add_action( 'after_signup_site', 'wpmu_signup_blog_notification', 10, 7 );
 			}
@@ -348,6 +373,13 @@ class Forminator_CForm_Front_User_Registration extends Forminator_User {
 			return esc_html__( 'That email address has already been used. Please check your inbox for an activation email. It will become available in a couple of days if you do nothing.', 'forminator' );
 		}
 
+		// Check whether there is a pending registration submission with the same username or email address.
+		if ( Forminator_Form_Entry_Model::has_submission_with_user_registration_pending( 'user_login', $username ) ) {
+			return esc_html__( 'That username is currently reserved.', 'forminator' );
+		} elseif ( Forminator_Form_Entry_Model::has_submission_with_user_registration_pending( 'user_email', $user_email ) ) {
+			return esc_html__( 'That email address is currently reserved.', 'forminator' );
+		}
+
 		// Multisite validation.
 		$validate = apply_filters( 'forminator_cform_user_registration_validation', $validate, $custom_form, Forminator_CForm_Front_Action::$prepared_data, $is_approve );
 		if ( ! $validate['result'] ) {
@@ -450,7 +482,21 @@ class Forminator_CForm_Front_User_Registration extends Forminator_User {
 					return $activation;
 				}
 			} else {
-				$user_id = $this->create_user( $new_user_data, $custom_form, $entry );
+				$is_user_signon = false;
+				if ( ! empty( $entry->entry_id ) ) {
+					$user_auto_login = $entry->get_meta( '_user_registration_automatic_login', false );
+					// If _user_registration_automatic_login is set, it means the entry is created with pending payment.
+					// Set is_user_signon to true, to avoid automatic login on cron / webhook triggered.
+					if ( ! empty( $user_auto_login ) ) {
+						$is_user_signon = true;
+					}
+				}
+				// Force user sign-on to false if automatic login is enabled, as the user will be logged in after registration.
+				// To handle the case where the payment is updated after completion on the frontend.
+				if ( $this->auto_login ) {
+					$is_user_signon = false;
+				}
+				$user_id = $this->create_user( $new_user_data, $custom_form, $entry, $is_user_signon );
 				if ( is_int( $user_id ) ) {
 					$new_user_data['user_id'] = $user_id;
 				} else {
@@ -571,20 +617,20 @@ class Forminator_CForm_Front_User_Registration extends Forminator_User {
 	 *
 	 * @param array                 $validate Validate.
 	 * @param Forminator_Form_Model $custom_form Form model.
+	 * @param array                 $prepared_data Submitted data.
 	 * @param bool                  $is_approve Is approve.
 	 *
 	 * @return array
 	 */
-	public function multisite_validation( $validate, $custom_form, $is_approve ) {
+	public function multisite_validation( $validate, $custom_form, $prepared_data = array(), $is_approve = false ) {
 		$data    = array(
 			'result'  => true,
 			'message' => '',
 		);
 		$setting = $custom_form->settings;
 
-		$activation_method = forminator_get_property( $setting, 'activation-method' );
-		// Site validation is not required if site registration is disabled and activation is not set to manual.
-		if ( 'manual' !== $activation_method && ! forminator_is_site_registration_enabled() ) {
+		// No site is created when the network doesn't allow it, whatever the activation method.
+		if ( ! forminator_is_site_registration_enabled() ) {
 			return $data;
 		}
 
@@ -595,37 +641,116 @@ class Forminator_CForm_Front_User_Registration extends Forminator_User {
 			return $data;
 		}
 
-		$blog_data    = $this->replace_site_data( $setting );
+		$blog_data    = $this->replace_site_data( $setting, $prepared_data );
 		$blog_address = $blog_data['address'];
 		$blog_title   = $blog_data['title'];
 
-		// get validation result for multi-site fields.
-		$validation_result = wpmu_validate_blog_signup( $blog_address, $blog_title, wp_get_current_user() );
-
-		// Site address validation.
-		if ( isset( $blog_address ) && ! empty( $blog_address ) ) {
-			$error_msg = isset( $validation_result['errors']->errors['blogname'][0] ) ? $validation_result['errors']->errors['blogname'][0] : false;
-
-			if ( false !== $error_msg ) {
-				$data['result']  = false;
-				$data['message'] = $error_msg;
-
-				return $data;
-			}
+		// No address means no site is created, so there is nothing to validate.
+		if ( empty( $blog_address ) ) {
+			return $data;
 		}
-		// Site title validation.
-		if ( isset( $blog_title ) && ! empty( $blog_title ) ) {
-			$error_msg = isset( $validation_result['errors']->errors['blog_title'][0] ) ? $validation_result['errors']->errors['blog_title'][0] : false;
 
-			if ( false !== $error_msg ) {
-				$data['result']  = false;
-				$data['message'] = $error_msg;
-
-				return $data;
-			}
+		$site_error = $this->get_site_signup_error( $blog_address, $blog_title );
+		if ( '' !== $site_error ) {
+			$data['result']  = false;
+			$data['message'] = $site_error;
 		}
 
 		return $data;
+	}
+
+	/**
+	 * Validate the requested site address and title with WordPress Core.
+	 *
+	 * Core's wpmu_validate_blog_signup() is the authoritative check: it rejects illegal,
+	 * reserved, too short, numeric only and already taken names, and names that collide with
+	 * a page on the network's main site.
+	 *
+	 * @since 1.58.0
+	 *
+	 * @param string $blog_address Requested site name.
+	 * @param string $blog_title   Requested site title.
+	 * @param int    $owner_id     User the site is created for. Only set for the final check
+	 *                             made right before wpmu_create_blog().
+	 *
+	 * @return string Error message, empty string when the site data is valid.
+	 */
+	private function get_site_signup_error( $blog_address, $blog_title, $owner_id = 0 ) {
+		$owner = $owner_id ? get_userdata( $owner_id ) : false;
+		$user  = $owner ? $owner : wp_get_current_user();
+
+		// The owner and its own pending signup already exist by then and are not real conflicts.
+		if ( $owner ) {
+			$this->site_owner = $owner;
+			add_filter( 'username_exists', array( $this, 'ignore_site_owner_username' ) );
+			add_filter( 'query', array( $this, 'skip_site_owner_signup_lookup' ) );
+		}
+
+		try {
+			$validation_result = wpmu_validate_blog_signup( $blog_address, $blog_title, $user );
+		} finally {
+			if ( $owner ) {
+				remove_filter( 'query', array( $this, 'skip_site_owner_signup_lookup' ) );
+				remove_filter( 'username_exists', array( $this, 'ignore_site_owner_username' ) );
+				$this->site_owner = null;
+			}
+		}
+
+		if ( ! isset( $validation_result['errors'] ) || ! is_wp_error( $validation_result['errors'] ) ) {
+			return '';
+		}
+
+		foreach ( array( 'blogname', 'blog_title' ) as $error_code ) {
+			$error_msg = $validation_result['errors']->get_error_message( $error_code );
+			if ( ! empty( $error_msg ) ) {
+				return $error_msg;
+			}
+		}
+
+		return '';
+	}
+
+	/**
+	 * Don't treat the site owner's own login as a taken site name.
+	 *
+	 * Core only allows that when the login matches the requested name exactly, but the address
+	 * is lower cased before it is validated, so the owner is matched by Id instead.
+	 *
+	 * @since 1.58.0
+	 *
+	 * @param int|false $user_id User Id found for the login, false when there is none.
+	 *
+	 * @return int|false
+	 */
+	public function ignore_site_owner_username( $user_id ) {
+		if ( $user_id && $this->site_owner && $this->site_owner->ID === (int) $user_id ) {
+			return false;
+		}
+
+		return $user_id;
+	}
+
+	/**
+	 * Hide the owner's own pending signup from wpmu_validate_blog_signup().
+	 *
+	 * Core reserves a domain and path while a signup for it is pending, and deletes that signup
+	 * once it is over two days old. Both are wrong for the signup that is being activated, so
+	 * that one row is excluded from the lookup. A signup reserved by anyone else still blocks.
+	 *
+	 * @since 1.58.0
+	 *
+	 * @param string $query Database query.
+	 *
+	 * @return string
+	 */
+	public function skip_site_owner_signup_lookup( $query ) {
+		global $wpdb;
+
+		if ( $this->site_owner && 0 === strpos( $query, "SELECT * FROM {$wpdb->signups} WHERE domain = " ) ) {
+			$query .= $wpdb->prepare( ' AND user_login != %s', $this->site_owner->user_login );
+		}
+
+		return $query;
 	}
 
 	/**
@@ -657,6 +782,14 @@ class Forminator_CForm_Front_User_Registration extends Forminator_User {
 
 		$site_data = $this->get_site_data( $setting, $user_id );
 		if ( ! $site_data ) {
+
+			return false;
+		}
+
+		// Re-check: with the activation methods the address may have been taken since submission.
+		$site_error = $this->get_site_signup_error( $site_data['address'], $site_data['title'], $user_id );
+		if ( '' !== $site_error ) {
+			forminator_maybe_log( __METHOD__, $site_error );
 
 			return false;
 		}
@@ -787,10 +920,13 @@ class Forminator_CForm_Front_User_Registration extends Forminator_User {
 	 * Replace site data
 	 *
 	 * @param array $setting Settings.
+	 * @param array $submitted_data Submitted data. Defaults to the currently prepared data.
 	 * @return array
 	 */
-	private function replace_site_data( $setting ) {
-		$submitted_data = Forminator_CForm_Front_Action::$prepared_data;
+	private function replace_site_data( $setting, $submitted_data = array() ) {
+		if ( empty( $submitted_data ) || ! is_array( $submitted_data ) ) {
+			$submitted_data = Forminator_CForm_Front_Action::$prepared_data;
+		}
 
 		$blog_address = '';
 		$address      = forminator_get_property( $setting, 'site-registration-name-field' );
@@ -845,10 +981,11 @@ class Forminator_CForm_Front_User_Registration extends Forminator_User {
 		}
 
 		return array(
-			'domain' => $blog_domain,
-			'path'   => $path,
-			'title'  => $blog_data['title'],
-			'email'  => $user_data['user_email'],
+			'address' => $blog_data['address'],
+			'domain'  => $blog_domain,
+			'path'    => $path,
+			'title'   => $blog_data['title'],
+			'email'   => $user_data['user_email'],
 		);
 	}
 
@@ -1026,5 +1163,32 @@ class Forminator_CForm_Front_User_Registration extends Forminator_User {
 		}
 
 		return $user_role;
+	}
+
+	/**
+	 * Get user registration data
+	 *
+	 * @return array
+	 */
+	public function get_user_registration_data() {
+		return $this->user_data;
+	}
+
+	/**
+	 * Set user registration data
+	 *
+	 * @param array $data User data.
+	 */
+	public function set_user_registration_data( $data ) {
+		$this->user_data = $data;
+	}
+
+	/**
+	 * Set auto login
+	 *
+	 * @param bool $value Value.
+	 */
+	public function set_auto_login( $value ) {
+		$this->auto_login = $value;
 	}
 }

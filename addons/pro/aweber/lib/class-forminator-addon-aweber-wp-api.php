@@ -600,6 +600,14 @@ class Forminator_Aweber_Wp_Api {
 			unset( $args['tags']['remove'] );
 		}
 
+		// AWeber rejects empty tag lists, so only send the changes there are.
+		if ( isset( $args['tags'] ) && is_array( $args['tags'] ) ) {
+			$args['tags'] = array_filter( $args['tags'] );
+			if ( ! $args['tags'] ) {
+				unset( $args['tags'] );
+			}
+		}
+
 		if ( empty( $args['email'] ) ) {
 			throw new Forminator_Integration_Exception( esc_html__( 'Email is required on update AWeber subscriber.', 'forminator' ) );
 		}

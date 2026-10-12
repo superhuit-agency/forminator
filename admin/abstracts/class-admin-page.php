@@ -264,6 +264,7 @@ abstract class Forminator_Admin_Page {
 	protected function render_header() {
 		$this->show_css_warning();
 		$this->show_stripe_migration_notice();
+		$this->show_stripe_webhook_notice();
 
 		if ( $this->template_exists( $this->folder . '/header' ) ) {
 			$this->template( $this->folder . '/header' );
@@ -868,5 +869,42 @@ abstract class Forminator_Admin_Page {
 		}
 
 		return null;
+	}
+
+	/**
+	 * Show webhook notice for stripe
+	 *
+	 * @return void
+	 */
+	public function show_stripe_webhook_notice() {
+		if ( Forminator_Gateway_Stripe::has_valid_webhook() ) {
+			return;
+		}
+		?>
+		<div
+			role="alert"
+			class="sui-notice sui-notice-yellow sui-active"
+			style="display: block; text-align: left;"
+			aria-live="assertive"
+		>
+			<div class="sui-notice-content">
+				<div class="sui-notice-message">
+					<span class="sui-notice-icon sui-icon-info" aria-hidden="true"></span>
+					<p>
+						<b><?php esc_html_e( 'Enable automatic payment updates', 'forminator' ); ?></b>
+					</p>
+					<p>
+						<?php esc_html_e( 'Your Stripe webhook is inactive. Reconnect your Stripe account to enable automatic webhook setup and receive instant payment status updates for seamless transaction tracking.', 'forminator' ); ?>
+					</p>
+					<p>
+						<a href="<?php echo esc_url( admin_url( 'admin.php?page=forminator-settings&section=payments' ) ); ?>"
+							class="sui-button sui-button-blue">
+							<?php esc_html_e( 'Reconnect with Stripe', 'forminator' ); ?>
+						</a>
+					</p>
+				</div>
+			</div>
+		</div>
+		<?php
 	}
 }

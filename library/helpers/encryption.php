@@ -34,6 +34,14 @@ class Forminator_Encryption {
 					continue;
 				}
 
+				$encrypted_key = self::encrypt( $original_key );
+
+				// Never persist the secret unencrypted.
+				if ( '' === $encrypted_key ) {
+					unset( $settings[ $key ], $settings[ $key . '_encrypted' ] );
+					continue;
+				}
+
 				// save relevant symbols from the beginning and end of the key.
 				$partial_secret = substr( $original_key, 0, $symbols_to_save[0] )
 					. str_repeat( '*', 10 )
@@ -42,7 +50,7 @@ class Forminator_Encryption {
 				$settings[ $key ] = $partial_secret;
 
 				$settings['is_salty']            = self::use_wp_salt();
-				$settings[ $key . '_encrypted' ] = self::encrypt( $original_key );
+				$settings[ $key . '_encrypted' ] = $encrypted_key;
 			}
 		}
 
@@ -54,9 +62,12 @@ class Forminator_Encryption {
 	 *
 	 * @param string $value Value to encrypt.
 	 *
-	 * @return string
+	 * @return string Encrypted value, or an empty string on failure.
 	 */
 	public static function encrypt( string $value ): string {
+		$result         = '';
+		$nonce          = null;
+		$encryption_key = null;
 		try {
 			$encryption_key = self::get_encryption_key();
 			// Random nonce, unique for each encryption.
@@ -68,24 +79,21 @@ class Forminator_Encryption {
 			// We then convert the encrypted message with the nonce to base64 for safe transport or storage.
 			// Again we use a timing-safe variant of base64_encode() to do this.
 			$result = sodium_bin2base64( $nonce . $ciphertext, SODIUM_BASE64_VARIANT_ORIGINAL );
-
-			// Overwrite $input, $nonce and $encryption_key with null bytes in order to prevent sensitive data leak.
-			sodium_memzero( $nonce );
-			sodium_memzero( $encryption_key );
-			sodium_memzero( $value );
 		} catch ( \Exception $e ) {
-			$result = $value;
-			unset( $value );
+			// Fail closed, never return the plaintext.
+			$result = '';
+		} finally {
+			// Overwrite $input, $nonce and $encryption_key with null bytes in order to prevent sensitive data leak.
+			self::memzero( $nonce );
+			self::memzero( $encryption_key );
+			self::memzero( $value );
 		}
 
 		// Apply filter to allow custom encryption methods.
 		$encrypted_value = apply_filters( 'forminator_custom_encryption', $result );
-		try {
-			// Overwrite $result with null bytes in order to prevent sensitive data leak.
-			sodium_memzero( $result );
-		} catch ( \Exception $e ) {
-			unset( $result );
-		}
+
+		// Overwrite $result with null bytes in order to prevent sensitive data leak.
+		self::memzero( $result );
 
 		return $encrypted_value;
 	}
@@ -100,6 +108,10 @@ class Forminator_Encryption {
 	public static function decrypt( string $value, bool $was_salty = false ): string {
 		// Apply filter to allow custom decryption methods.
 		$value = apply_filters( 'forminator_custom_decryption', $value );
+
+		$nonce          = null;
+		$encryption_key = null;
+		$ciphertext     = null;
 		try {
 			$encryption_key = self::get_encryption_key( $was_salty );
 			// Convert the base64 encoded message to binary using sodium_base642bin().
@@ -113,16 +125,33 @@ class Forminator_Encryption {
 
 			// Decrypt the message with the secret key and nonce.
 			$plaintext = (string) sodium_crypto_secretbox_open( $ciphertext, $nonce, $encryption_key );
-
-			// Overwrite $ciphertext, $nonce and $key with null bytes in order to prevent sensitive data leak.
-			sodium_memzero( $nonce );
-			sodium_memzero( $encryption_key );
-			sodium_memzero( $ciphertext );
 		} catch ( \Exception $e ) {
 			return $value;
+		} finally {
+			// Overwrite $ciphertext, $nonce and $key with null bytes in order to prevent sensitive data leak.
+			self::memzero( $nonce );
+			self::memzero( $encryption_key );
+			self::memzero( $ciphertext );
 		}
 
 		return $plaintext;
+	}
+
+	/**
+	 * Wipe a string, sodium_compat can't and throws.
+	 *
+	 * @param mixed $data Data to wipe.
+	 */
+	private static function memzero( &$data ) {
+		if ( ! is_string( $data ) ) {
+			return;
+		}
+
+		try {
+			sodium_memzero( $data );
+		} catch ( \Exception $e ) {
+			$data = null;
+		}
 	}
 
 	/**

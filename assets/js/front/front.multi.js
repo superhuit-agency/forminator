@@ -579,6 +579,11 @@
 
 				if ('undefined' !== typeof (is_national_phone)) {
 
+					// Keep the field's own placeholder before intlTelInput swaps in an example number.
+					if ( 'undefined' === typeof ( $(this).attr('data-original-placeholder') ) ) {
+						$(this).attr( 'data-original-placeholder', $(this).attr('placeholder') || '' );
+					}
+
 					if (is_material) {
 						$(this).unwrap('.forminator-input--wrap');
 					}
@@ -586,6 +591,15 @@
 					// If it's already intialised then first destroy it and then reinit.
 					if ( iti ) {
 						iti.destroy();
+					}
+
+					// destroy() leaves the example number behind, and the default "polite" autoPlaceholder
+					// skips updates when the input already has one, freezing it on the previous country.
+					var original_placeholder = $(this).attr('data-original-placeholder');
+					if ( original_placeholder ) {
+						$(this).attr( 'placeholder', original_placeholder );
+					} else {
+						$(this).removeAttr( 'placeholder' );
 					}
 
 					var args = {

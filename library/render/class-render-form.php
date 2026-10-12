@@ -382,24 +382,31 @@ abstract class Forminator_Render_Form {
 			$render_id = $render_id_ajax;
 		}
 
-		$forminator_ui = 'forminator-ui ';
+		$forminator_ui     = 'forminator-ui ';
+		$forminator_ui     = $this->sanitize_html_classes( $forminator_ui );
+		$design_class      = $this->sanitize_html_classes( $design_class );
+		$fields_type_class = $this->sanitize_html_classes( $fields_type_class );
+		$extra_classes     = $this->sanitize_html_classes( $extra_classes );
 
-		if ( ! empty( $form_settings['cform-color-option'] ) && 'theme' === $form_settings['cform-color-option'] ) {
-			$extra_attrs .= ' data-color-option="theme"';
-		} else {
-			$extra_attrs .= ' data-color-option="default"';
-		}
+		$color_option = ( ! empty( $form_settings['cform-color-option'] ) && 'theme' === $form_settings['cform-color-option'] )
+			? 'theme'
+			: 'default';
+		$extra_attrs .= ' data-color-option="' . esc_attr( $color_option ) . '"';
 
 		if ( 'quiz' === $form_type ) {
-			$extra_attrs .= ' data-design="' . $this->get_quiz_theme() . '"';
+			$extra_attrs .= ' data-design="' . esc_attr( sanitize_html_class( $this->get_quiz_theme() ) ) . '"';
 		} else {
-			$extra_attrs .= ' data-design="' . $this->get_form_design() . '"';
+			$extra_attrs .= ' data-design="' . esc_attr( sanitize_html_class( $this->get_form_design() ) ) . '"';
 		}
 
 		if ( 'custom-form' === $form_type ) {
 			$is_draft_enabled = isset( $form_settings['use_save_and_continue'] ) ? filter_var( $form_settings['use_save_and_continue'], FILTER_VALIDATE_BOOLEAN ) : false;
 			$maybe_draft      = $this->set_draft_data( $is_draft_enabled );
-			$extra_attrs     .= ' data-grid="' . $this->get_fields_style() . '"';
+			$fields_style     = sanitize_html_class( $this->get_fields_style() );
+			if ( ! in_array( $fields_style, array( 'open', 'enclosed', 'custom' ), true ) ) {
+				$fields_style = 'open';
+			}
+			$extra_attrs .= ' data-grid="' . esc_attr( $fields_style ) . '"';
 
 			if ( $is_draft_enabled ) {
 				$extra_classes .= ' draft-enabled';
@@ -417,18 +424,20 @@ abstract class Forminator_Render_Form {
 			add_filter( 'forminator_field_description', array( $this, 'maybe_wrap_description' ), 10, 4 );
 		}
 
+		$extra_classes = $this->sanitize_html_classes( $extra_classes );
+
 		// Markup Loader.
 		$loader = sprintf(
-			'<div class="%sforminator-%s forminator-%s-%s %s %s %s" data-forminator-render="%s" data-form="forminator-module-%s" %s><br/></div>',
-			$forminator_ui,
-			$form_type,
-			$form_type,
-			$id,
-			$design_class,
-			$fields_type_class,
-			$extra_classes,
-			$render_id,
-			$id,
+			'<div class="%s forminator-%s forminator-%s-%s %s %s %s" data-forminator-render="%s" data-form="forminator-module-%s" %s><br/></div>',
+			esc_attr( $forminator_ui ),
+			esc_attr( $form_type ),
+			esc_attr( $form_type ),
+			esc_attr( $id ),
+			esc_attr( $design_class ),
+			esc_attr( $fields_type_class ),
+			esc_attr( $extra_classes ),
+			esc_attr( $render_id ),
+			esc_attr( $id ),
 			$form_uid
 		);
 
@@ -438,30 +447,34 @@ abstract class Forminator_Render_Form {
 		}
 
 		if ( 'quiz' === $form_type ) {
-			$quiz_type    = $this->model->quiz_type;
-			$extra_attrs .= ' data-quiz="' . $quiz_type . '"';
+			$quiz_type    = sanitize_html_class( (string) $this->model->quiz_type );
+			$extra_attrs .= ' data-quiz="' . esc_attr( $quiz_type ) . '"';
 			$extra_attrs .= ' aria-live="polite"'; // Listen to live changes on form.
 
-			if ( isset( $form_settings['quiz-spacing'] ) && ! empty( $form_settings['quiz-spacing'] ) ) {
-				$extra_attrs .= ' data-spacing="' . $form_settings['quiz-spacing'] . '"';
-			} else {
-				$extra_attrs .= ' data-spacing="default"';
+			$quiz_spacing = ! empty( $form_settings['quiz-spacing'] ) ? (string) $form_settings['quiz-spacing'] : 'default';
+			if ( ! in_array( $quiz_spacing, array( 'default', 'enclosed', 'custom' ), true ) ) {
+				$quiz_spacing = 'default';
 			}
+			$extra_attrs .= ' data-spacing="' . esc_attr( $quiz_spacing ) . '"';
 
-			if ( isset( $form_settings['quiz-alignment'] ) && ! empty( $form_settings['quiz-alignment'] ) ) {
-				$extra_attrs .= ' data-alignment="' . $form_settings['quiz-alignment'] . '"';
+			if ( ! empty( $form_settings['quiz-alignment'] ) ) {
+				$quiz_alignment = (string) $form_settings['quiz-alignment'];
 			} elseif ( false !== strpos( $form_design, 'grid' ) ) {
-				$extra_attrs .= ' data-alignment="center"';
+				$quiz_alignment = 'center';
 			} else {
-				$extra_attrs .= ' data-alignment="left"';
+				$quiz_alignment = 'left';
 			}
+			if ( ! in_array( $quiz_alignment, array( 'left', 'center', 'right' ), true ) ) {
+				$quiz_alignment = 'left';
+			}
+			$extra_attrs .= ' data-alignment="' . esc_attr( $quiz_alignment ) . '"';
 
 			if ( isset( $form_settings['visual_style'] ) && 'grid' === $form_settings['visual_style'] ) {
-				if ( isset( $form_settings['quiz-grid-cols'] ) ) {
-					$extra_attrs .= ' data-columns="' . $form_settings['quiz-grid-cols'] . '"';
-				} else {
-					$extra_attrs .= ' data-columns="3"';
+				$quiz_grid_cols = isset( $form_settings['quiz-grid-cols'] ) ? absint( $form_settings['quiz-grid-cols'] ) : 3;
+				if ( $quiz_grid_cols < 2 || $quiz_grid_cols > 6 ) {
+					$quiz_grid_cols = 3;
 				}
+				$extra_attrs .= ' data-columns="' . esc_attr( $quiz_grid_cols ) . '"';
 			}
 		}
 
@@ -480,23 +493,23 @@ abstract class Forminator_Render_Form {
 		$html .= sprintf(
 			'<form
 				id="forminator-module-%s"
-				class="%sforminator-%s forminator-%s-%s %s %s %s"
+				class="%s forminator-%s forminator-%s-%s %s %s %s"
 				method="post"
 				data-forminator-render="%s"
 				data-form-id="%s"
 				%s
 				%s
 			>',
-			$id,
-			$forminator_ui,
-			$form_type,
-			$form_type,
-			$id,
-			$design_class,
-			$fields_type_class,
-			$extra_classes,
-			$render_id,
-			$id,
+			esc_attr( $id ),
+			esc_attr( $forminator_ui ),
+			esc_attr( $form_type ),
+			esc_attr( $form_type ),
+			esc_attr( $id ),
+			esc_attr( $design_class ),
+			esc_attr( $fields_type_class ),
+			esc_attr( $extra_classes ),
+			esc_attr( $render_id ),
+			esc_attr( $id ),
 			$extra_attrs,
 			$form_uid
 		);
@@ -651,6 +664,19 @@ abstract class Forminator_Render_Form {
 	}
 
 	/**
+	 * Sanitize a space-separated list of HTML class names.
+	 *
+	 * @param string $classes Class list.
+	 * @return string
+	 */
+	protected function sanitize_html_classes( $classes ) {
+		$classes = preg_split( '/\s+/', trim( (string) $classes ) );
+		$classes = array_filter( array_map( 'sanitize_html_class', (array) $classes ) );
+
+		return implode( ' ', $classes );
+	}
+
+	/**
 	 * Get Additional CSS class to be aplied based on get_form_design
 	 *
 	 * @since 1.0.5
@@ -667,7 +693,7 @@ abstract class Forminator_Render_Form {
 
 				$design_class = '';
 		} else {
-			$design_class = 'forminator-design--' . $form_design;
+			$design_class = 'forminator-design--' . sanitize_html_class( $form_design );
 		}
 
 		/**

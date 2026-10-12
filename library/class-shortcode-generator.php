@@ -93,13 +93,25 @@ class Forminator_Shortcode_Generator {
 	/**
 	 * Attach button
 	 *
+	 * The button is bound by its class, not its ID, because the same markup is printed
+	 * for every editor on the screen. The modal is opened from JS instead of Shared UI's
+	 * "data-modal-open" attribute, which only binds elements present on page load and so
+	 * misses editors built after it, like the ACF WYSIWYG fields.
+	 *
 	 * @since 1.0
+	 *
+	 * @param string $editor_id ID of the editor the button is printed for.
 	 */
-	public function attach_button() {
+	public function attach_button( $editor_id = 'content' ) {
+		if ( ! is_string( $editor_id ) || '' === $editor_id ) {
+			$editor_id = 'content';
+		}
+
 		// Button markup.
 		printf(
-			'<button type="button" id="%s" class="button" data-editor="content" data-modal-open="forminator-popup">%s<span>%s</span></button>',
+			'<button type="button" id="%1$s" class="button %1$s" data-editor="%2$s" aria-haspopup="dialog">%3$s<span>%4$s</span></button>',
 			'forminator-generate-shortcode',
+			esc_attr( $editor_id ),
 			'<i class="forminator-scgen-icon" aria-hidden="true"></i>',
 			esc_html__( 'Add Form', 'forminator' )
 		);
@@ -160,16 +172,6 @@ class Forminator_Shortcode_Generator {
 		);
 
 		$this->print_markup();
-
-		?>
-		<script type="text/javascript">
-			jQuery(function () {
-				jQuery("#forminator-generate-shortcode").on( 'click', function(e) {
-					e.preventDefault();
-				});
-			});
-		</script>
-		<?php
 	}
 
 	/**

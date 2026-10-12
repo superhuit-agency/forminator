@@ -314,8 +314,9 @@ class Forminator_Settings_Page extends Forminator_Admin_Page {
 		$permissions = get_option( 'forminator_permissions', array() );
 
 		$data['mainSettings']     = array(
-			'permissions' => $permissions,
-			'modal'       => array(),
+			'permissions'  => $permissions,
+			'capabilities' => forminator_get_capability_definitions(),
+			'modal'        => array(),
 		);
 		$data['permission_nonce'] = wp_create_nonce( 'forminator_permission_nonce' );
 
@@ -334,6 +335,11 @@ class Forminator_Settings_Page extends Forminator_Admin_Page {
 		}
 
 		if ( ! wp_verify_nonce( $nonce, 'forminatorSettingsRequest' ) ) {
+			return;
+		}
+
+		// The nonce only proves the request is genuine, it does not authorize the user.
+		if ( ! forminator_is_user_allowed( 'forminator-settings' ) ) {
 			return;
 		}
 

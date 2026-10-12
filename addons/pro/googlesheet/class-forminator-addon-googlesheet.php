@@ -73,6 +73,16 @@ final class Forminator_Googlesheet extends Forminator_Integration {
 	protected $_sensitive_keys = array( 'client_secret' );
 
 	/**
+	 * Google redirects back to a pre registered URL that cannot carry a per request
+	 * nonce, so the section nonce is not required here. CSRF protection for this
+	 * flow needs the nonce moved into the OAuth state parameter instead.
+	 *
+	 * @since 1.58
+	 * @var bool
+	 */
+	public $section_requires_nonce = false;
+
+	/**
 	 * Forminator_Googlesheet constructor.
 	 *
 	 * @since 1.0 Google Sheets Integration
@@ -382,10 +392,15 @@ final class Forminator_Googlesheet extends Forminator_Integration {
 	 * @return string
 	 */
 	public function get_auth_url() {
+		$global_id     = $this->is_multi_global ? (string) $this->multi_global_id : '';
+		$oauth_state   = forminator_integration_create_oauth_state( $this, $global_id );
 		$google_client = $this->get_google_client();
-		$auth_url      = $google_client->createAuthUrl();
 
-		return $auth_url;
+		if ( ! empty( $oauth_state ) ) {
+			$google_client->setState( $oauth_state );
+		}
+
+		return $google_client->createAuthUrl();
 	}
 
 	/**
@@ -501,8 +516,10 @@ final class Forminator_Googlesheet extends Forminator_Integration {
 	 * @throws Forminator_Integration_Exception Throws Integration Exception.
 	 */
 	public function authorize_page_callback( $query_args ) {
+		$global_id = '';
 		if ( isset( $query_args['global_id'] ) ) {
 			$this->multi_global_id = $query_args['global_id'];
+			$global_id             = (string) $query_args['global_id'];
 		}
 		$settings        = $this->get_settings_values( true );
 		$template        = forminator_addon_googlesheet_dir() . 'views/sections/authorize.php';
@@ -513,6 +530,11 @@ final class Forminator_Googlesheet extends Forminator_Integration {
 
 		if ( isset( $query_args['code'] ) ) {
 			try {
+				$oauth_state = isset( $query_args['state'] ) ? $query_args['state'] : '';
+				if ( false === forminator_integration_validate_oauth_state( $this, $oauth_state, $global_id ) ) {
+					throw new Forminator_Integration_Exception( esc_html__( 'Invalid authorization request.', 'forminator' ) );
+				}
+
 				$google_client = $this->get_google_client();
 				$google_client->fetchAccessTokenWithAuthCode( $query_args['code'] );
 				$token = $google_client->getAccessToken();

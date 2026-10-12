@@ -72,6 +72,11 @@ class Forminator_Admin_Report_Page {
 			return;
 		}
 
+		// The nonce only proves the request is genuine, it does not authorize the user.
+		if ( ! forminator_is_user_allowed( 'forminator-reports' ) ) {
+			return;
+		}
+
 		$ids         = Forminator_Core::sanitize_text_field( 'ids' );
 		$report_ids  = ! empty( $ids ) ? explode( ',', $ids ) : array();
 		$form_report = Forminator_Form_Reports_Model::get_instance();

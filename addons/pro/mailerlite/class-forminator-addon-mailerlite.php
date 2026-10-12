@@ -249,7 +249,7 @@ class Forminator_Mailerlite extends Forminator_Integration {
 					'has_errors'   => false,
 					'notification' => array(
 						'type' => 'success',
-						'text' => '<strong>' . $this->get_title() . '</strong> ' . esc_html__( 'is connected successfully.', 'forminator' ),
+						'text' => '<strong>' . esc_html( $this->get_title() ) . '</strong> ' . esc_html__( 'is connected successfully.', 'forminator' ),
 					),
 				);
 			}
@@ -281,7 +281,7 @@ class Forminator_Mailerlite extends Forminator_Integration {
 		$html .= $this->settings_help();
 		$html .= $error_message ? '<div class="sui-notice sui-notice-error"><div class="sui-notice-content"><div class="sui-notice-message">
 										<span class="sui-notice-icon sui-icon-info" aria-hidden="true" ></span>
-										<p>' . $error_message . '</p>
+										<p>' . esc_html( $error_message ) . '</p>
 									</div></div></div>' : '';
 		$html .= '</div>';
 		$html .= '<form>';

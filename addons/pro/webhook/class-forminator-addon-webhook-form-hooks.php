@@ -86,6 +86,7 @@ class Forminator_Webhook_Form_Hooks extends Forminator_Integration_Form_Hooks {
 
 			$args['form-title'] = $form_settings['formName'];
 			$args['entry-time'] = current_time( 'Y-m-d H:i:s' );
+			$args               = self::add_upload_attachment_ids( $args, $form_entry_fields );
 
 			/**
 			 * Filter arguments to passed on to Webhook API
@@ -138,5 +139,34 @@ class Forminator_Webhook_Form_Hooks extends Forminator_Integration_Form_Hooks {
 				'url_request'     => ( ( $webhook_api instanceof Forminator_Webhook_Wp_Api ) ? $webhook_api->get_last_url_request() : '' ),
 			);
 		}
+	}
+
+	/**
+	 * Add media library IDs of uploaded files to the data sent to Webhook
+	 *
+	 * Upload fields are sent as file URLs, so the attachment ID is exposed in a sibling
+	 * `{element_id}-post-id` key. Only available when the field has "Show files in media
+	 * library" enabled, since no attachment is created otherwise.
+	 *
+	 * @since 1.58.0
+	 *
+	 * @param array $args Data to send to Webhook.
+	 * @param array $form_entry_fields Form entry fields.
+	 *
+	 * @return array
+	 */
+	private static function add_upload_attachment_ids( $args, $form_entry_fields ) {
+		foreach ( wp_list_pluck( $form_entry_fields, 'value', 'name' ) as $element_id => $value ) {
+			if ( empty( $value['file']['attachment_id'] ) ) {
+				continue;
+			}
+
+			$attachment_ids = array_filter( array_map( 'absint', (array) $value['file']['attachment_id'] ) );
+			if ( $attachment_ids ) {
+				$args[ $element_id . '-post-id' ] = implode( ', ', $attachment_ids );
+			}
+		}
+
+		return $args;
 	}
 }

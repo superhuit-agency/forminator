@@ -178,6 +178,55 @@ class forminatorFrontUtils {
 
 		return false;
 	}
+
+	handle_authentication_error( data, self, formData ) {
+		if ( typeof data !== 'undefined' &&
+			typeof data.data !== 'undefined' &&
+			typeof data.data.authentication !== 'undefined' &&
+		   ( 'show' === data.data.authentication || 'invalid' === data.data.authentication ) ) {
+		   var moduleId  = self.$el.attr( 'id' ),
+			   authId    = moduleId + '-authentication',
+			   authField = jQuery( '#' + authId ),
+			   authInput = jQuery( '#' + authId + '-input' ),
+			   authToken = jQuery( '#' + authId + '-token' )
+		   ;
+		   authField.find('.forminator-authentication-notice').removeClass('error');
+		   authField.find('.lost-device-url').attr('href', data.data.lost_url);
+		   self.$el.find( 'button' ).removeAttr( 'disabled' );
+		   if( 'show' === data.data.authentication ) {
+			   if (
+				   'undefined' !== typeof window.webauthn &&
+				   'undefined' !== typeof data.data.username
+			   ) {
+				   window.webauthn.username = data.data.username;
+			   }
+
+			   self.$el.find('.forminator-authentication-nav').html('').append( data.data.auth_nav );
+			   self.$el.find('.forminator-authentication-box').hide();
+			   if ( 'fallback-email' === data.data.auth_method ) {
+				   self.$el.find('.wpdef-2fa-email-resend input').click();
+				   self.$el.find('.notification').hide();
+			   }
+			   self.$el.find( '#forminator-2fa-' + data.data.auth_method ).show();
+			   self.$el.find( '#forminator-2fa-' + data.data.auth_method + ' .option-row' ).attr( 'tabindex', '0' ).attr( 'role', 'button' );
+			   self.$el.find('.forminator-authentication-box input').attr( 'disabled', true );
+			   self.$el.find( '#forminator-2fa-' + data.data.auth_method + ' input' ).attr( 'disabled', false );
+			   self.$el.find('.forminator-2fa-link').show();
+			   self.$el.find('#forminator-2fa-link-' + data.data.auth_method).hide();
+			   authInput.removeAttr( 'disabled' ).val(data.data.auth_method);
+			   authToken.val( data.data.auth_token );
+			   FUI.openAuthentication( authId, moduleId, authId + '-input' );
+		   }
+		   if ( 'invalid' === data.data.authentication ) {
+			   authField.find('.forminator-authentication-notice').addClass('error');
+			   authField.find('.forminator-authentication-notice').html('<p>' + data.data.message + '</p>');
+			   self.$el.trigger('forminator:form:submit:failed', [ formData, data.data.message ] );
+		   }
+
+		   return false;
+	   }
+	   return true;
+	}
 }
 
 if (window['forminatorUtils'] === undefined) {

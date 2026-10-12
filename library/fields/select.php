@@ -396,7 +396,11 @@ class Forminator_Select extends Forminator_Field {
 				}
 
 				if ( $option_default && ! $draft_valid && ! $prefil_valid && ! $post_valid ) {
-					$default = $value;
+					if ( 'multiselect' === $field_type && 'modern' === $field_style ) {
+						$default_arr[] = $value;
+					} else {
+						$default = $value;
+					}
 				}
 
 				if ( $post_valid ) {
@@ -632,14 +636,16 @@ class Forminator_Select extends Forminator_Field {
 			$field['options']
 		);
 
+		// A single select submits one value, and '0' is a value too.
 		if ( is_array( $data ) ) {
+			$value_exists = 'multiselect' === $select_type || 1 >= count( $data );
 			foreach ( $data as $value ) {
 				if ( false === array_search( forminator_normalize_choice_option_value( $value ), $option_values, true ) ) {
 					$value_exists = false;
 					break;
 				}
 			}
-		} elseif ( ! empty( $data ) && false === array_search( forminator_normalize_choice_option_value( $data ), $option_values, true ) ) {
+		} elseif ( ( ! empty( $data ) || '0' === $data ) && false === array_search( forminator_normalize_choice_option_value( $data ), $option_values, true ) ) {
 			$value_exists = false;
 		}
 

@@ -508,4 +508,78 @@ final class Forminator_Aweber extends Forminator_Integration {
 	public function is_allow_multi_on_quiz() {
 		return true;
 	}
+
+	/**
+	 * Check whether a submission may update an existing subscriber.
+	 *
+	 * Only the WordPress user with the subscriber's email may. Account emails are not always verified,
+	 * so sites can tighten this with the filter.
+	 *
+	 * @since 1.58.1
+	 *
+	 * @param string                           $email Submitted email.
+	 * @param object                           $subscriber Existing subscriber.
+	 * @param int                              $module_id Module ID.
+	 * @param string                           $connection_id Connection ID.
+	 * @param Forminator_Form_Entry_Model|null $entry Entry.
+	 *
+	 * @return bool
+	 */
+	public function can_update_subscriber( $email, $subscriber, $module_id, $connection_id, $entry = null ) {
+		// Payments completed later use the stored submitter, not the current user.
+		$submitter = $entry instanceof Forminator_Form_Entry_Model ? $entry->get_meta( '_submitter_user_id', null ) : null;
+		$user      = null === $submitter ? wp_get_current_user() : new WP_User( (int) $submitter );
+		$email     = strtolower( trim( (string) ( $subscriber->email ?? $email ) ) );
+		$is_owner  = $user->exists() && strtolower( trim( $user->user_email ) ) === $email;
+
+		/**
+		 * Filter whether a submission may update an existing AWeber subscriber
+		 *
+		 * Returning true lets anyone who submits the email overwrite the subscriber.
+		 *
+		 * @since 1.58.1
+		 *
+		 * @param bool                             $is_owner Whether the submitter's account email matches the subscriber.
+		 * @param string                           $email Subscriber email.
+		 * @param object                           $subscriber Existing subscriber.
+		 * @param int                              $module_id Module ID.
+		 * @param string                           $connection_id Connection ID.
+		 * @param Forminator_Form_Entry_Model|null $entry Entry.
+		 * @param WP_User                          $user Submitter, ID 0 for guests. Check it with user_can(), not current_user_can().
+		 */
+		return (bool) apply_filters( 'forminator_addon_aweber_update_existing_subscriber', $is_owner, $email, $subscriber, $module_id, $connection_id, $entry, $user );
+	}
+
+	/**
+	 * Get the value each choice option submits when chosen alone.
+	 *
+	 * @since 1.58.1
+	 *
+	 * @param array|null $field Field settings.
+	 * @param bool       $labels Return raw labels, as stored on lead entries, instead of values.
+	 *
+	 * @return array
+	 */
+	public static function get_choice_option_values( $field, $labels = false ) {
+		if ( ! is_array( $field ) || ! in_array( $field['type'] ?? '', array( 'radio', 'select', 'checkbox' ), true ) ) {
+			return array();
+		}
+
+		$values = array();
+		foreach ( $field['options'] ?? array() as $option ) {
+			$value = (string) ( $option[ $labels ? 'label' : 'value' ] ?? '' );
+			if ( ! $labels ) {
+				// Radios and checkboxes submit the label when the value is empty, selects submit nothing.
+				if ( '' === $value && 'select' !== $field['type'] ) {
+					$value = (string) ( $option['label'] ?? '' );
+				}
+				$value = forminator_normalize_choice_option_value( $value );
+			}
+			if ( '' !== $value ) {
+				$values[] = $value;
+			}
+		}
+
+		return $values;
+	}
 }

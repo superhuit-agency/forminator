@@ -112,9 +112,12 @@ class Forminator_Group extends Forminator_Field {
 		$settings = $views_obj->model->settings;
 		$html     = '';
 
+		$label_id = self::get_field_id( $name ) . '-label';
+
 		if ( ! empty( $field['field_label'] ) ) {
 			$html .= sprintf(
-				'<label class="forminator-label forminator-repeater-label">%s</label>',
+				'<span id="%s" class="forminator-label forminator-repeater-label">%s</span>',
+				esc_attr( $label_id ),
 				self::convert_markdown( esc_html( $field['field_label'] ) )
 			);
 		}
@@ -134,7 +137,9 @@ class Forminator_Group extends Forminator_Field {
 			);
 		}
 
-		$html .= '<div class="forminator-all-group-copies' . ( ! empty( $field['group_styles'] ) && 'custom' === $field['group_styles'] ? '' : ' forminator-repeater-field' ) . '">';
+		$group_label = ! empty( $field['field_label'] ) ? ' role="group" aria-labelledby="' . esc_attr( $label_id ) . '"' : '';
+
+		$html .= '<div class="forminator-all-group-copies' . ( ! empty( $field['group_styles'] ) && 'custom' === $field['group_styles'] ? '' : ' forminator-repeater-field' ) . '"' . $group_label . '>';
 
 		$i = 1;
 		do {

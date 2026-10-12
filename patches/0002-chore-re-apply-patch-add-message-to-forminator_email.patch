@@ -14,10 +14,10 @@ Content-Transfer-Encoding: 8bit
  2 files changed, 4 insertions(+), 4 deletions(-)
 
 diff --git a/library/abstracts/abstract-class-mail.php b/library/abstracts/abstract-class-mail.php
-index 33edecf..4b7bc0b 100644
+index 2005a9d..38716df 100644
 --- a/library/abstracts/abstract-class-mail.php
 +++ b/library/abstracts/abstract-class-mail.php
-@@ -389,8 +389,9 @@ abstract class Forminator_Mail {
+@@ -409,8 +409,9 @@ abstract class Forminator_Mail {
  		 * Filter email body that will be sent by Forminator Mailer
  		 *
  		 * @param string $message
@@ -29,10 +29,10 @@ index 33edecf..4b7bc0b 100644
  		$this->message = $message;
  	}
 diff --git a/library/modules/custom-forms/front/front-mail.php b/library/modules/custom-forms/front/front-mail.php
-index 4058417..cf5b61a 100644
+index ce07143..04f407c 100644
 --- a/library/modules/custom-forms/front/front-mail.php
 +++ b/library/modules/custom-forms/front/front-mail.php
-@@ -122,7 +122,6 @@ class Forminator_CForm_Front_Mail extends Forminator_Mail {
+@@ -217,7 +217,6 @@ class Forminator_CForm_Front_Mail extends Forminator_Mail {
  
  		try {
  			$data          = Forminator_CForm_Front_Action::$prepared_data;
@@ -40,7 +40,7 @@ index 4058417..cf5b61a 100644
  
  			if (
  			empty( $data ) && ! empty( $submitted_data ) &&
-@@ -191,10 +190,10 @@ class Forminator_CForm_Front_Mail extends Forminator_Mail {
+@@ -323,10 +322,10 @@ class Forminator_CForm_Front_Mail extends Forminator_Mail {
  			do_action( 'forminator_custom_form_mail_before_send_mail', $this, $custom_form, $data, $entry );
  
  			// Process Email.
@@ -50,9 +50,9 @@ index 4058417..cf5b61a 100644
  				// Process admin mail.
 -				foreach ( $notifications as $notification ) {
 +				foreach ( $custom_form->notifications as $notification ) {
- 
- 					// If notification is save_draft type, skip.
- 					if (
+ 					// If notification is stripe-payment-failed type, skip if entry status is not failed.
+ 					if ( 'failed' !== $entry->status &&
+ 						isset( $notification['type'] ) && 'stripe-payment-failed' === $notification['type'] ) {
 -- 
 2.52.0
 

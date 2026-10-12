@@ -178,6 +178,10 @@ if ( $this->total_entries() > 0 ) :
 									echo '<span class="sui-tag draft-tag status-tag">' . esc_html__( 'Draft', 'forminator' ) . '</span>';
 								} elseif ( 'abandoned' === $entries['status'] ) {
 									echo '<span class="sui-tag sui-tag-yellow status-tag">' . esc_html__( 'Abandoned', 'forminator' ) . '</span>';
+								} elseif ( 'pending' === $entries['status'] ) {
+									echo '<span class="sui-tag sui-tag-blue status-tag">' . esc_html__( 'Pending', 'forminator' ) . '</span>';
+								} elseif ( 'failed' === $entries['status'] ) {
+									echo '<span class="sui-tag sui-tag-red status-tag">' . esc_html__( 'Failed', 'forminator' ) . '</span>';
 								}
 
 								if ( $pending_approval ) {

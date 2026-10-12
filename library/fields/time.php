@@ -200,8 +200,16 @@ class Forminator_Time extends Forminator_Field {
 			}
 		}
 
-		$html .= self::get_field_label( $field_label, 'forminator-field-' . $name, $required );
-		if ( ! empty( $field_label ) ) {
+		$label_id = $id . '-label';
+
+		if ( $field_label ) {
+			$label  = self::convert_markdown( $field_label );
+			$label .= $required ? ' ' . forminator_get_required_icon() : '';
+			$html  .= sprintf(
+				'<span id="%s" class="forminator-label">%s</span>',
+				esc_attr( $label_id ),
+				$label
+			);
 			// mark hours and minutes required markup as false.
 			$required = false;
 		}
@@ -211,6 +219,9 @@ class Forminator_Time extends Forminator_Field {
 		}
 
 		$html .= '<div class="forminator-timepicker" ';
+		if ( ! empty( $field_label ) ) {
+			$html .= 'role="group" aria-labelledby="' . esc_attr( $label_id ) . '" ';
+		}
 		if ( 'twelve' === $type && 'specific' === $restrict_time ) {
 			$is_12_hr = 'twelve' === $type ? true : false;
 			$html    .= 'data-start-limit="' . esc_attr( $this->get_time_limiter( $field, 'start', $is_12_hr ) ) . '" ';

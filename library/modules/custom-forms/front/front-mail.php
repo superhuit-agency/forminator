@@ -326,6 +326,11 @@ class Forminator_CForm_Front_Mail extends Forminator_Mail {
 				$this->init();
 				// Process admin mail.
 				foreach ( $custom_form->notifications as $notification ) {
+					// If notification is stripe-payment-failed type, skip if entry status is not failed.
+					if ( 'failed' !== $entry->status &&
+						isset( $notification['type'] ) && 'stripe-payment-failed' === $notification['type'] ) {
+						continue;
+					}
 
 					// If notification is save_draft type, skip.
 					if (

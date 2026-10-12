@@ -226,7 +226,7 @@ class Forminator_Password extends Forminator_Field {
 			$description = str_replace( '{lostpassword_url}', wp_lostpassword_url( get_permalink() ), $description );
 
 			if ( ! empty( $description ) ) {
-				$html .= self::convert_markdown( wp_kses_post( $description ) );
+				$html .= wp_kses_post( self::convert_markdown( $description ) );
 			}
 
 			if ( ( ! empty( $limit ) && ! empty( $limit_type ) ) ) {
@@ -300,7 +300,7 @@ class Forminator_Password extends Forminator_Field {
 			if ( ! empty( $confirm_password_description ) || ( ! empty( $limit ) && ! empty( $limit_type ) ) ) {
 				$html .= sprintf( '<span class="forminator-description" id="%s">', $id . '-description' );
 				if ( ! empty( $confirm_password_description ) ) {
-					$html .= self::convert_markdown( wp_kses_post( $confirm_password_description ) );
+					$html .= wp_kses_post( self::convert_markdown( $confirm_password_description ) );
 				}
 
 				if ( ( ! empty( $limit ) && ! empty( $limit_type ) ) ) {
@@ -689,7 +689,7 @@ class Forminator_Password extends Forminator_Field {
 			}
 		}
 
-		$password         = Forminator_CForm_Front_Action::$prepared_data[ $id ];
+		$password         = ! empty( Forminator_CForm_Front_Action::$prepared_data[ $id ] ) ? Forminator_CForm_Front_Action::$prepared_data[ $id ] : '';
 		$confirm_password = ! empty( Forminator_CForm_Front_Action::$prepared_data[ 'confirm_' . $id ] ) ? Forminator_CForm_Front_Action::$prepared_data[ 'confirm_' . $id ] : '';
 		if ( $is_confirm && ! empty( $data ) && $password !== $confirm_password ) {
 			$validation_message_not_match         = self::get_property( 'validation_message', $field, '' );

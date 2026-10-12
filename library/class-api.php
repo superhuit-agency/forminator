@@ -177,8 +177,9 @@ class Forminator_API {
 	 * @param  array $module_ids Array of Module IDs.
 	 */
 	public static function delete_modules( $module_ids ) {
+		$args = func_get_args();
 		if ( ! is_array( $module_ids ) ) {
-			$module_ids = func_get_args();
+			$module_ids = $args;
 		}
 
 		$module_ids = array_map( 'trim', $module_ids );
@@ -1500,12 +1501,13 @@ class Forminator_API {
 	 *
 	 * @since 1.2
 	 *
-	 * @param int $form_id Form Id.
-	 * @param int $entry_id Entry Id.
+	 * @param int    $form_id Form Id.
+	 * @param int    $entry_id Entry Id.
+	 * @param string $entry_type Optional. Expected module type, eg custom-forms.
 	 *
 	 * @return bool|WP_Error
 	 */
-	public static function delete_entry( $form_id, $entry_id ) {
+	public static function delete_entry( $form_id, $entry_id, $entry_type = '' ) {
 		// Initialize API.
 		self::initialize();
 
@@ -1519,10 +1521,41 @@ class Forminator_API {
 			return new WP_Error( 'missing_entry_id', esc_html__( 'Entry ID is required!', 'forminator' ) );
 		}
 
+		// The entry must belong to the requested module.
+		$entry = self::get_module_entry( $form_id, $entry_id, $entry_type );
+		if ( is_wp_error( $entry ) ) {
+			return $entry;
+		}
+
 		// Delete entry.
-		Forminator_Form_Entry_Model::delete_by_entry( $entry_id );
+		Forminator_Form_Entry_Model::delete_by_entry( $entry->entry_id );
 
 		return true;
+	}
+
+	/**
+	 * Load an entry and check that it belongs to the requested module
+	 *
+	 * @since 1.58
+	 *
+	 * @param int    $module_id Form, Poll or Quiz Id.
+	 * @param int    $entry_id Entry Id.
+	 * @param string $entry_type Optional. Expected module type, eg custom-forms.
+	 *
+	 * @return Forminator_Form_Entry_Model|WP_Error
+	 */
+	private static function get_module_entry( $module_id, $entry_id, $entry_type = '' ) {
+		$entry = new Forminator_Form_Entry_Model( $entry_id );
+
+		if ( empty( $entry->entry_id ) || (int) $module_id !== (int) $entry->form_id ) {
+			return new WP_Error( 'invalid_entry_id', esc_html__( 'Entry not found for this module!', 'forminator' ) );
+		}
+
+		if ( ! empty( $entry_type ) && $entry_type !== $entry->entry_type ) {
+			return new WP_Error( 'invalid_entry_type', esc_html__( 'Entry does not belong to this module type!', 'forminator' ) );
+		}
+
+		return $entry;
 	}
 
 	/**
@@ -1626,7 +1659,7 @@ class Forminator_API {
 	 * @return bool|WP_Error
 	 */
 	public static function delete_form_entry( $form_id, $entry_id ) {
-		return self::delete_entry( $form_id, $entry_id );
+		return self::delete_entry( $form_id, $entry_id, 'custom-forms' );
 	}
 
 	/**
@@ -1699,7 +1732,7 @@ class Forminator_API {
 	 * @return bool|WP_Error
 	 */
 	public static function delete_poll_entry( $poll_id, $entry_id ) {
-		return self::delete_entry( $poll_id, $entry_id );
+		return self::delete_entry( $poll_id, $entry_id, 'polls' );
 	}
 
 	/**
@@ -1772,7 +1805,7 @@ class Forminator_API {
 	 * @return bool|WP_Error
 	 */
 	public static function delete_quiz_entry( $quiz_id, $entry_id ) {
-		return self::delete_entry( $quiz_id, $entry_id );
+		return self::delete_entry( $quiz_id, $entry_id, 'quizzes' );
 	}
 
 	/**

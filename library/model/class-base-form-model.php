@@ -157,14 +157,40 @@ abstract class Forminator_Base_Form_Model {
 	}
 
 	/**
-	 * Save temporary settings
+	 * Check an ID is a Forminator module, optionally of an expected post type
 	 *
-	 * @param int   $id Module ID.
-	 * @param array $module_data Module data.
+	 * Temporary settings are written as post meta, so the target must be verified
+	 * server side rather than trusted from the request.
+	 *
+	 * @since 1.58
+	 *
+	 * @param int    $id Module ID.
+	 * @param string $expected_type Optional. Expected module post type.
 	 *
 	 * @return bool
 	 */
-	public static function save_temp_settings( int $id, array $module_data ): bool {
+	private static function is_module_of_type( int $id, string $expected_type = '' ): bool {
+		if ( ! self::get_model_class( $id ) ) {
+			return false;
+		}
+
+		return '' === $expected_type || get_post_type( $id ) === $expected_type;
+	}
+
+	/**
+	 * Save temporary settings
+	 *
+	 * @param int    $id Module ID.
+	 * @param array  $module_data Module data.
+	 * @param string $expected_type Optional. Expected module post type.
+	 *
+	 * @return bool
+	 */
+	public static function save_temp_settings( int $id, array $module_data, string $expected_type = '' ): bool {
+		if ( ! self::is_module_of_type( $id, $expected_type ) ) {
+			return false;
+		}
+
 		unset( $module_data['pdfs'] ); // Remove PDFs from temp settings.
 		$response = update_post_meta( $id, self::TEMP_META_KEY, $module_data );
 		// It can be false, if new data is the same as old data.
@@ -195,10 +221,15 @@ abstract class Forminator_Base_Form_Model {
 	/**
 	 * Remove temporary settings
 	 *
-	 * @param int $id Module ID.
+	 * @param int    $id Module ID.
+	 * @param string $expected_type Optional. Expected module post type.
 	 * @return bool
 	 */
-	public static function remove_temp_settings( int $id ): bool {
+	public static function remove_temp_settings( int $id, string $expected_type = '' ): bool {
+		if ( ! self::is_module_of_type( $id, $expected_type ) ) {
+			return false;
+		}
+
 		$response = delete_post_meta( $id, self::TEMP_META_KEY );
 
 		return (bool) $response;
@@ -374,7 +405,7 @@ abstract class Forminator_Base_Form_Model {
 	 * @since 1.2 Add $sanitize_function as optional param
 	 */
 	public function set_var_in_array( $property, $name, $array_values, $sanitize_function = 'sanitize_title' ) {
-		$val = isset( $array_values[ $name ] ) ? $array_values[ $name ] : null;
+		$val = $array_values[ $name ] ?? '';
 		if ( is_callable( $sanitize_function ) ) {
 			$val = call_user_func_array( $sanitize_function, array( $val ) );
 		}
@@ -562,20 +593,9 @@ abstract class Forminator_Base_Form_Model {
 	 * @since 1.6 add optional param `status`
 	 */
 	public function count_all( $status = '' ) {
-		$count_posts = wp_count_posts( $this->post_type );
-		$count_posts = (array) $count_posts;
-		if ( ! empty( $status ) ) {
-			if ( isset( $count_posts[ $status ] ) ) {
-				return $count_posts[ $status ];
-			} else {
-				return 0;
-			}
-		} elseif ( 'forminator_forms' === $this->post_type ) {
-				unset( $count_posts['leads'] );
-				unset( $count_posts['pdf_form'] );
-		}
+		$result = $this->get_all_paged( 1, 1, $status, null, '', false );
 
-		return array_sum( $count_posts );
+		return (int) $result['foundPosts'];
 	}
 
 	/**
@@ -611,14 +631,16 @@ abstract class Forminator_Base_Form_Model {
 	 * @param string      $status Status.
 	 * @param null|int    $pdf_parent_id PDF parent Id.
 	 * @param null|string $search Optional search. Added in 1.52.
+	 * @param bool        $load_models Whether to build module models. Added in 1.58.1.
 	 *
 	 * @return array
 	 * @since 1.5.4 add optional param per_page
 	 * @since 1.5.4 add optional param $status
+	 * @since 1.58.1 add optional param $load_models
 	 *
 	 * @since 1.2
 	 */
-	public function get_all_paged( $current_page = 1, $per_page = null, $status = '', $pdf_parent_id = null, $search = '' ) {
+	public function get_all_paged( $current_page = 1, $per_page = null, $status = '', $pdf_parent_id = null, $search = '', $load_models = true ) {
 		if ( is_null( $per_page ) ) {
 			$per_page = forminator_form_view_per_page();
 		}
@@ -660,6 +682,12 @@ abstract class Forminator_Base_Form_Model {
 			}
 		}
 
+		if ( ! $load_models ) {
+			$args['fields']                 = 'ids';
+			$args['update_post_meta_cache'] = false;
+			$args['update_post_term_cache'] = false;
+		}
+
 		$query = new WP_Query( $args );
 
 		if ( ! empty( $search ) ) {
@@ -668,8 +696,10 @@ abstract class Forminator_Base_Form_Model {
 
 		$models = array();
 
-		foreach ( $query->posts as $post ) {
-			$models[] = $this->_load( $post );
+		if ( $load_models ) {
+			foreach ( $query->posts as $post ) {
+				$models[] = $this->_load( $post );
+			}
 		}
 
 		return array(
@@ -931,6 +961,10 @@ abstract class Forminator_Base_Form_Model {
 				$form_settings         = self::validate_registration_fields_mapping( $form_settings, $fields );
 				$object->settings      = Forminator_Migration::migrate_custom_form_settings( $form_settings, $fields );
 				$object->notifications = Forminator_Migration::migrate_custom_form_notifications( $object->notifications, $form_settings, $meta );
+
+				if ( 'leads' !== $object->status && $object->has_stripe_field() ) {
+					$object->notifications = Forminator_Migration::migrate_stripe_notifications( $object->notifications );
+				}
 			}
 
 			// Migrate settings Polls.
@@ -942,6 +976,10 @@ abstract class Forminator_Base_Form_Model {
 			if ( 'forminator_quizzes' === $this->post_type ) {
 				$object->settings      = Forminator_Migration::migrate_quizzes_settings( $form_settings );
 				$object->notifications = Forminator_Migration::migrate_quizzes_notifications( $object->notifications, $form_settings, $meta );
+
+				if ( self::has_stripe_field_in_quiz( $form_settings ) ) {
+					$object->notifications = Forminator_Migration::migrate_stripe_notifications( $object->notifications );
+				}
 			}
 
 			$object->raw = $post;
@@ -950,6 +988,23 @@ abstract class Forminator_Base_Form_Model {
 		}
 
 		return false;
+	}
+
+	/**
+	 * Check if the quiz has a stripe field
+	 *
+	 * @param array $form_settings Form settings.
+	 * @return bool
+	 */
+	protected static function has_stripe_field_in_quiz( $form_settings ) {
+		$stripe_exists = false;
+		if ( ! empty( $form_settings['hasLeads'] ) && ! empty( $form_settings['leadsId'] ) ) {
+			$lead_form = Forminator_Form_Model::model()->load( $form_settings['leadsId'] );
+			if ( ! empty( $lead_form ) && $lead_form->has_stripe_field() ) {
+				$stripe_exists = true;
+			}
+		}
+		return $stripe_exists;
 	}
 
 	/**
@@ -1410,6 +1465,14 @@ abstract class Forminator_Base_Form_Model {
 
 			if ( empty( $meta['settings']['formName'] ) ) {
 				throw new Exception( esc_html__( 'Invalid format of import data name', 'forminator' ) );
+			}
+
+			// create_from_import_data() writes posts directly and skips save(), so enforce
+			// registration role checks here for every import path (including quiz lead forms).
+			$validate = forminator_validate_registration_form_settings( $meta['settings'] );
+			if ( is_wp_error( $validate ) ) {
+				// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Exception message is already escaped.
+				throw new Exception( $validate->get_error_message() );
 			}
 
 			if ( $name ) {

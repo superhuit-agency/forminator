@@ -235,6 +235,28 @@ final class Forminator_Trello extends Forminator_Integration {
 	}
 
 	/**
+	 * Resolve APP key for the OAuth authorization flow.
+	 *
+	 * On first connect the key may only exist in memory from the wizard step.
+	 * On re-authorize it may only exist in saved (encrypted) settings.
+	 *
+	 * @since 1.58.0
+	 *
+	 * @return string
+	 */
+	private function get_app_key_for_authorization() {
+		$app_key = $this->get_app_key();
+
+		if ( ! empty( $app_key ) ) {
+			return $app_key;
+		}
+
+		$decrypted = $this->get_settings_values( true );
+
+		return ! empty( $decrypted['api_key'] ) ? $decrypted['api_key'] : '';
+	}
+
+	/**
 	 * Settings wizard
 	 *
 	 * @since 1.0 Trello Integration
@@ -476,12 +498,22 @@ final class Forminator_Trello extends Forminator_Integration {
 
 		if ( isset( $query_args['token'] ) ) {
 			try {
-				$identifier = ! empty( $query_args['identifier'] ) ? $query_args['identifier'] : '';
-				if ( ! empty( $query_args['global_id'] ) ) {
-					$this->multi_global_id = $query_args['global_id'];
+				// Unslash to match the identifier bound to the OAuth state.
+				$identifier = ! empty( $query_args['identifier'] ) ? (string) wp_unslash( $query_args['identifier'] ) : '';
+				$global_id  = ! empty( $query_args['global_id'] ) ? (string) $query_args['global_id'] : '';
+				if ( ! empty( $global_id ) ) {
+					$this->multi_global_id = $global_id;
 				}
-				$token     = $query_args['token'];
-				$api_key   = $query_args['api_key'];
+				$oauth_state   = isset( $query_args['state'] ) ? $query_args['state'] : '';
+				$oauth_context = forminator_integration_validate_oauth_state( $this, $oauth_state, $global_id, $identifier );
+				if ( false === $oauth_context ) {
+					throw new Forminator_Integration_Exception( esc_html__( 'Invalid authorization request.', 'forminator' ) );
+				}
+				$token   = $query_args['token'];
+				$api_key = ! empty( $oauth_context['api_key'] ) ? $oauth_context['api_key'] : '';
+				if ( empty( $api_key ) ) {
+					throw new Forminator_Integration_Exception( esc_html__( 'Missing required APP Key', 'forminator' ) );
+				}
 				$validated = $this->validate_token( $token, $api_key );
 				if ( true !== $validated ) {
 					throw new Forminator_Integration_Exception( $validated );
@@ -520,9 +552,23 @@ final class Forminator_Trello extends Forminator_Integration {
 	 */
 	public function get_auth_url( $return_url = '' ) {
 		$authorize_url = 'https://trello.com/1/authorize/';
+		$app_key       = $this->get_app_key_for_authorization();
 		if ( ! $return_url ) {
+			$global_id   = $this->is_multi_global ? (string) $this->multi_global_id : '';
+			$identifier  = $this->identifier ? (string) $this->identifier : '';
+			$oauth_state = forminator_integration_create_oauth_state(
+				$this,
+				$global_id,
+				$identifier,
+				array(
+					'api_key' => $app_key,
+				)
+			);
+			// Trello allows a dynamic return URL, so keep the section nonce.
 			$return_url = forminator_addon_integration_section_admin_url( $this, 'authorize', true, $this->identifier );
-			$return_url = add_query_arg( 'api_key', $this->get_app_key(), $return_url );
+			if ( ! empty( $oauth_state ) ) {
+				$return_url = add_query_arg( 'state', $oauth_state, $return_url );
+			}
 		}
 		$return_url = rawurlencode( $return_url );
 		// https://developers.trello.com/page/authorization.
@@ -531,7 +577,7 @@ final class Forminator_Trello extends Forminator_Integration {
 			'scope'           => 'read,write,account',
 			'expiration'      => 'never',
 			'name'            => esc_html__( 'Forminator Pro', 'forminator' ),
-			'key'             => $this->get_app_key(),
+			'key'             => $app_key,
 			'response_type'   => 'token',
 			'return_url'      => $return_url,
 		);
@@ -622,13 +668,11 @@ final class Forminator_Trello extends Forminator_Integration {
 	 * @return mixed
 	 */
 	public function before_get_settings_values( $values ) {
-		forminator_addon_maybe_log( __METHOD__, $values );
 		if ( isset( $values['connected_account'] ) && ! empty( $values['connected_account'] ) && is_array( $values['connected_account'] ) ) {
 			$this->connected_account = $values['connected_account'];
 		}
 		if ( isset( $values['token'] ) ) {
 			$this->_token = $values['token'];
-			forminator_addon_maybe_log( __METHOD__, $this->_token );
 		}
 
 		return $values;
@@ -645,13 +689,9 @@ final class Forminator_Trello extends Forminator_Integration {
 		try {
 			$api = $this->get_api();
 			// revoke token from trello server.
-			forminator_addon_maybe_log( __METHOD__, $this->_token );
 			$api->delete_( 'tokens/' . $this->_token );
 		} catch ( Forminator_Integration_Exception $e ) {
 			forminator_addon_maybe_log( __METHOD__, $e->getMessage() );
-			$this->_deactivation_error_message = $e->getMessage();
-
-			return false;
 		}
 
 		return true;

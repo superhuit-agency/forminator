@@ -107,6 +107,13 @@
 							$entry_status = __( 'Abandoned', 'forminator' );
 						}
 						break;
+					case 'pending':
+						$entry_status = __( 'Pending', 'forminator' );
+						break;
+
+					case 'failed':
+						$entry_status = __( 'Failed', 'forminator' );
+						break;
 
 					default:
 						$entry_status = __( 'All', 'forminator' );

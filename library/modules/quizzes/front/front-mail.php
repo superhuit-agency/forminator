@@ -123,6 +123,11 @@ class Forminator_Quiz_Front_Mail extends Forminator_Mail {
 				$this->init();
 				// Process admin mail.
 				foreach ( $notifications as $notification ) {
+					// If notification is stripe-payment-failed type, skip if entry status is not failed.
+					if ( 'failed' !== $entry->status &&
+						isset( $notification['type'] ) && 'stripe-payment-failed' === $notification['type'] ) {
+						continue;
+					}
 
 					if ( $this->is_condition( $notification, $data, $quiz, $result_slug ) ) {
 						continue;

@@ -194,7 +194,7 @@ class Forminator_Upload extends Forminator_Field {
 			if ( ! empty( $upload_limit ) ) {
 				$filesize  = self::get_property( 'filesize', $field, 'MB' );
 				$file_size = $this->file_size( $filesize );
-				$max_size  = $upload_limit * $file_size;
+				$max_size  = min( $max_size, $upload_limit * $file_size );
 			}
 			$upload_attr['data-size']         = $max_size;
 			$rounded_max_size                 = $this->byte_to_size( $max_size );
@@ -454,10 +454,31 @@ class Forminator_Upload extends Forminator_Field {
 					);
 				}
 
-				if ( ! is_uploaded_file( $file_object['tmp_name'] ) ) {
+				$upload_dir       = wp_upload_dir(); // Set upload folder.
+				$file_path        = 'upload' === $upload_type ? $upload_temp_path : forminator_get_upload_path( $form_id, 'uploads' );
+				$file_url         = forminator_get_upload_url( $form_id, 'uploads' );
+				$unique_file_name = wp_unique_filename( $file_path, $file_name );
+				$exploded_name    = explode( '/', $unique_file_name );
+				$filename         = end( $exploded_name ); // Create base file name.
+
+				$max_size  = wp_max_upload_size();
+				$file_size = $this->file_size( $filesize );
+				if ( $custom_limit_size ) {
+					$max_size = min( $max_size, $upload_limit * $file_size ); // convert to byte.
+				}
+
+				if ( ( isset( $file_object['error'] ) && UPLOAD_ERR_INI_SIZE === $file_object['error'] )
+					|| $file_object['size'] > $max_size ) {
+
+					$rounded_max_size = $this->byte_to_size( $max_size );
+
 					return array(
 						'success' => false,
-						'message' => esc_html__( 'Error saving form. Failed to read uploaded file.', 'forminator' ),
+						'message' => sprintf(
+						/* translators: %s: Maximum size */
+							esc_html__( 'Maximum file size allowed is %s. ', 'forminator' ),
+							$rounded_max_size
+						),
 					);
 				}
 
@@ -470,37 +491,17 @@ class Forminator_Upload extends Forminator_Field {
 					);
 				}
 
-				$upload_dir       = wp_upload_dir(); // Set upload folder.
-				$file_path        = 'upload' === $upload_type ? $upload_temp_path : forminator_get_upload_path( $form_id, 'uploads' );
-				$file_url         = forminator_get_upload_url( $form_id, 'uploads' );
-				$unique_file_name = wp_unique_filename( $file_path, $file_name );
-				$exploded_name    = explode( '/', $unique_file_name );
-				$filename         = end( $exploded_name ); // Create base file name.
-
-				$max_size  = wp_max_upload_size();
-				$file_size = $this->file_size( $filesize );
-				if ( $custom_limit_size ) {
-					$max_size = $upload_limit * $file_size; // convert to byte.
+				if ( ! is_uploaded_file( $file_object['tmp_name'] ) ) {
+					return array(
+						'success' => false,
+						'message' => esc_html__( 'Error saving form. Failed to read uploaded file.', 'forminator' ),
+					);
 				}
 
 				if ( 0 === $file_object['size'] ) {
 					return array(
 						'success' => false,
 						'message' => esc_html__( 'The attached file is empty and can\'t be uploaded.', 'forminator' ),
-					);
-				}
-
-				if ( $file_object['size'] > $max_size ) {
-
-					$rounded_max_size = $this->byte_to_size( $max_size );
-
-					return array(
-						'success' => false,
-						'message' => sprintf(
-						/* translators: %s: Maximum size */
-							esc_html__( 'Maximum file size allowed is %s. ', 'forminator' ),
-							$rounded_max_size
-						),
 					);
 				}
 
@@ -533,10 +534,6 @@ class Forminator_Upload extends Forminator_Field {
 					if ( 'custom' === $file_limit_type ) {
 						$file_limit = self::get_property( 'file-limit-input', $field, 5 );
 						if ( isset( $post_data['totalFiles'] ) && $post_data['totalFiles'] > $file_limit ) {
-							if ( 'upload' === $upload_type ) {
-								move_uploaded_file( $file_object['tmp_name'], $file_path );
-							}
-
 							return array(
 								'error_type' => 'limit',
 								'success'    => false,
@@ -550,6 +547,7 @@ class Forminator_Upload extends Forminator_Field {
 				// use move_uploaded_file instead of $wp_filesystem->put_contents.
 				// increase performance, and avoid permission issues.
 				if ( false !== move_uploaded_file( $file_object['tmp_name'], $file_path ) ) {
+					$upload_id = 0;
 					if ( $use_library && 'submit' === $upload_type ) {
 						$upload_id = wp_insert_attachment(
 							array(
@@ -565,13 +563,30 @@ class Forminator_Upload extends Forminator_Field {
 						self::generate_upload_metadata( $upload_id, $file_path );
 					}
 
-					return array(
-						'success'   => true,
-						'file_name' => $filename,
-						'file_url'  => $file_url,
-						'message'   => '',
-						'file_path' => wp_normalize_path( $file_path ),
+					$response = array(
+						'success'       => true,
+						'file_name'     => $filename,
+						'file_url'      => $file_url,
+						'message'       => '',
+						'file_path'     => wp_normalize_path( $file_path ),
+						'attachment_id' => (int) $upload_id,
 					);
+
+					// AJAX temp uploads: create an opaque token instead of exposing path/URL details.
+					if ( 'upload' === $upload_type ) {
+						$access_token = Forminator_Upload_Access::create_token( $form_id, $filename, $file_path );
+						if ( '' === $access_token ) {
+							wp_delete_file( $file_path );
+
+							return array(
+								'success' => false,
+								'message' => esc_html__( 'Error saving form. Upload error.', 'forminator' ),
+							);
+						}
+						$response['access_token'] = $access_token;
+					}
+
+					return $response;
 
 				} else {
 					return array(
@@ -634,16 +649,28 @@ class Forminator_Upload extends Forminator_Field {
 	 * @return bool|array
 	 */
 	public function handle_ajax_multifile_upload( $form_id, $upload_data, $field_array = array() ) {
-		$file_path_arr = array();
-		$file_url_arr  = array();
-		$use_library   = self::get_property( 'use_library', $field_array, false );
-		$file_type     = self::get_property( 'file-type', $field_array, 'single' );
+		$file_path_arr     = array();
+		$file_url_arr      = array();
+		$attachment_id_arr = array();
+		$use_library       = self::get_property( 'use_library', $field_array, false );
+		$file_type         = self::get_property( 'file-type', $field_array, 'single' );
 		if ( ! empty( $upload_data ) && ! empty( $upload_data['file'] ) ) {
 			if ( false !== array_search( false, array_column( $upload_data['file'], 'success' ), true ) ) {
 				return array(
 					'success' => false,
 				);
 			}
+
+			// Capping the list that gets moved caps what a submission can store.
+			$file_limit = self::get_file_limit( $field_array );
+			if ( null !== $file_limit && count( $upload_data['file'] ) > $file_limit ) {
+				return array(
+					'error_type' => 'limit',
+					'success'    => false,
+					'message'    => /* translators: %d: File limit */ sprintf( esc_html__( 'You can upload a maximum of %d files.', 'forminator' ), $file_limit ),
+				);
+			}
+
 			$upload_dir  = wp_upload_dir();
 			$upload_path = forminator_get_upload_path( $form_id, 'uploads' );
 			$upload_url  = forminator_get_upload_url( $form_id, 'uploads' );
@@ -660,7 +687,10 @@ class Forminator_Upload extends Forminator_Field {
 			foreach ( $upload_data['file'] as $upload ) {
 				$upload_temp_path = forminator_upload_root_temp();
 				if ( ! empty( $upload ) && ! is_wp_error( $upload_temp_path ) ) {
-					$file_name = trim( sanitize_file_name( $upload['file_name'] ) );
+					$file_name = Forminator_Upload_Access::resolve_temp_file_name( $upload, $form_id );
+					if ( '' === $file_name ) {
+						continue;
+					}
 					$temp_path = $upload_temp_path . '/' . $file_name;
 
 					$unique_file_name = wp_unique_filename( $upload_path, $file_name );
@@ -677,6 +707,9 @@ class Forminator_Upload extends Forminator_Field {
 
 					if ( file_exists( $temp_path ) ) {
 						if ( $this->move_file( $temp_path, $file_path ) ) {
+							Forminator_Upload_Access::revoke_from_upload( $upload );
+
+							$upload_id = 0;
 							if ( $use_library ) {
 								$upload_id = wp_insert_attachment(
 									array(
@@ -692,8 +725,9 @@ class Forminator_Upload extends Forminator_Field {
 								self::generate_upload_metadata( $upload_id, $file_path );
 							}
 
-							$file_path_arr[] = $file_path;
-							$file_url_arr[]  = $file_url;
+							$file_path_arr[]     = $file_path;
+							$file_url_arr[]      = $file_url;
+							$attachment_id_arr[] = (int) $upload_id;
 						}
 					} else {
 						// Check maybe it was already saved on previous submission but it had other fields validation issues.
@@ -708,8 +742,9 @@ class Forminator_Upload extends Forminator_Field {
 							$file_path = substr( $file_path, 0, -strlen( $matches[0] ) ) . $ext;
 							$file_url  = substr( $file_url, 0, -strlen( $matches[0] ) ) . $ext;
 							if ( file_exists( $file_path ) ) {
-								$file_path_arr[] = $file_path;
-								$file_url_arr[]  = $file_url;
+								$file_path_arr[]     = $file_path;
+								$file_url_arr[]      = $file_url;
+								$attachment_id_arr[] = $use_library ? attachment_url_to_postid( $file_url ) : 0;
 							}
 						}
 					}
@@ -718,9 +753,10 @@ class Forminator_Upload extends Forminator_Field {
 			if ( ! empty( $file_url_arr ) && ! empty( $file_path_arr ) ) {
 
 				return array(
-					'success'   => true,
-					'file_url'  => $file_url_arr,
-					'file_path' => $file_path_arr,
+					'success'       => true,
+					'file_url'      => $file_url_arr,
+					'file_path'     => $file_path_arr,
+					'attachment_id' => $attachment_id_arr,
 				);
 			} else {
 
@@ -732,6 +768,47 @@ class Forminator_Upload extends Forminator_Field {
 		}
 
 		return false;
+	}
+
+	/**
+	 * Get the file limit configured for a multi file field.
+	 *
+	 * @param array $field Field settings.
+	 *
+	 * @return int|null Null when the field is not limited.
+	 */
+	private static function get_file_limit( $field ) {
+		if ( 'multiple' !== self::get_property( 'file-type', $field, 'single' ) ) {
+			return null;
+		}
+
+		if ( 'custom' !== self::get_property( 'file-limit', $field, 'unlimited' ) ) {
+			return null;
+		}
+
+		return (int) self::get_property( 'file-limit-input', $field, 5 );
+	}
+
+	/**
+	 * Delete the files a failed upload left behind.
+	 *
+	 * @param array $file_paths File paths created during the request.
+	 * @param array $attachment_ids Attachment IDs created for them.
+	 */
+	private static function cleanup_uploaded_files( $file_paths, $attachment_ids = array() ) {
+		foreach ( $file_paths as $index => $file_path ) {
+			$attachment_id = isset( $attachment_ids[ $index ] ) ? (int) $attachment_ids[ $index ] : 0;
+
+			// Deleting the attachment takes its file with it.
+			if ( $attachment_id > 0 ) {
+				wp_delete_attachment( $attachment_id, true );
+				continue;
+			}
+
+			if ( ! empty( $file_path ) && file_exists( $file_path ) ) {
+				wp_delete_file( $file_path );
+			}
+		}
 	}
 
 	/**
@@ -771,20 +848,36 @@ class Forminator_Upload extends Forminator_Field {
 	 * @return bool|array
 	 */
 	public function handle_submission_multifile_upload( $form_id, $field, $upload_data, $temporary = false ) {
-		$file_name_arr = array();
-		$file_path_arr = array();
-		$file_url_arr  = array();
-		$to_temp       = $temporary ? 'upload' : 'submit';
+		$file_name_arr     = array();
+		$file_path_arr     = array();
+		$file_url_arr      = array();
+		$attachment_id_arr = array();
+		$to_temp           = $temporary ? 'upload' : 'submit';
 		if ( ! empty( $upload_data ) ) {
 			$upload_file = $this->arrange_files( $upload_data );
-			$i           = 1;
+			$file_limit  = self::get_file_limit( $field );
+
+			// Reject an oversized batch before anything is stored.
+			if ( null !== $file_limit && count( $upload_file ) > $file_limit ) {
+				return array(
+					'error_type' => 'limit',
+					'success'    => false,
+					'message'    => /* translators: %d: File limit */ sprintf( esc_html__( 'You can upload a maximum of %d files.', 'forminator' ), $file_limit ),
+				);
+			}
+
+			$i = 1;
 			foreach ( $upload_file as $upload ) {
 				$response = $this->handle_file_upload( $form_id, $field, array( 'totalFiles' => $i ), $to_temp, $upload );
 				if ( isset( $response['success'] ) && $response['success'] ) {
-					$file_name_arr[] = $response['file_name'];
-					$file_path_arr[] = wp_normalize_path( $response['file_path'] );
-					$file_url_arr[]  = $response['file_url'];
+					$file_name_arr[]     = $response['file_name'];
+					$file_path_arr[]     = wp_normalize_path( $response['file_path'] );
+					$file_url_arr[]      = $response['file_url'];
+					$attachment_id_arr[] = $response['attachment_id'];
 				} else {
+					// One bad file fails the batch, nothing from it stays on disk.
+					self::cleanup_uploaded_files( $file_path_arr, $attachment_id_arr );
+
 					return $response;
 				}
 
@@ -794,10 +887,11 @@ class Forminator_Upload extends Forminator_Field {
 			if ( ! empty( $file_url_arr ) && ! empty( $file_path_arr ) ) {
 
 				return array(
-					'success'   => true,
-					'file_name' => $file_name_arr,
-					'file_url'  => $file_url_arr,
-					'file_path' => $file_path_arr,
+					'success'       => true,
+					'file_name'     => $file_name_arr,
+					'file_url'      => $file_url_arr,
+					'file_path'     => $file_path_arr,
+					'attachment_id' => $attachment_id_arr,
 				);
 			} else {
 				return array(
@@ -822,10 +916,11 @@ class Forminator_Upload extends Forminator_Field {
 	 * @return bool|array
 	 */
 	public function transfer_upload( $form_id, $upload_data, $field_array = array() ) {
-		$file_path   = null;
-		$file_url    = null;
-		$use_library = self::get_property( 'use_library', $field_array, false );
-		$file_type   = self::get_property( 'file-type', $field_array, 'single' );
+		$file_path     = null;
+		$file_url      = null;
+		$attachment_id = null;
+		$use_library   = self::get_property( 'use_library', $field_array, false );
+		$file_type     = self::get_property( 'file-type', $field_array, 'single' );
 		if ( ! empty( $upload_data ) && ! empty( $upload_data['file'] ) ) {
 			if ( false !== array_search( false, array_column( $upload_data['file'], 'success' ), true ) ) {
 				return array(
@@ -848,11 +943,17 @@ class Forminator_Upload extends Forminator_Field {
 						$upload_path,
 						$upload_url,
 						$use_library,
-						$file_type
+						$file_type,
+						$form_id
 					);
 
-					$file_path[] = $files['file_path'];
-					$file_url[]  = $files['file_url'];
+					if ( empty( $files ) || ! is_array( $files ) ) {
+						continue;
+					}
+
+					$file_path[]     = $files['file_path'];
+					$file_url[]      = $files['file_url'];
+					$attachment_id[] = $files['attachment_id'];
 				}
 			} else {
 				$file = $this->move_upload(
@@ -861,18 +962,27 @@ class Forminator_Upload extends Forminator_Field {
 					$upload_path,
 					$upload_url,
 					$use_library,
-					$file_type
+					$file_type,
+					$form_id
 				);
 
-				$file_path = $file['file_path'];
-				$file_url  = $file['file_url'];
+				if ( empty( $file ) || ! is_array( $file ) ) {
+					return array(
+						'success' => false,
+					);
+				}
+
+				$file_path     = $file['file_path'];
+				$file_url      = $file['file_url'];
+				$attachment_id = $file['attachment_id'];
 			}
 
 			if ( ! empty( $file_url ) && ! empty( $file_path ) ) {
 				return array(
-					'success'   => true,
-					'file_url'  => $file_url,
-					'file_path' => $file_path,
+					'success'       => true,
+					'file_url'      => $file_url,
+					'file_path'     => $file_path,
+					'attachment_id' => $attachment_id,
 				);
 			} else {
 				return array(
@@ -897,11 +1007,20 @@ class Forminator_Upload extends Forminator_Field {
 	 * @param string $upload_url - Upload URL.
 	 * @param bool   $use_library - Upload directory.
 	 * @param string $file_type - Single/Multiple.
+	 * @param int    $form_id - Form ID.
 	 *
 	 * @return bool|array
 	 */
-	public function move_upload( $upload, $upload_dir, $upload_path, $upload_url, $use_library, $file_type ) {
-		$file_name        = trim( sanitize_file_name( $upload['file_name'] ) );
+	public function move_upload( $upload, $upload_dir, $upload_path, $upload_url, $use_library, $file_type, $form_id = 0 ) {
+		// AJAX temp uploads carry access_token; payment/submission temp moves use the stored file_name from our own earlier upload step.
+		$file_name = Forminator_Upload_Access::resolve_temp_file_name( $upload, $form_id );
+		if ( '' === $file_name && ! empty( $upload['file_name'] ) ) {
+			$file_name = trim( sanitize_file_name( $upload['file_name'] ) );
+		}
+		if ( '' === $file_name ) {
+			return false;
+		}
+
 		$unique_file_name = wp_unique_filename( $upload_path, $file_name );
 		$exploded_name    = explode( '/', $unique_file_name );
 		$filename         = end( $exploded_name );
@@ -918,12 +1037,15 @@ class Forminator_Upload extends Forminator_Field {
 			$file_url  = $upload_dir['baseurl'] . '/' . trim( sanitize_file_name( $filename ) );
 		}
 
+		$upload_id = 0;
 		$temp_path = forminator_upload_root_temp();
 		if ( ! is_wp_error( $temp_path ) ) {
 			$temp_path = $temp_path . '/' . $file_name;
 		}
 		if ( ! is_wp_error( $temp_path ) && file_exists( $temp_path ) ) {
 			if ( $this->move_file( $temp_path, $file_path ) ) {
+				Forminator_Upload_Access::revoke_from_upload( $upload );
+
 				$file_mime = $this->get_mime_type( $file_path );
 				if ( $use_library ) {
 					$upload_id = wp_insert_attachment(
@@ -955,13 +1077,15 @@ class Forminator_Upload extends Forminator_Field {
 				if ( file_exists( $file_path_new ) ) {
 					$file_path = $file_path_new;
 					$file_url  = $file_url_new;
+					$upload_id = $use_library ? attachment_url_to_postid( $file_url ) : 0;
 				}
 			}
 		}
 
 		return array(
-			'file_path' => $file_path,
-			'file_url'  => $file_url,
+			'file_path'     => $file_path,
+			'file_url'      => $file_url,
+			'attachment_id' => (int) $upload_id,
 		);
 	}
 

@@ -79,36 +79,68 @@ class Forminator_Poll_Model extends Forminator_Base_Form_Model {
 		 * @since 1.0.5
 		 */
 		if ( $this->check_access ) {
+			if ( ! $this->is_allow_multiple_votes() && ! $this->poll_single_vote_request_allowed( $freeze ) ) {
+				return false;
+			}
+
 			if ( $this->is_method_browser_cookie() ) {
 				return $this->poll_votes_method_browser_cookie();
-			} else {
-				$user_ip      = Forminator_Geo::get_user_ip();
-				$key_requests = 'forminator_request_from_ip_' . $this->id . '_' . $user_ip;
-				// Check if the IP has made a request within the allowed interval.
-				if ( get_transient( $key_requests ) ) {
-					// IP has made a request too soon.
-					$can_vote = false;
-				} else {
-					if ( $freeze ) {
-						/**
-						 * Filter the time interval (in seconds) between consecutive requests allowed per IP
-						 *
-						 * @param int    $seconds Second amount. 10 by default.
-						 * @param string $user_ip Current IP.
-						 */
-						$expiration    = apply_filters( 'forminator_poll_request_interval_seconds', 10, $user_ip );
-						$set_transient = set_transient( $key_requests, 1, $expiration );
-						if ( ! $set_transient ) {
-							// It doesn't set transient for parallel requests.
-							return false;
-						}
-					}
-					$can_vote = $this->poll_votes_method_user_ip();
-				}
+			}
 
-				return $can_vote;
+			return $this->poll_votes_method_user_ip();
+		}
+
+		return true;
+	}
+
+	/**
+	 * Single-vote race guard for render and submit.
+	 *
+	 * Uses a transient so render reflects a recent submit, and an atomic option lock on submit
+	 * so parallel requests cannot both pass before the entry is saved.
+	 *
+	 * @since 1.58.0
+	 *
+	 * @param bool $freeze Optional. Acquire lock on submit. False by default.
+	 *
+	 * @return bool
+	 */
+	private function poll_single_vote_request_allowed( $freeze = false ) {
+		$user_ip      = Forminator_Geo::get_user_ip();
+		$key_requests = 'forminator_request_from_ip_' . $this->id . '_' . $user_ip;
+
+		// Check if the IP has made a request within the allowed interval.
+		if ( get_transient( $key_requests ) ) {
+			// IP has made a request too soon.
+			return false;
+		}
+
+		if ( ! $freeze ) {
+			return true;
+		}
+
+		/**
+		 * Filter the time interval (in seconds) between consecutive requests allowed per IP
+		 *
+		 * @param int    $seconds Second amount. 10 by default.
+		 * @param string $user_ip Current IP.
+		 */
+		$expiration  = apply_filters( 'forminator_poll_request_interval_seconds', 10, $user_ip );
+		$lock_option = 'forminator_poll_ip_lock_' . $this->id . '_' . md5( $user_ip );
+
+		if ( ! add_option( $lock_option, time(), '', 'no' ) ) {
+			$lock_time = (int) get_option( $lock_option, 0 );
+			if ( time() - $lock_time < $expiration ) {
+				return false;
+			}
+
+			delete_option( $lock_option );
+			if ( ! add_option( $lock_option, time(), '', 'no' ) ) {
+				return false;
 			}
 		}
+
+		set_transient( $key_requests, 1, $expiration );
 
 		return true;
 	}
@@ -151,7 +183,7 @@ class Forminator_Poll_Model extends Forminator_Base_Form_Model {
 						$interval = 'year';
 						break;
 				}
-				$cookie_value  = date_i18n( 'Y-m-d H:i:s', strtotime( Forminator_Core::sanitize_text_field( $_COOKIE[ $poll_cookie ] ) ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
+				$cookie_value  = date_i18n( 'Y-m-d H:i:s', strtotime( sanitize_text_field( wp_unslash( $_COOKIE[ $poll_cookie ] ) ) ) );
 				$cookie_expire = $cookie_value . ' +' . $duration . ' ' . $interval;
 				if ( time() < strtotime( $cookie_expire ) ) {
 					return false;
@@ -177,7 +209,7 @@ class Forminator_Poll_Model extends Forminator_Base_Form_Model {
 		$user_ip  = Forminator_Geo::get_user_ip();
 		if ( $this->is_allow_multiple_votes() ) {
 
-			if ( isset( $settings['vote_limit_input'] ) ) {
+			if ( isset( $settings['vote_limit_input'] ) && ! empty( $settings['vote_limit_input'] ) ) {
 				$duration           = is_numeric( $settings['vote_limit_input'] ) ? $settings['vote_limit_input'] : 0;
 				$vote_limit_options = isset( $settings['vote_limit_options'] ) ? $settings['vote_limit_options'] : 'm';
 				switch ( $vote_limit_options ) {

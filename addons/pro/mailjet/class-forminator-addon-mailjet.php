@@ -100,8 +100,6 @@ class Forminator_Mailjet extends Forminator_Integration {
 	 * @return array
 	 */
 	public function before_save_settings_values( $values ) {
-		forminator_addon_maybe_log( __METHOD__, $values );
-
 		if ( ! empty( $this->_connected_account ) ) {
 			$values['connected_account'] = $this->_connected_account;
 		}

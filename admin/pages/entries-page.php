@@ -270,13 +270,15 @@ class Forminator_Entries_Page extends Forminator_Admin_Page {
 			false
 		); // jquery inputmask.
 
-		wp_enqueue_script(
-			'forminator-inputmask-binding',
-			forminator_plugin_url() . 'assets/js/library/inputmask.binding.js',
-			array( 'jquery' ),
-			FORMINATOR_VERSION,
-			false
-		); // inputmask binding.
+		// Bind the input mask to the elements with the .forminator-numeric-span class.
+		$bind_inputmask = 'jQuery( document ).ready( function () {
+			jQuery( ".forminator-numeric-span" ).each( function (ndx, lmnt) {
+				if ( lmnt.inputmask === undefined ) {
+					Inputmask().mask(lmnt);
+				}
+			});
+		});';
+		wp_add_inline_script( 'forminator-jquery-inputmask', $bind_inputmask );
 
 		// use inline script to allow hooking into this.
 		$daterangepicker_ranges

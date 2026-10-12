@@ -232,6 +232,9 @@ class Forminator_Stripe_Connect {
 			$account_name
 		);
 
+		// Create the webhook endpoint after storing the credentials.
+		Forminator_Gateway_Stripe::create_webhook_endpoint( $save_mode );
+
 		return true;
 	}
 
@@ -251,6 +254,9 @@ class Forminator_Stripe_Connect {
 	 */
 	public function disconnect( $mode ) {
 		$mode = Forminator_Gateway_Stripe::normalize_oauth_mode( $mode );
+
+		// Delete the webhook endpoint for this site (if it exists) before clearing the credentials.
+		Forminator_Gateway_Stripe::delete_webhook_endpoint( $mode );
 
 		Forminator_Gateway_Stripe::disconnect_oauth( $mode );
 	}

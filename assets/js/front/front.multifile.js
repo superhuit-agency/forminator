@@ -210,7 +210,8 @@
 									success: data.success,
 									message: 'undefined' !== typeof responseData.message ? responseData.message : '',
 									file_id: unique_id,
-									file_name: 'undefined' !== typeof responseData.file_url ? responseData.file_url.replace(/^.*[\\\/]/, '') : item.name,
+									file_name: item.name,
+									access_token: 'undefined' !== typeof responseData.access_token ? responseData.access_token : '',
 									mime_type: item.type,
 								};
 							self.add_upload_file( element, current_file );

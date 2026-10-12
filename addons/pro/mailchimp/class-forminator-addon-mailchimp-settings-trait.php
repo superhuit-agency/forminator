@@ -235,12 +235,12 @@ trait Forminator_Mailchimp_Settings_Trait {
 			if ( Forminator_Mailchimp::is_enable_gdpr() ) {
 				$gdpr_fields = '<div class="sui-form-field">' .
 					'<label class="sui-label">' . esc_html__( 'Enable GDPR', 'forminator' ) . '</label>
-					<input type="checkbox" name="enable_gdpr" value="1" ' . checked( 1, $current_data['enable_double_opt_in'], false ) . '>
+					<input type="checkbox" name="enable_gdpr" value="1" ' . checked( 1, $current_data['enable_gdpr'], false ) . '>
 				</div>
 
 				<div class="sui-form-field">
 					<label class="sui-label">' . esc_html__( 'GDPR Text', 'forminator' ) . '</label>
-					<textarea name="gdpr_text">' . $current_data['gdpr_text'] . '</textarea>
+					<textarea name="gdpr_text">' . esc_textarea( $current_data['gdpr_text'] ) . '</textarea>
 				</div>';
 			}
 		}

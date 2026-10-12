@@ -8,6 +8,9 @@
 $user      = wp_get_current_user();
 $banner_1x = forminator_plugin_url() . 'assets/images/Feature_highlight.png';
 $banner_2x = forminator_plugin_url() . 'assets/images/Feature_highlight@2x.png';
+
+// True when Test or Live has stored API keys that were not issued via Stripe Connect.
+$stripe_connected = class_exists( 'Forminator_Gateway_Stripe' ) && Forminator_Gateway_Stripe::has_manual_api_connection();
 ?>
 
 <div class="sui-modal sui-modal-md">
@@ -41,63 +44,44 @@ $banner_2x = forminator_plugin_url() . 'assets/images/Feature_highlight@2x.png';
 
 				<h3 class="sui-box-title sui-lg" style="overflow: initial; white-space: initial; text-overflow: initial;">
 				<?php
-					esc_html_e( 'Introduce Sequential Submission IDs', 'forminator' );
+					esc_html_e( 'Support for async & delayed Stripe payments', 'forminator' );
 				?>
 				</h3>
 
 				<p class="sui-description">
 				<?php
-					esc_html_e( 'You can now generate custom, form-specific sequential IDs for every submission. Instead of global submission counters that jump across different forms.', 'forminator' );
+					esc_html_e( 'Forminator\'s upgraded Stripe integration now supports asynchronous and delayed payment methods, enabling you to accept transactions that require hours or days to process, such as bank transfers, SEPA, and ACH Direct Debit.', 'forminator' );
 				?>
 				</p>
-				<p></p>
 
-				<div class="sui-modal-list" style="text-align: left; background-color: #F8F8F8; padding: 15px; border-radius: 5px;">
-					<ul style="margin: 0; line-height: 22px;">
+				<?php if ( $stripe_connected ) : ?>
+					<div class="sui-modal-list" style="text-align: left; background-color: #F8F8F8; padding: 15px; border-radius: 5px;">
+						<div class="sui-description">
+							<?php
+							printf(
+								/* translators: 1. Bold text. 2. Bold text. */
+								esc_html__( '%1$sNote:%2$s We detected your current Stripe setup uses a manual API key connection. Switch to Stripe Connect to enable automatic webhook setup and get instant payment status updates for seamless transaction tracking.', 'forminator' ),
+								'<b>',
+								'</b>'
+							);
+							?>
+						</div>
+					</div>
+				<?php endif; ?>
 
-						<li style="line-height: 22px; margin-bottom: 10px;">
-							<h3 style="margin-bottom: 0; display: inline;">
-								<?php esc_html_e( 'Now (Custom Prefixes & Starting Numbers):', 'forminator' ); ?>
-							</h3>
-							<p class="sui-description" style="display: inline;">
-								<?php esc_html_e( 'Every form maintains its own sequence. With option to add your own prefix (e.g., INV-) and set exact starting numbers.', 'forminator' ); ?>
-							</p>
-						</li>
-
-						<li style="line-height: 22px; margin-bottom: 10px;">
-							<h3 style="margin-bottom: 0; display: inline;">
-								<?php esc_html_e( 'Unified Display:', 'forminator' ); ?>
-							</h3>
-							<p class="sui-description" style="display: inline;">
-								<?php esc_html_e( 'Custom IDs reflect seamlessly across your email notifications, submission logs, CSV exports, and PDFs.', 'forminator' ); ?>
-							</p>
-						</li>
-
-						<li style="line-height: 22px;">
-							<h3 style="margin-bottom: 0; display: inline;">
-								<?php esc_html_e( 'Enabled by Default for New Forms:', 'forminator' ); ?>
-							</h3>
-							<p class="sui-description" style="display: inline;">
-								<?php
-								printf(
-									/* translators: 1. Bold text. 2. Bold text. */
-									esc_html__( 'All newly created forms will use sequential numbering automatically. You can also turn it on anytime for existing forms in %1$sForm Settings → Sequential Form ID%2$s.', 'forminator' ),
-									'<b>',
-									'</b>'
-								);
-								?>
-							</p>
-						</li>
-
-					</ul>
-				</div>
 			</div>
 
 			<div class="sui-box-footer sui-flatten sui-content-center">
 
-				<button class="sui-button forminator-dismiss-new-feature" data-modal-close>
-					<?php esc_html_e( 'Got it!', 'forminator' ); ?>
-				</button>
+				<?php if ( $stripe_connected ) : ?>
+					<a href="<?php echo esc_url( admin_url( 'admin.php?page=forminator-settings&section=payments' ) ); ?>" class="sui-button">
+						<?php esc_html_e( 'Reconnect with Stripe', 'forminator' ); ?>
+					</a>
+				<?php else : ?>
+					<button class="sui-button forminator-dismiss-new-feature" data-modal-close>
+						<?php esc_html_e( 'Got it!', 'forminator' ); ?>
+					</button>
+				<?php endif; ?>
 
 			</div>
 

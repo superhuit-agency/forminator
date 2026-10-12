@@ -157,6 +157,7 @@ class Forminator_Captcha extends Forminator_Field {
 
 		$extra_attrs     = '';
 		$hcaptcha_notice = '';
+		$captcha_badge   = '';
 		$provider        = self::get_property( 'captcha_provider', $field, 'recaptcha' );
 		$alignment       = self::get_property( 'captcha_alignment', $field, 'left' );
 
@@ -167,7 +168,8 @@ class Forminator_Captcha extends Forminator_Field {
 			$captcha_class = 'forminator-captcha-' . $alignment . ' forminator-g-recaptcha';
 
 			if ( $this->is_invisible_recaptcha( $field ) ) {
-				$extra_attrs    = 'data-badge="' . esc_attr( self::get_property( 'captcha_badge', $field, 'inline' ) ) . '"';
+				$captcha_badge  = self::get_property( 'captcha_badge', $field, 'inline' );
+				$extra_attrs    = 'data-badge="' . esc_attr( $captcha_badge ) . '"';
 				$captcha_size   = 'invisible';
 				$captcha_class .= ' recaptcha-invisible';
 			}
@@ -202,6 +204,14 @@ class Forminator_Captcha extends Forminator_Field {
 				$hcaptcha_notice = sprintf( '<div class="forminator-checkbox__label">%s</div>', wp_kses_post( $hcaptcha_notice ) );
 			}
 		}
+
+		if ( forminator_is_block_editor_render() ) {
+			// A floating badge takes no space in the form, so those keep only their notice.
+			$takes_layout_space = 'invisible' !== $captcha_size || 'inline' === $captcha_badge;
+
+			return $takes_layout_space ? self::block_editor_placeholder( $provider ) : $hcaptcha_notice;
+		}
+
 		// don't use .g-recaptcha class as it will render automatically when other plugin load recaptcha with default render.
 		return sprintf(
 			'<div class="%s" data-theme="%s" %s data-sitekey="%s" data-size="%s"></div> %s',
@@ -212,6 +222,54 @@ class Forminator_Captcha extends Forminator_Field {
 			esc_attr( $captcha_size ),
 			$hcaptcha_notice
 		);
+	}
+
+	/**
+	 * Placeholder shown in place of the captcha widget inside the block editor.
+	 *
+	 * The editor canvas is an iframe served from a `blob:` URL, which providers reject
+	 * with "Invalid domain for site key". Styles are inline so the canvas needs no CSS.
+	 *
+	 * @since 1.58.0
+	 *
+	 * @param string $provider Captcha provider.
+	 *
+	 * @return string
+	 */
+	private static function block_editor_placeholder( $provider ) {
+		// Mirrors markup(), where anything else is hCaptcha.
+		switch ( $provider ) {
+			case 'recaptcha':
+				$label = 'reCAPTCHA';
+				break;
+			case 'turnstile':
+				$label = 'Cloudflare Turnstile';
+				break;
+			default:
+				$label = 'hCaptcha';
+				break;
+		}
+
+		$message = sprintf(
+			/* translators: %s - Captcha provider name, e.g. reCAPTCHA. */
+			esc_html__( "%s can't be previewed in the block editor. Save the post and view the form on the frontend to see it.", 'forminator' ),
+			$label
+		);
+
+		$placeholder = sprintf(
+			'<div class="forminator-captcha-placeholder" style="border:1px dashed #cbd5e0;background:#f7fafc;color:#4a5568;padding:16px 20px;border-radius:4px;font:14px/1.5 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;">%s</div>',
+			$message
+		);
+
+		/**
+		 * Filter the captcha placeholder rendered inside the block editor.
+		 *
+		 * @since 1.58.0
+		 *
+		 * @param string $placeholder Placeholder markup.
+		 * @param string $provider    Captcha provider.
+		 */
+		return apply_filters( 'forminator_captcha_block_editor_placeholder', $placeholder, $provider );
 	}
 
 	/**

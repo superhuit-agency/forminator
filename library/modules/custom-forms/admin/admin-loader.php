@@ -75,6 +75,10 @@ class Forminator_Custom_Form_Admin extends Forminator_Admin_Module {
 			if ( $id ) {
 				$data['formNonce'] = wp_create_nonce( 'forminator_save_builder_fields' );
 				$model             = Forminator_Base_Form_Model::get_model( $id );
+				// Only custom forms open here, a poll or quiz ID is treated as missing.
+				if ( ! $model instanceof Forminator_Form_Model ) {
+					$model = null;
+				}
 			}
 
 			$wrappers = array();
@@ -495,6 +499,11 @@ class Forminator_Custom_Form_Admin extends Forminator_Admin_Module {
 			return;
 		}
 
+		// The nonce guards against CSRF, it does not authorize the caller.
+		if ( ! forminator_is_user_allowed( $this->page ) ) {
+			return;
+		}
+
 		$slug = Forminator_Core::sanitize_text_field( 'template', 'blank' );
 		$name = Forminator_Core::sanitize_text_field( 'name' );
 
@@ -889,6 +898,10 @@ class Forminator_Custom_Form_Admin extends Forminator_Admin_Module {
 	public function get_cloud_templates() {
 		// Validate nonce.
 		forminator_validate_nonce_ajax( 'forminator_load_cloud_templates' );
+		// The builder lists templates too, so module access is enough to read them.
+		if ( ! forminator_is_user_allowed( 'forminator-templates' ) && ! forminator_is_user_allowed( 'forminator-cform' ) ) {
+			wp_send_json_error( esc_html__( 'You are not allowed to perform this action.', 'forminator' ) );
+		}
 
 		$page_number = filter_input( INPUT_POST, 'page_number', FILTER_VALIDATE_INT ) ?? 1;
 
@@ -972,6 +985,9 @@ class Forminator_Custom_Form_Admin extends Forminator_Admin_Module {
 		if ( ! $nonce || ! wp_verify_nonce( $nonce, 'forminator-delete-cloud-template' ) ) {
 			wp_send_json_error( esc_html__( 'You are not allowed to perform this action.', 'forminator' ) );
 		}
+		if ( ! forminator_is_user_allowed( 'forminator-templates' ) ) {
+			wp_send_json_error( esc_html__( 'You are not allowed to perform this action.', 'forminator' ) );
+		}
 
 		$id  = Forminator_Core::sanitize_text_field( 'id' );
 		$res = Forminator_Template_API::delete_template( (int) $id );
@@ -989,6 +1005,9 @@ class Forminator_Custom_Form_Admin extends Forminator_Admin_Module {
 	public function rename_template() {
 		$nonce = Forminator_Core::sanitize_text_field( 'nonce' );
 		if ( ! $nonce || ! wp_verify_nonce( $nonce, 'forminator-rename-cloud-template' ) ) {
+			wp_send_json_error( esc_html__( 'You are not allowed to perform this action.', 'forminator' ) );
+		}
+		if ( ! forminator_is_user_allowed( 'forminator-templates' ) ) {
 			wp_send_json_error( esc_html__( 'You are not allowed to perform this action.', 'forminator' ) );
 		}
 
@@ -1087,6 +1106,9 @@ class Forminator_Custom_Form_Admin extends Forminator_Admin_Module {
 	public function duplicate_template() {
 		$nonce = Forminator_Core::sanitize_text_field( 'nonce' );
 		if ( ! $nonce || ! wp_verify_nonce( $nonce, 'forminator-duplicate-cloud-template' ) ) {
+			wp_send_json_error( esc_html__( 'You are not allowed to perform this action.', 'forminator' ) );
+		}
+		if ( ! forminator_is_user_allowed( 'forminator-templates' ) ) {
 			wp_send_json_error( esc_html__( 'You are not allowed to perform this action.', 'forminator' ) );
 		}
 

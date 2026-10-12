@@ -13,6 +13,15 @@
 class Forminator_Aweber_Quiz_Hooks extends Forminator_Integration_Quiz_Hooks {
 
 	/**
+	 * Subscribers added per submission, keyed by entry ID, list ID and email.
+	 *
+	 * Static, as each connection has its own hooks instance.
+	 *
+	 * @var array
+	 */
+	private static $added_subscribers = array();
+
+	/**
 	 * Return custom entry fields
 	 *
 	 * @param array $submitted_data Submitted data.
@@ -20,6 +29,7 @@ class Forminator_Aweber_Quiz_Hooks extends Forminator_Integration_Quiz_Hooks {
 	 * @return array
 	 */
 	protected function custom_entry_fields( $submitted_data, $current_entry_fields ): array {
+		$entry                = func_get_args()[2];
 		$addon_setting_values = $this->settings_instance->get_settings_values();
 		$data                 = array();
 
@@ -29,7 +39,7 @@ class Forminator_Aweber_Quiz_Hooks extends Forminator_Integration_Quiz_Hooks {
 				// exec only on completed connection.
 				$data[] = array(
 					'name'  => 'status-' . $key,
-					'value' => $this->get_status_on_add_subscriber( $key, $submitted_data, $addon_setting_value, $current_entry_fields ),
+					'value' => $this->get_status_on_add_subscriber( $key, $submitted_data, $addon_setting_value, $current_entry_fields, $entry ),
 				);
 			}
 		}
@@ -42,15 +52,16 @@ class Forminator_Aweber_Quiz_Hooks extends Forminator_Integration_Quiz_Hooks {
 	 *
 	 * @since 1.0 AWeber Integration
 	 *
-	 * @param string $connection_id Connection Id.
-	 * @param array  $submitted_data Submitted data.
-	 * @param array  $connection_settings Connection settings.
-	 * @param array  $form_entry_fields Form entry fields.
+	 * @param string                           $connection_id Connection Id.
+	 * @param array                            $submitted_data Submitted data.
+	 * @param array                            $connection_settings Connection settings.
+	 * @param array                            $form_entry_fields Form entry fields.
+	 * @param Forminator_Form_Entry_Model|null $entry Entry.
 	 *
 	 * @return array `is_sent` true means its success send data to AWeber, false otherwise.
 	 * @throws Forminator_Integration_Exception Throws Integration Exception.
 	 */
-	private function get_status_on_add_subscriber( $connection_id, $submitted_data, $connection_settings, $form_entry_fields ) {
+	private function get_status_on_add_subscriber( $connection_id, $submitted_data, $connection_settings, $form_entry_fields, $entry ) {
 		$quiz_submitted_data = get_quiz_submitted_data( $this->module, $submitted_data, $form_entry_fields );
 		$quiz_settings       = $this->settings_instance->get_quiz_settings();
 		$addons_fields       = $this->settings_instance->get_form_fields();
@@ -62,6 +73,7 @@ class Forminator_Aweber_Quiz_Hooks extends Forminator_Integration_Quiz_Hooks {
 		$api = null;
 
 		$quiz_id                = $this->module_id;
+		$entry_id               = $entry->entry_id ?? 0;
 		$quiz_settings_instance = $this->settings_instance;
 		$quiz_settings          = $this->settings_instance->get_quiz_settings();
 
@@ -139,6 +151,12 @@ class Forminator_Aweber_Quiz_Hooks extends Forminator_Integration_Quiz_Hooks {
 						}
 					}
 				}
+			}
+
+			// Only the owner may update an existing subscriber, unless this submission added it.
+			if ( $subscriber_is_exist && empty( self::$added_subscribers[ $entry_id ][ $list_id ][ $email ] )
+				&& ! $this->addon->can_update_subscriber( $email, $existing_subscriber, $quiz_id, $connection_id, $entry ) ) {
+				throw new Forminator_Integration_Exception( esc_html__( 'Subscriber already exists, only its owner can update it.', 'forminator' ) );
 			}
 
 			// processed.
@@ -222,6 +240,8 @@ class Forminator_Aweber_Quiz_Hooks extends Forminator_Integration_Quiz_Hooks {
 				}
 			}
 
+			// Tags this connection may remove: its choice field options.
+			$managed_tags = array();
 			if ( isset( $connection_settings['tags'] ) && ! empty( $connection_settings['tags'] ) ) {
 				$tags = array();
 				foreach ( $connection_settings['tags'] as $tag ) {
@@ -231,6 +251,13 @@ class Forminator_Aweber_Quiz_Hooks extends Forminator_Integration_Quiz_Hooks {
 						// translate to value.
 						$element_id = str_ireplace( '{', '', $tag );
 						$element_id = str_ireplace( '}', '', $element_id );
+
+						// Lead entries store option labels, payments completed later send values.
+						$field = $this->lead_model ? $this->lead_model->get_field( $element_id ) : null;
+						foreach ( array_merge( Forminator_Aweber::get_choice_option_values( $field ), Forminator_Aweber::get_choice_option_values( $field, true ) ) as $option_value ) {
+							$managed_tags[] = strtolower( $option_value );
+						}
+
 						if ( isset( $submitted_data[ $element_id ] ) && ! empty( $submitted_data[ $element_id ] ) ) {
 							$element_value = $submitted_data[ $element_id ];
 							if ( is_array( $element_value ) ) {
@@ -338,6 +365,7 @@ class Forminator_Aweber_Quiz_Hooks extends Forminator_Integration_Quiz_Hooks {
 
 				$api->add_account_list_subscriber( $setting_values['account_id'], $list_id, $args );
 
+				self::$added_subscribers[ $entry_id ][ $list_id ][ $email ] = true;
 			} else {
 				/**
 				 * This will only update information
@@ -355,7 +383,7 @@ class Forminator_Aweber_Quiz_Hooks extends Forminator_Integration_Quiz_Hooks {
 				}
 
 				$add_tags    = array_diff( $args['tags'], $current_tags );
-				$remove_tags = array_diff( $current_tags, $args['tags'] );
+				$remove_tags = array_intersect( array_diff( $current_tags, $args['tags'] ), $managed_tags );
 
 				sort( $add_tags );
 				sort( $remove_tags );

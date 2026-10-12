@@ -1302,8 +1302,10 @@
 			if ( paymentPageElement.length > 0 ) {
 				if( paymentPageElement.hasClass('forminator-hidden') ) {
 					this.$el.find('.forminator-button-submit').removeClass('forminator-hidden');
-				} else{
+				} else if ( $stripe_element.length === 0 ) {
 					this.$el.find('.forminator-button-submit').addClass('forminator-hidden');
+				} else {
+					this.$el.find('.forminator-button-submit').removeClass('forminator-hidden');
 				}
 			}
 		},

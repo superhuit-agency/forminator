@@ -196,6 +196,17 @@ abstract class Forminator_Integration implements Forminator_Integration_Interfac
 	public $is_multi_global = false;
 
 	/**
+	 * Require a nonce before an integration section callback is invoked
+	 *
+	 * Integrations whose provider redirects back to a pre registered URL cannot
+	 * carry a per request nonce and must set this to false.
+	 *
+	 * @since 1.58
+	 * @var bool
+	 */
+	public $section_requires_nonce = true;
+
+	/**
 	 * Wizard steps
 	 *
 	 * @var array
@@ -216,9 +227,12 @@ abstract class Forminator_Integration implements Forminator_Integration_Interfac
 	 */
 	const NONCE_OPTION_NAME = 'forminator_custom_nonce';
 
-	const DOMAIN       = 'https://wpmudev.com';
-	const REDIRECT_URI = 'https://wpmudev.com/api/forminator/v1/provider';
-
+	/**
+	 * Handler provider endpoint path (appended to the WPMU DEV server base URL).
+	 *
+	 * @var string
+	 */
+	const HANDLER_ENDPOINT = 'api/forminator/v1/provider';
 
 	/**
 	 * Get addon instance
@@ -284,6 +298,28 @@ abstract class Forminator_Integration implements Forminator_Integration_Interfac
 	}
 
 	/**
+	 * WPMU DEV platform domain used to verify OAuth callbacks from the handler.
+	 *
+	 * Respects WPMUDEV_CUSTOM_API_SERVER for staging/testing overrides.
+	 *
+	 * @return string
+	 */
+	public static function get_domain() {
+		return untrailingslashit( forminator_get_server_url() );
+	}
+
+	/**
+	 * Handler provider endpoint URL.
+	 *
+	 * Respects WPMUDEV_CUSTOM_API_SERVER for staging/testing overrides.
+	 *
+	 * @return string
+	 */
+	public static function get_redirect_uri() {
+		return forminator_get_server_url( self::HANDLER_ENDPOINT );
+	}
+
+	/**
 	 * Get redirect URL
 	 *
 	 * @param string $provider Provider.
@@ -300,7 +336,7 @@ abstract class Forminator_Integration implements Forminator_Integration_Interfac
 			)
 		);
 
-		return add_query_arg( $params, self::REDIRECT_URI );
+		return add_query_arg( $params, self::get_redirect_uri() );
 	}
 
 	/**
@@ -315,7 +351,7 @@ abstract class Forminator_Integration implements Forminator_Integration_Interfac
 		$provider_input = filter_input( INPUT_GET, 'provider', FILTER_SANITIZE_SPECIAL_CHARS );
 
 		return ! empty( $wpnonce ) && self::verify_nonce( $wpnonce )
-			&& self::DOMAIN === $domain && $provider === $provider_input;
+			&& self::get_domain() === $domain && $provider === $provider_input;
 	}
 
 	/**
@@ -1522,10 +1558,10 @@ abstract class Forminator_Integration implements Forminator_Integration_Interfac
 		}
 
 		if ( $this->is_multi_global ) {
-			$all_values[ $this->multi_global_id ] = forminator_sanitize_array_field( $values );
+			$all_values[ $this->multi_global_id ] = forminator_sanitize_array_field( $values, true );
 		} else {
 			$all_values = array(
-				$this->multi_global_id => forminator_sanitize_array_field( $values ),
+				$this->multi_global_id => forminator_sanitize_array_field( $values, true ),
 			);
 		}
 

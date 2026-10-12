@@ -401,13 +401,14 @@ class Forminator_Poll_Front extends Forminator_Render_Form {
 				if ( $this->is_preview ) {
 					$url = '#';
 				} else {
+					// Stay relative to the current page, but keep Plain permalink args like page_id.
 					$url = add_query_arg(
 						array(
 							'results'   => 'true',
 							'form_id'   => $this->model->id,
 							'render_id' => self::$render_ids[ $this->model->id ],
 						),
-						$url
+						'?' . wp_parse_url( get_permalink( $this->get_post_id() ), PHP_URL_QUERY )
 					);
 				}
 
@@ -441,13 +442,14 @@ class Forminator_Poll_Front extends Forminator_Render_Form {
 				if ( $this->is_preview ) {
 					$url = '#';
 				} else {
+					// Stay relative to the current page, but keep Plain permalink args like page_id.
 					$url = add_query_arg(
 						array(
 							'results'   => 'true',
 							'form_id'   => $this->model->id,
 							'render_id' => self::$render_ids[ $this->model->id ],
 						),
-						$url
+						'?' . wp_parse_url( get_permalink( $this->get_post_id() ), PHP_URL_QUERY )
 					);
 				}
 				$html .= sprintf( '<a href="%s">%s</a>', esc_url( $url ), esc_html__( 'View results', 'forminator' ) );
@@ -839,7 +841,9 @@ class Forminator_Poll_Front extends Forminator_Render_Form {
 			return 'default';
 		}
 
-		return $form_settings['forminator-poll-design'];
+		$design = sanitize_html_class( $form_settings['forminator-poll-design'] );
+
+		return '' !== $design ? $design : 'default';
 	}
 
 	/**
@@ -997,6 +1001,14 @@ class Forminator_Poll_Front extends Forminator_Render_Form {
 				<?php if ( isset( $settings['enable-votes-limit'] ) && 'true' === $settings['enable-votes-limit'] ) { ?>
 
 					<div class="forminator-poll-footer forminator-poll--actions">
+
+						<?php
+						// GET forms drop the action's query string, so keep Plain permalink args like page_id.
+						parse_str( (string) wp_parse_url( $return_url, PHP_URL_QUERY ), $return_args );
+						foreach ( $return_args as $arg_name => $arg_value ) {
+							printf( '<input type="hidden" name="%s" value="%s" />', esc_attr( $arg_name ), esc_attr( $arg_value ) );
+						}
+						?>
 
 						<?php if ( 'material' === $design ) : ?>
 

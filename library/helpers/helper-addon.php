@@ -1089,9 +1089,8 @@ function forminator_addon_replace_custom_vars( $content, $submitted_data, Formin
 	array_multisort( $field_types_strlen, $field_types, SORT_DESC );
 	$field_types = array_reverse( $field_types );
 
-	$randomed_field_pattern  = 'field-\d+-\d+';
 	$increment_field_pattern = sprintf( '(%s)-\d+', implode( '|', $field_types ) );
-	$pattern                 = '/\{((' . $randomed_field_pattern . ')|(' . $increment_field_pattern . '))(\-[A-Za-z0-9_-]+)?\}/';
+	$pattern                 = '/\{((' . $increment_field_pattern . ')(\-[A-Za-z0-9_-]+)?)\}/';
 
 	// Find all field ID's.
 	if ( preg_match_all( $pattern, $content, $matches ) ) {
@@ -1448,12 +1447,114 @@ function get_quiz_submitted_data( $quiz, $data, $quiz_entry_fields ) {
 }
 
 /**
- * Flag whether doc link should shown or not for addons
+ * OAuth state lifetime for integration authorization callbacks.
  *
- * @since 1.14.2
- * @return bool
+ * @since 1.58.0
+ *
+ * @return int
  */
-function forminator_is_show_addons_documentation_link() {
-	_deprecated_function( __FUNCTION__, '1.50', 'forminator_is_show_documentation_link' );
-	return forminator_is_show_documentation_link();
+function forminator_integration_oauth_state_ttl() {
+	return 15 * MINUTE_IN_SECONDS;
+}
+
+/**
+ * Build transient storage key for an OAuth state value.
+ *
+ * @since 1.58.0
+ *
+ * @param string $state OAuth state.
+ *
+ * @return string
+ */
+function forminator_integration_oauth_state_storage_key( $state ) {
+	return 'forminator_oauth_' . hash( 'sha256', $state );
+}
+
+/**
+ * Create a single-use OAuth state bound to the current user and integration context.
+ *
+ * @since 1.58.0
+ *
+ * @param Forminator_Integration $addon      Integration addon instance.
+ * @param string                 $global_id  Multi-global integration ID.
+ * @param string                 $identifier Multi-global integration identifier.
+ * @param array                  $context    Optional addon-specific context to bind to the state.
+ *
+ * @return string Empty string when the current user cannot manage integrations.
+ */
+function forminator_integration_create_oauth_state( $addon, $global_id = '', $identifier = '', $context = array() ) {
+	if ( ! current_user_can( forminator_get_permission( 'forminator-integrations' ) ) ) {
+		return '';
+	}
+
+	$state = wp_generate_password( 64, false, false );
+
+	$payload = array(
+		'user_id'    => get_current_user_id(),
+		'slug'       => $addon->get_slug(),
+		'global_id'  => (string) $global_id,
+		'identifier' => (string) $identifier,
+	);
+
+	if ( ! empty( $context ) && is_array( $context ) ) {
+		$payload['context'] = $context;
+	}
+
+	set_transient(
+		forminator_integration_oauth_state_storage_key( $state ),
+		$payload,
+		forminator_integration_oauth_state_ttl()
+	);
+
+	return $state;
+}
+
+/**
+ * Validate and consume a single-use OAuth state for an integration callback.
+ *
+ * @since 1.58.0
+ *
+ * @param Forminator_Integration $addon      Integration addon instance.
+ * @param string                 $state      OAuth state from the callback request.
+ * @param string                 $global_id  Multi-global integration ID.
+ * @param string                 $identifier Multi-global integration identifier.
+ *
+ * @return array|false Bound context on success, false on failure.
+ */
+function forminator_integration_validate_oauth_state( $addon, $state, $global_id = '', $identifier = '' ) {
+	if ( ! current_user_can( forminator_get_permission( 'forminator-integrations' ) ) ) {
+		return false;
+	}
+
+	if ( empty( $state ) || ! is_string( $state ) ) {
+		return false;
+	}
+
+	$key     = forminator_integration_oauth_state_storage_key( $state );
+	$payload = get_transient( $key );
+
+	if ( ! is_array( $payload ) ) {
+		return false;
+	}
+
+	delete_transient( $key );
+
+	$user_id = get_current_user_id();
+	if ( empty( $user_id ) || (int) $payload['user_id'] !== (int) $user_id ) {
+		return false;
+	}
+
+	if ( ! hash_equals( (string) $payload['slug'], (string) $addon->get_slug() ) ) {
+		return false;
+	}
+
+	if ( ! hash_equals( (string) $payload['global_id'], (string) $global_id ) ) {
+		return false;
+	}
+
+	if ( ! hash_equals( (string) $payload['identifier'], (string) $identifier ) ) {
+		return false;
+	}
+
+	return isset( $payload['context'] ) && is_array( $payload['context'] ) ? $payload['context'] : array();
 }
