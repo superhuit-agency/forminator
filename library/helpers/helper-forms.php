@@ -1295,6 +1295,9 @@ function forminator_sanitize_rich_textarea_widget_hooks( $content ) {
 function forminator_get_rich_textarea_allowed_html() {
 	$allowed_html = wp_kses_allowed_html( 'post' );
 
+	// Validate URL attributes so entity-encoded markup cannot ride in them.
+	$url_attributes = wp_kses_uri_attributes();
+
 	foreach ( $allowed_html as $tag => $attributes ) {
 		if ( ! is_array( $attributes ) ) {
 			continue;
@@ -1307,6 +1310,14 @@ function forminator_get_rich_textarea_allowed_html() {
 			$allowed_html[ $tag ]['class'] = array(
 				'value_callback' => 'forminator_is_allowed_rich_textarea_class_attribute',
 			);
+		}
+
+		foreach ( $url_attributes as $url_attribute ) {
+			if ( isset( $allowed_html[ $tag ][ $url_attribute ] ) ) {
+				$allowed_html[ $tag ][ $url_attribute ] = array(
+					'value_callback' => 'forminator_is_allowed_rich_textarea_url_attribute',
+				);
+			}
 		}
 	}
 
@@ -1331,4 +1342,101 @@ function forminator_is_allowed_rich_textarea_class_attribute( $class_value ) {
 	}
 
 	return true;
+}
+
+/**
+ * Check whether a URL attribute value is safe for public rich-text admin output.
+ *
+ * Kses keeps entity-encoded values verbatim, so client-side code can decode them
+ * back into a breakout. Legitimate URLs percent-encode these, so reject any value
+ * that decodes to an angle bracket, quote or backtick.
+ *
+ * @since 1.57.3
+ *
+ * @param string $url_value URL attribute value.
+ * @return bool
+ */
+function forminator_is_allowed_rich_textarea_url_attribute( $url_value ) {
+	$decoded = (string) $url_value;
+
+	// Decode until stable to catch multi-encoded characters. Decoding only ever
+	// shortens the string, so this converges.
+	do {
+		$previous = $decoded;
+		$decoded  = html_entity_decode( $previous, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+	} while ( $decoded !== $previous );
+
+	// These characters can break out of a downstream HTML/JS sink.
+	if ( preg_match( '/[<>"\'`]/', $decoded ) ) {
+		return false;
+	}
+
+	return true;
+}
+
+/**
+ * Filter value for submissions page. Allow only a few tags to avoid XSS issues.
+ *
+ * @since 1.58
+ *
+ * @param string $value Value.
+ * @param string $type Type.
+ * @return string
+ */
+function forminator_submissions_value_filter( $value, $type = '' ) {
+	$allowed_tags = array(
+		'a'      => array(
+			'href'   => true,
+			'title'  => true,
+			'target' => true,
+			'rel'    => true,
+			'class'  => true,
+		),
+		'span'   => array(
+			'class'       => true,
+			'aria-hidden' => true,
+		),
+		'img'    => array(
+			'src'    => true,
+			'alt'    => true,
+			'title'  => true,
+			'class'  => true,
+			'width'  => true,
+			'height' => true,
+		),
+		'b'      => array(),
+		'i'      => array(),
+		'strong' => array(),
+		'br'     => array(),
+	);
+
+	if ( 'geolocation' === $type ) {
+		$allowed_tags['table'] = array(
+			'class' => true,
+			'id'    => true,
+		);
+		$allowed_tags['tbody'] = array();
+		$allowed_tags['tr']    = array();
+		$allowed_tags['td']    = array(
+			'class' => true,
+			'style' => true,
+		);
+		$allowed_tags['div']   = array(
+			'id'                  => true,
+			'class'               => true,
+			'data-height'         => true,
+			'data-lat'            => true,
+			'data-lng'            => true,
+			'data-zoom'           => true,
+			'data-maptypecontrol' => true,
+			'data-maptype'        => true,
+			'data-styles'         => true,
+			'data-mapid'          => true,
+			'data-styled_type'    => true,
+		);
+		$allowed_tags['p']     = array(
+			'class' => true,
+		);
+	}
+	return wp_kses( $value, $allowed_tags );
 }

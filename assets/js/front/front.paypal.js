@@ -117,6 +117,11 @@
 				window.paypal = window.parent.paypal;
 			}
 
+			// Skip the button when the shared SDK failed to load, instead of throwing.
+			if ( 'undefined' === typeof paypal ) {
+				return;
+			}
+
 			this.paypalButton = paypal.Buttons({
 				onInit: function(data, actions) {
 					actions.disable();
@@ -198,6 +203,7 @@
 						form_id = self.getPayPalData('form_id'),
 						request_data = self.paypal_request_data()
 					;
+					return self.ensureCaptchaToken( $form ).then( function () {
 					return fetch( ForminatorFront.ajaxUrl + '?action=forminator_pp_create_order', {
 						method: 'POST',
 						mode: "same-origin",
@@ -225,6 +231,7 @@
 						$form.find('.forminator-paypal-input').val( orderId );
 
 						return orderId;
+					});
 					});
 				},
 				onApprove: function(data, actions) {
@@ -271,6 +278,45 @@
 				},
 			});
 			this.paypalButton.render( $form.find( '.forminator-button-paypal' )[0] );
+		},
+
+		/**
+		 * Make sure a captcha token exists before the order is created.
+		 *
+		 * The PayPal flow never executes an invisible widget, so it holds no token. A v3 site
+		 * key can be executed directly, returning one without the widget's submit callback.
+		 *
+		 * @param {jQuery} $form Form.
+		 * @returns {Promise}
+		 */
+		ensureCaptchaToken: function ( $form ) {
+			var $captcha = $form.find( '.forminator-g-recaptcha' ).first(),
+				sitekey;
+
+			// Already carrying a token, or nothing to execute.
+			if ( ! $captcha.length || $form.find( 'input[name="forminator-captcha-token"]' ).val() ) {
+				return Promise.resolve();
+			}
+
+			if ( 'invisible' !== $captcha.data( 'size' ) ) {
+				return Promise.resolve();
+			}
+
+			sitekey = $captcha.data( 'sitekey' );
+
+			if ( ! sitekey || typeof grecaptcha === 'undefined' || typeof grecaptcha.execute !== 'function' ) {
+				return Promise.resolve();
+			}
+
+			return Promise.resolve( grecaptcha.execute( sitekey, { action: 'forminator_paypal' } ) )
+				.then( function ( token ) {
+					if ( token ) {
+						$( '<input>', { type: 'hidden', name: 'forminator-captcha-token' } ).val( token ).appendTo( $form );
+					}
+				} )
+				.catch( function () {
+					// A v2 invisible key cannot be executed this way, the server decides what to do.
+				} );
 		},
 
 		configurePayPal: function () {
@@ -574,17 +620,33 @@
 			var self = this,
 				formCurrency = this.paypalData.currency;
 
-			self.$el.on( 'click', function( e ) {
-				var paypalScript = $( "script[src^='https://www.paypal.com/sdk/js']" ),
-					paypalScriptSrc = paypalScript.attr( 'src' ),
-					scriptCurrency = /currency=([^&]+)/.exec( paypalScriptSrc )[1];
+			if ( ! formCurrency ) {
+				return;
+			}
 
-				if ( formCurrency === scriptCurrency ) {
+			self.$el.on( 'click', function( e ) {
+				// The SDK sits in the top document when the form is rendered in an iframe.
+				var sdkDocument = document;
+				try {
+					if ( window.parent !== window && window.parent.document ) {
+						sdkDocument = window.parent.document;
+					}
+				} catch ( error ) {}
+
+				var paypalScript = $( sdkDocument ).find( "script[src^='https://www.paypal.com/sdk/js']" ).first(),
+					paypalScriptSrc = paypalScript.attr( 'src' ),
+					currencyMatch = paypalScriptSrc ? /currency=([^&]+)/.exec( paypalScriptSrc ) : null;
+
+				// Nothing to swap, PayPal falls back to the account default currency.
+				if ( ! currencyMatch || formCurrency === currencyMatch[1] ) {
 					return;
 				}
 
-				paypalScript.attr( 'src', paypalScriptSrc.replace( 'currency='+ scriptCurrency, 'currency='+ formCurrency ) );
-				self.paypalButton.updateProps();
+				paypalScript.attr( 'src', paypalScriptSrc.replace( 'currency='+ currencyMatch[1], 'currency='+ formCurrency ) );
+
+				if ( self.paypalButton ) {
+					self.paypalButton.updateProps();
+				}
 			});
 		},
 

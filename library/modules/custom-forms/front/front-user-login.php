@@ -204,7 +204,31 @@ class Forminator_CForm_Front_User_Login extends Forminator_User {
 				'user_password' => $password,
 				'remember'      => $remember,
 			);
-			$sign_on     = wp_signon( $user_fields );
+
+			// If the entry status is pending, we need to store user data in the entry fields to login the user after the payment is completed.
+			if ( isset( $entry->status ) && 'pending' === $entry->status ) {
+				if ( empty( $sign_on ) ) {
+					// If the user is not authenticated yet, we need to authenticate them to check if they are valid.
+					$sign_on = wp_authenticate( $username, $password );
+				}
+				if ( ! is_wp_error( $sign_on ) ) {
+					// Encrypt the password before saving it to the entry fields.
+					$user_fields['user_password'] = Forminator_CForm_Front_User_Registration::openssl_encrypt( $user_fields['user_password'] );
+					if ( false === $user_fields['user_password'] ) {
+						// If the encryption fails, we can return an error.
+						$response['authentication'] = '';
+						$response['user']           = new WP_Error( 'encryption_failed', esc_html__( 'Failed to encrypt the password.', 'forminator' ) );
+						return $response;
+					}
+					// To set the data in the entry meta.
+					Forminator_CForm_Front_Action::$info['field_data_array'][] = array(
+						'name'  => '_user_login_data',
+						'value' => $user_fields,
+					);
+				}
+			} else {
+				$sign_on = wp_signon( $user_fields );
+			}
 		}
 
 		$response['authentication'] = '';

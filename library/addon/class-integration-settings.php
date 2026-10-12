@@ -368,7 +368,7 @@ abstract class Forminator_Integration_Settings {
 		 * @param int   $module_id current module id.
 		 */
 		$addon_settings = apply_filters( 'forminator_addon_' . $addon_slug . '_save_' . static::$module_slug . '_settings_values', $addon_settings, $module_id );
-		update_post_meta( $module_id, $this->get_settings_meta_key(), forminator_sanitize_array_field( $addon_settings ) );
+		update_post_meta( $module_id, $this->get_settings_meta_key(), forminator_sanitize_array_field( $addon_settings, true ) );
 	}
 
 	/**

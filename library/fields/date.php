@@ -1093,21 +1093,21 @@ class Forminator_Date extends Forminator_Field {
 		$field       = $this->field;
 		$id          = self::get_property( 'element_id', $field );
 		$type        = trim( self::get_property( 'field_type', $field ) );
-		$date_format = self::get_property( 'date_format', $field );
+		$date_format = $this->sanitize_date_format_setting( self::get_property( 'date_format', $field ) );
+		$field_key   = sanitize_html_class( (string) $this->get_id( $field ) );
 		$rules       = '';
 
 		if ( 'picker' === $type ) {
-			$rules .= '"' . $this->get_id( $field ) . '": {' . "\n";
+			$rule = array();
 			if ( $this->is_required( $field ) ) {
-				$rules .= '"required": true,';
+				$rule['required'] = true;
 			}
-
-			$rules .= '"dateformat": "' . $date_format . '",';
-			$rules .= '},' . "\n";
+			$rule['dateformat'] = $date_format;
+			$rules             .= '"' . $field_key . '": ' . wp_json_encode( $rule ) . ',' . "\n";
 		} elseif ( $this->is_required( $field ) ) {
-				$rules .= '"' . $this->get_id( $field ) . '-day": "required",';
-				$rules .= '"' . $this->get_id( $field ) . '-month": "required",';
-				$rules .= '"' . $this->get_id( $field ) . '-year": "required",';
+			$rules .= '"' . $field_key . '-day": "required",';
+			$rules .= '"' . $field_key . '-month": "required",';
+			$rules .= '"' . $field_key . '-year": "required",';
 		}
 
 		return apply_filters( 'forminator_field_date_validation_rules', $rules, $id, $field );
@@ -1122,23 +1122,24 @@ class Forminator_Date extends Forminator_Field {
 	public function get_validation_messages() {
 		$field                       = $this->field;
 		$type                        = trim( self::get_property( 'field_type', $field ) );
-		$date_format                 = self::get_property( 'date_format', $field );
+		$date_format                 = $this->sanitize_date_format_setting( self::get_property( 'date_format', $field ) );
 		$required_validation_message = self::get_property( 'required_message', $field, '' );
 		$month_label                 = self::get_property( 'month_label', $field, '' );
 		$day_label                   = self::get_property( 'day_label', $field, '' );
 		$year_label                  = self::get_property( 'year_label', $field, '' );
+		$field_key                   = sanitize_html_class( (string) $this->get_id( $field ) );
 
 		if ( empty( $required_validation_message ) ) {
 			if ( 'picker' === $type ) {
-				$required_validation_message = esc_html( self::$default_required_messages[ $this->type ] );
+				$required_validation_message = self::$default_required_messages[ $this->type ];
 			} else {
-				$required_validation_message = ' ' . esc_html__( 'field is required.', 'forminator' );
+				$required_validation_message = ' ' . __( 'field is required.', 'forminator' );
 			}
 		}
 
 		$messages = '';
 		if ( 'picker' === $type ) {
-			$messages = '"' . $this->get_id( $field ) . '": {' . "\n";
+			$picker_messages = array();
 			if ( $this->is_required( $field ) ) {
 				$required_validation_message = apply_filters(
 					'forminator_field_date_required_validation_message',
@@ -1148,20 +1149,21 @@ class Forminator_Date extends Forminator_Field {
 					$date_format,
 					$this
 				);
-				$messages                   .= '"required": "' . forminator_addcslashes( $required_validation_message ) . '",' . "\n";
+				$picker_messages['required'] = esc_html( $required_validation_message );
 			}
 
 			$format_validation_message = apply_filters(
 				'forminator_field_date_format_validation_message',
-				esc_html__( 'Not valid date', 'forminator' ),
+				__( 'Not valid date', 'forminator' ),
 				$field,
 				$type,
 				$date_format,
 				$this
 			);
 
-			$messages .= '"dateformat": "' . forminator_addcslashes( $format_validation_message ) . '",' . "\n";
-			$messages .= '},' . "\n";
+			$picker_messages['dateformat'] = esc_html( $format_validation_message );
+
+			$messages = '"' . $field_key . '": ' . wp_json_encode( $picker_messages ) . ',' . "\n";
 		} elseif ( $this->is_required( $field ) ) {
 				$day_validation_message = apply_filters(
 					'forminator_field_date_day_validation_message',
@@ -1171,7 +1173,8 @@ class Forminator_Date extends Forminator_Field {
 					$date_format,
 					$this
 				);
-				$messages               = '"' . $this->get_id( $field ) . '-day": "<strong>' . forminator_addcslashes( $day_label ) . '</strong> ' . forminator_addcslashes( $day_validation_message ) . '",' . "\n";
+				$day_message            = '<strong>' . esc_html( $day_label ) . '</strong> ' . esc_html( $day_validation_message );
+				$messages               = '"' . $field_key . '-day": ' . wp_json_encode( $day_message ) . ',' . "\n";
 
 				$month_validation_message = apply_filters(
 					'forminator_field_date_month_validation_message',
@@ -1181,7 +1184,8 @@ class Forminator_Date extends Forminator_Field {
 					$date_format,
 					$this
 				);
-				$messages                .= '"' . $this->get_id( $field ) . '-month": "<strong>' . forminator_addcslashes( $month_label ) . '</strong> ' . forminator_addcslashes( $month_validation_message ) . '",' . "\n";
+				$month_message            = '<strong>' . esc_html( $month_label ) . '</strong> ' . esc_html( $month_validation_message );
+				$messages                .= '"' . $field_key . '-month": ' . wp_json_encode( $month_message ) . ',' . "\n";
 
 				$year_validation_message = apply_filters(
 					'forminator_field_date_year_validation_message',
@@ -1191,10 +1195,42 @@ class Forminator_Date extends Forminator_Field {
 					$date_format,
 					$this
 				);
-				$messages               .= '"' . $this->get_id( $field ) . '-year": "<strong>' . forminator_addcslashes( $year_label ) . '</strong> ' . forminator_addcslashes( $year_validation_message ) . '",' . "\n";
+				$year_message            = '<strong>' . esc_html( $year_label ) . '</strong> ' . esc_html( $year_validation_message );
+				$messages               .= '"' . $field_key . '-year": ' . wp_json_encode( $year_message ) . ',' . "\n";
 		}
 
 		return apply_filters( 'forminator_field_date_validation_message', $messages, $field, $type, $date_format, $this );
+	}
+
+	/**
+	 * Restrict date formats used in front-end validation to a safe character set.
+	 *
+	 * @param string $date_format Date format setting.
+	 * @return string
+	 */
+	private function sanitize_date_format_setting( $date_format ) {
+		$date_format = preg_replace( '/[^a-zA-Z0-9.\-\/]/', '', (string) $date_format );
+		if ( '' === $date_format ) {
+			return 'mm/dd/yy';
+		}
+
+		return $date_format;
+	}
+
+	/**
+	 * Get escaped restrict / unavailable-date validation message.
+	 *
+	 * @param array $field Field settings.
+	 * @return string
+	 */
+	private function get_restrict_validation_message( $field ) {
+		$message = self::get_property(
+			'restrict_message',
+			$field,
+			__( 'Please select one of the available dates.', 'forminator' )
+		);
+
+		return esc_html( $message );
 	}
 
 	/**
@@ -1215,7 +1251,9 @@ class Forminator_Date extends Forminator_Field {
 		$restrict_type   = self::get_property( 'howto-restrict', $field );
 
 		if ( $this->is_required( $field ) ) {
-			$required_validation_message = self::get_property( 'required_message', $field, esc_html( self::$default_required_messages[ $this->type ] ) );
+			$required_validation_message = esc_html(
+				self::get_property( 'required_message', $field, self::$default_required_messages[ $this->type ] )
+			);
 			if ( empty( $data ) ) {
 				$this->validation_message[ $id ] = apply_filters(
 					'forminator_field_date_required_field_validation_message',
@@ -1434,7 +1472,7 @@ class Forminator_Date extends Forminator_Field {
 						if ( in_array( strtolower( $current_day ), $restrict, true ) ) {
 							$this->validation_message[ $id ] = apply_filters(
 								'forminator_field_date_valid_between_date_validation_message',
-								self::get_property( 'restrict_message', $field, esc_html__( 'Please select one of the available dates.', 'forminator' ) )
+								self::get_restrict_validation_message( $field )
 							);
 						}
 					}
@@ -1463,7 +1501,7 @@ class Forminator_Date extends Forminator_Field {
 					if ( ! empty( $start_date ) && strtotime( $selected_date ) < strtotime( $start_date ) ) {
 						$this->validation_message[ $id ] = apply_filters(
 							'forminator_field_date_valid_between_date_validation_message',
-							self::get_property( 'restrict_message', $field, esc_html__( 'Please select one of the available dates.', 'forminator' ) )
+							self::get_restrict_validation_message( $field )
 						);
 					}
 				}
@@ -1491,7 +1529,7 @@ class Forminator_Date extends Forminator_Field {
 					if ( ! empty( $end_date ) && strtotime( $selected_date ) > strtotime( $end_date ) ) {
 						$this->validation_message[ $id ] = apply_filters(
 							'forminator_field_date_valid_between_date_validation_message',
-							self::get_property( 'restrict_message', $field, esc_html__( 'Please select one of the available dates.', 'forminator' ) )
+							self::get_restrict_validation_message( $field )
 						);
 					}
 				}
@@ -1502,7 +1540,7 @@ class Forminator_Date extends Forminator_Field {
 				if ( ! empty( $disabled_dates ) && in_array( $formatted_selected_date, $disabled_dates, true ) ) {
 					$this->validation_message[ $id ] = apply_filters(
 						'forminator_field_date_valid_disabled_validation_message',
-						self::get_property( 'restrict_message', $field, esc_html__( 'Please select one of the available dates.', 'forminator' ) )
+						self::get_restrict_validation_message( $field )
 					);
 				}
 
@@ -1522,7 +1560,7 @@ class Forminator_Date extends Forminator_Field {
 					if ( ! $has_range ) {
 						$this->validation_message[ $id ] = apply_filters(
 							'forminator_field_date_valid_disabled_validation_message',
-							self::get_property( 'restrict_message', $field, esc_html__( 'Please select one of the available dates.', 'forminator' ) )
+							self::get_restrict_validation_message( $field )
 						);
 					}
 				}

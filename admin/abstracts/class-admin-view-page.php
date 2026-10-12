@@ -602,6 +602,11 @@ abstract class Forminator_Admin_View_Page extends Forminator_Admin_Page {
 			return;
 		}
 
+		// The nonce guards against CSRF, it does not authorize the caller.
+		if ( ! forminator_is_user_allowed( $this->get_admin_page() ) ) {
+			return;
+		}
+
 		switch ( $action ) {
 			case 'approve-users':
 				$this->approve_users();

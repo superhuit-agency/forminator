@@ -67,6 +67,12 @@ foreach ( $this->entries_iterator() as $entries ) {
 
 					echo esc_html( $db_entry_id );
 
+				if ( 'pending' === $entries['status'] ) {
+					echo '<span class="sui-tag sui-tag-blue status-tag">' . esc_html__( 'Pending', 'forminator' ) . '</span>';
+				} elseif ( 'failed' === $entries['status'] ) {
+					echo '<span class="sui-tag sui-tag-red status-tag">' . esc_html__( 'Failed', 'forminator' ) . '</span>';
+				}
+
 				echo '</td>';
 
 			else :
@@ -385,7 +391,7 @@ foreach ( $this->entries_iterator() as $entries ) {
 
 												<?php else : ?>
 
-													<span><?php echo wp_kses_post( $integration['value'] ); ?></span>
+													<span><?php echo forminator_submissions_value_filter( $integration['value'] ); /* PHPCS:ignore WordPress.Security.EscapeOutput.OutputNotEscaped */ ?></span>
 
 												<?php endif; ?>
 
@@ -411,7 +417,7 @@ foreach ( $this->entries_iterator() as $entries ) {
 
 															<div class="">
 																<span class="sui-settings-label"><?php echo esc_html( $sub_entry['label'] ); ?></span>
-																<span class="sui-description"><?php echo wp_kses_post( $sub_entry['value'] ); ?></span>
+																<span class="sui-description"><?php echo forminator_submissions_value_filter( $sub_entry['value'] ); /* PHPCS:ignore WordPress.Security.EscapeOutput.OutputNotEscaped */ ?></span>
 															</div>
 
 														<?php } ?>

@@ -54,7 +54,7 @@ class Forminator_Captcha_Verification {
 	 *
 	 * @param string      $user_response User response.
 	 * @param null|string $remote_ip Remote IP.
-	 * @param string      $score Score.
+	 * @param string      $score Score threshold, empty when none is configured.
 	 *
 	 * @return bool|WP_Error (true on success, WP_Error on fail)
 	 */
@@ -96,24 +96,43 @@ class Forminator_Captcha_Verification {
 			return $error;
 		}
 
-		if ( 'recaptcha' === $provider ) {
+		$success = isset( $json['success'] ) && true === $json['success'];
 
-			if ( ! empty( $score ) && ! empty( $json['score'] ) && floatval( $json['score'] ) < floatval( $score ) ) {
-				$error = new WP_Error( 'recaptcha_failed_score', 'Score is lower than expected.', array( $body ) );
+		// The threshold only qualifies a successful verification.
+		if ( $success && ! empty( $score ) && is_numeric( $score ) ) {
+			$response_score = $json['score'] ?? null;
+
+			// A threshold cannot be enforced without a score.
+			if ( ! is_numeric( $response_score ) ) {
+				$error = new WP_Error( $provider . '_missing_score', 'Score is missing from the response.', array( $body ) );
 				forminator_maybe_log( __METHOD__, $error );
 
 				return $error;
 			}
-		} elseif ( ! empty( $score ) && ! empty( $json['score'] ) && floatval( $json['score'] ) >= floatval( $score ) ) {
 
-				$error = new WP_Error( 'hcaptcha_failed_score', 'Score is higher than expected.', array( $body ) );
+			// reCAPTCHA scores trust, so a score below the threshold fails. Nothing sits below
+			// 0.0, so that threshold also refuses the worst score or it could never refuse
+			// anything. hCaptcha scores risk, so its comparison is reversed.
+			if ( 'recaptcha' === $provider ) {
+				$score_value = floatval( $response_score );
+				$threshold   = floatval( $score );
+				$failed      = $score_value < $threshold || ( 0.0 === $threshold && 0.0 === $score_value );
+				$message     = 'Score is lower than expected.';
+			} else {
+				$failed  = floatval( $response_score ) >= floatval( $score );
+				$message = 'Score is higher than expected.';
+			}
+
+			if ( $failed ) {
+				$error = new WP_Error( $provider . '_failed_score', $message, array( $body ) );
 				forminator_maybe_log( __METHOD__, $error );
 
 				return $error;
+			}
 		}
 
 		// success verify.
-		if ( isset( $json['success'] ) && true === $json['success'] ) {
+		if ( $success ) {
 			return true;
 		}
 

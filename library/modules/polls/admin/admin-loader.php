@@ -274,6 +274,11 @@ class Forminator_Poll_Admin extends Forminator_Admin_Module {
 			return;
 		}
 
+		// The nonce guards against CSRF, it does not authorize the caller.
+		if ( ! forminator_is_user_allowed( $this->page ) ) {
+			return;
+		}
+
 		$name   = Forminator_Core::sanitize_text_field( 'name' );
 		$status = Forminator_Poll_Model::STATUS_DRAFT;
 
@@ -392,7 +397,7 @@ class Forminator_Poll_Admin extends Forminator_Admin_Module {
 		$answers = array();
 		// Check if answers exist.
 		if ( isset( $template->answers ) ) {
-			$answers = forminator_sanitize_array_field( $template->answers );
+			$answers = forminator_sanitize_array_field( $template->answers, true );
 			$answers = wp_slash( $answers );
 		}
 

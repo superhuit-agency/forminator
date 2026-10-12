@@ -14,6 +14,9 @@
 	// as this (slightly) quickens the resolution process and can be more efficiently
 	// minified (especially when both are regularly referenced in your plugin).
 
+	// PayPal JS SDK, shared by every form on the page.
+	var PAYPAL_SDK_URL = 'https://www.paypal.com/sdk/js';
+
 	// Create the defaults once
 	var pluginName = "forminatorLoader",
 	    defaults   = {
@@ -292,8 +295,7 @@
 		maybe_append_scripts: function (scripts) {
 			var self           = this,
 				scripts_to_load = [],
-				hasHustle       = $( 'body' ).find( '.hustle-ui' ).length,
-            paypal_src      = $( 'body' ).find( "script[src^='https://www.paypal.com/sdk/js']" ).attr('src')
+				hasHustle       = $( 'body' ).find( '.hustle-ui' ).length
 			;
 
 			for (var script_id in scripts) {
@@ -314,11 +316,18 @@
 					var script = {};
 					script.src = scripts[script_id].src;
 					script.async = scripts[ script_id ].async ?? true;
-                    // Check if a paypal script is already loaded.
-                    if ( script.src !== paypal_src ) {
-                        scripts_to_load.push(script);
-                        this.scriptsQue.push(script_id);
-                    }
+
+					// PayPal is shared between all forms on the page, only one of them loads it.
+					if ( self.is_paypal_sdk( script.src ) ) {
+						if ( self.reserve_paypal_sdk( script_id ) ) {
+							scripts_to_load.push(script);
+						}
+
+						continue;
+					}
+
+					scripts_to_load.push(script);
+					this.scriptsQue.push(script_id);
 				}
 			}
 
@@ -336,44 +345,197 @@
 
 		},
 
-		load_script: function (script_props) {
-			var self   = this;
-			var script = document.createElement('script');
-			var body   = document.getElementsByTagName('body')[0];
+		/**
+		 * Check whether the script url is the PayPal JS SDK.
+		 *
+		 * @param {string} src Script url.
+		 *
+		 * @return {boolean}
+		 */
+		is_paypal_sdk: function (src) {
+			return 'string' === typeof src && 0 === src.indexOf( PAYPAL_SDK_URL );
+		},
 
-			script.type   = 'text/javascript';
-			script.src    = script_props.src;
-			script.async  = script_props.async;
-			script.defer  = true;
-			script.onload = function () {
+		/**
+		 * Get the window holding the PayPal SDK. The block editor renders its canvas in an
+		 * iframe, so the SDK lives in the top document and is shared from there.
+		 *
+		 * @return {Window}
+		 */
+		paypal_host: function () {
+			try {
+				if ( window.parent !== window && window.parent.document ) {
+					return window.parent;
+				}
+			} catch ( e ) {
+				// Cross-origin parent, stay in the current window.
+			}
+
+			return window;
+		},
+
+		/**
+		 * Get the shared state of the single PayPal SDK load.
+		 *
+		 * @return {Object}
+		 */
+		paypal_registry: function () {
+			var host = this.paypal_host();
+
+			if ( ! host.forminatorPayPalSdk ) {
+				host.forminatorPayPalSdk = { state: 'idle', callbacks: [] };
+			}
+
+			var registry = host.forminatorPayPalSdk;
+
+			// Adopt an SDK enqueued by PHP or injected before this loader ran.
+			if ( 'idle' === registry.state ) {
+				var existing = $( host.document ).find( 'script[src^="' + PAYPAL_SDK_URL + '"]' );
+
+				if ( host.paypal ) {
+					registry.state = 'loaded';
+				} else if ( existing.length ) {
+					registry.state = 'loading';
+					this.watch_paypal_script( existing.get( 0 ) );
+				}
+			}
+
+			return registry;
+		},
+
+		/**
+		 * Reserve the shared PayPal SDK for this form.
+		 *
+		 * The SDK can only be evaluated once per document, a second evaluation makes zoid
+		 * destroy the buttons already rendered by the first one. Forms that do not get the
+		 * reservation wait for the single load instead of injecting their own copy.
+		 *
+		 * @param {string} script_id Script handle.
+		 *
+		 * @return {boolean} True when this form has to load the SDK itself.
+		 */
+		reserve_paypal_sdk: function (script_id) {
+			var self     = this,
+			    registry = self.paypal_registry();
+
+			if ( 'loaded' === registry.state ) {
+				self.adopt_paypal();
+
+				return false;
+			}
+
+			self.scriptsQue.push(script_id);
+			registry.callbacks.push( function () {
+				self.adopt_paypal();
 				self.script_on_load();
+			} );
+
+			// Another form is already loading it.
+			if ( 'loading' === registry.state ) {
+				return false;
+			}
+
+			registry.state = 'loading';
+
+			return true;
+		},
+
+		/**
+		 * Release the forms waiting on the shared SDK once it settles.
+		 *
+		 * @param {Element} element SDK script tag.
+		 */
+		watch_paypal_script: function (element) {
+			var self = this;
+
+			if ( ! element || element.forminatorPayPalWatched ) {
+				return;
+			}
+			element.forminatorPayPalWatched = true;
+
+			var done = function ( event ) {
+				var registry  = self.paypal_registry(),
+				    callbacks = registry.callbacks,
+				    failed    = !! event && 'error' === event.type;
+
+				if ( failed ) {
+					// Drop the tag too, a retry would otherwise adopt it and wait for a load that never comes.
+					registry.state = 'idle';
+
+					if ( element.parentNode ) {
+						element.parentNode.removeChild( element );
+					}
+				} else {
+					registry.state = 'loaded';
+				}
+
+				registry.callbacks = [];
+
+				for ( var i = 0; i < callbacks.length; i++ ) {
+					callbacks[i]();
+				}
 			};
 
-			// Check if script is already loaded or not.
-			if ( 0 === $( 'script[src="' + script.src + '"]' ).length ) {
-				if( window.parent !== window && script_props.src.includes( "paypal.com" ) ) {
-					// Handle the case when PayPal is loaded in an iframe (e.g., in the theme editor).
-					var parentScript = window.parent.document.createElement('script');
-						parentScript.type = 'text/javascript';
-						parentScript.src = script_props.src;
-						parentScript.async = script_props.async;
-						parentScript.defer = true;
-						parentScript.onload = function () {
-							self.script_on_load();
-						};
+			// It may have finished loading before we got a chance to watch it.
+			if ( self.paypal_host().paypal ) {
+				done();
 
-						// Check if script is already loaded in the parent document.
-						if ( 0 === $(window.parent.document).find('script[src="' + parentScript.src + '"]').length ) {
-							window.parent.document.body.appendChild(parentScript);
-						} else {
-							self.script_on_load();
-						}
-				} else {
-					body.appendChild(script);
-				}
-			} else {
-				self.script_on_load();
+				return;
 			}
+
+			element.addEventListener( 'load', done );
+			// Release the waiting forms on failure too, so they never hang.
+			element.addEventListener( 'error', done );
+		},
+
+		/**
+		 * Expose the shared SDK to the current window when it was loaded in the parent.
+		 */
+		adopt_paypal: function () {
+			var host = this.paypal_host();
+
+			if ( host !== window && host.paypal && ! window.paypal ) {
+				window.paypal = host.paypal;
+			}
+		},
+
+		load_script: function (script_props) {
+			var self      = this;
+			var is_paypal = self.is_paypal_sdk( script_props.src );
+			// PayPal goes into the document holding the shared SDK, the top one when the form
+			// is rendered inside an iframe such as the block editor canvas.
+			var doc       = is_paypal ? self.paypal_host().document : document;
+			var loaded    = $( doc ).find( 'script[src="' + script_props.src + '"]' );
+
+			// Check if script is already loaded or not.
+			if ( loaded.length ) {
+				if ( is_paypal ) {
+					self.watch_paypal_script( loaded.get( 0 ) );
+				} else {
+					self.script_on_load();
+				}
+
+				return;
+			}
+
+			var script = doc.createElement('script');
+			var body   = doc.getElementsByTagName('body')[0];
+
+			script.type  = 'text/javascript';
+			script.src   = script_props.src;
+			script.async = script_props.async;
+			script.defer = true;
+
+			if ( is_paypal ) {
+				// Every waiting form is released at once when the shared SDK settles.
+				self.watch_paypal_script( script );
+			} else {
+				script.onload = function () {
+					self.script_on_load();
+				};
+			}
+
+			body.appendChild(script);
 		},
 
 		script_on_load: function () {

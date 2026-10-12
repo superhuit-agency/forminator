@@ -63,7 +63,7 @@ $form_type = $this->get_form_type();
 										<tr>
 
 											<td><?php echo esc_html( $lead_entry['name'] ); ?></td>
-											<td><?php echo wp_kses_post( $lead_entry['value'] ); ?></td>
+											<td><?php echo forminator_submissions_value_filter( $lead_entry['value'] ); /* PHPCS:ignore WordPress.Security.EscapeOutput.OutputNotEscaped */ ?></td>
 
 										</tr>
 

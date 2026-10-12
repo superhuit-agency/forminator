@@ -74,17 +74,6 @@ trait Forminator_Webhook_Settings_Trait {
 			$module_id,
 			$connection_settings
 		);
-		$endpoint = apply_filters_deprecated(
-			'forminator_addon_webhook_endpoint',
-			array(
-				$endpoint,
-				$module_id,
-				$connection_settings,
-			),
-			'1.33',
-			'forminator_addon_webhook_' . static::$module_slug . '_endpoint'
-		);
-
 		forminator_addon_maybe_log( __METHOD__, $endpoint );
 		$api = $this->addon->get_api( $endpoint );
 
@@ -111,17 +100,6 @@ trait Forminator_Webhook_Settings_Trait {
 			$sample_data,
 			$module_id,
 			$submitted_data
-		);
-
-		$sample_data = apply_filters_deprecated(
-			'forminator_addon_webhook_sample_data',
-			array(
-				$sample_data,
-				$module_id,
-				$submitted_data,
-			),
-			'1.33',
-			'forminator_addon_webhook_' . static::$module_slug . '_sample_data'
 		);
 
 		$api->post_( $sample_data );
@@ -262,6 +240,10 @@ trait Forminator_Webhook_Settings_Trait {
 					'file_url'  => get_home_url(),
 					'file_path' => $sample_file_path,
 				);
+
+				if ( filter_var( $form_field['use_library'] ?? false, FILTER_VALIDATE_BOOLEAN ) ) {
+					$sample_data[ $form_field['element_id'] . '-post-id' ] = '0';
+				}
 			}
 		}
 

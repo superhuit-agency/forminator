@@ -141,14 +141,17 @@ abstract class Forminator_Result {
 	 * @return mixed
 	 */
 	public function build_permalink( $id = false ) {
+		$remove_query_args = array( 'stripe_session_id', 'session_id', 'error', 'error_code', 'error_message', 'error_description', 'redirect_status' );
+		$http_referer      = $this->post_data['_wp_http_referer'];
+		$http_referer      = remove_query_arg( $remove_query_args, $http_referer );
 		if ( empty( $this->entry_id ) ) {
-			return $this->post_data['_wp_http_referer'];
+			return $http_referer;
 		}
 
 		$permalink = get_option( 'permalink_structure' );
 
 		if ( empty( $permalink ) ) {
-			$query        = wp_parse_url( $this->post_data['_wp_http_referer'] );
+			$query        = wp_parse_url( $http_referer );
 			$query_params = array();
 
 			if ( isset( $query['query'] ) ) {
@@ -160,7 +163,6 @@ abstract class Forminator_Result {
 			return home_url( '?' . http_build_query( $query_params, '', '&' ) );
 		}
 
-		$http_referer = $this->post_data['_wp_http_referer'];
 		$http_referer = preg_replace( '/entries((.*))?/', '', $http_referer );
 
 		return $http_referer . 'entries/' . $this->entry_id . '/';

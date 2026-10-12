@@ -80,6 +80,22 @@ class Forminator_Gateway_Stripe {
 	private const SETTINGS_OPTION = 'forminator_stripe_configuration';
 
 	/**
+	 * Webhook events that Forminator is interested in.
+	 *
+	 * @since 1.56.0
+	 */
+	public const ENABLED_WEBHOOK_EVENTS = array(
+		'checkout.session.async_payment_failed',
+		'checkout.session.async_payment_succeeded',
+		'checkout.session.completed',
+		'checkout.session.expired',
+		'payment_intent.processing',
+		'payment_intent.succeeded',
+		'payment_intent.payment_failed',
+		'setup_intent.setup_failed',
+	);
+
+	/**
 	 * Forminator_Gateway_Stripe constructor.
 	 *
 	 * @throws Forminator_Gateway_Exception When there is a Gateway error.
@@ -354,6 +370,209 @@ class Forminator_Gateway_Stripe {
 	}
 
 	/**
+	 * Whether Test or Live has stored API keys that were not issued via Stripe Connect.
+	 *
+	 * Modes are independent, so a manual connection in either mode is enough.
+	 *
+	 * @since 1.58.0
+	 *
+	 * @return bool
+	 */
+	public static function has_manual_api_connection() {
+		foreach ( array( 'test', 'live' ) as $mode ) {
+			if ( self::is_mode_configured( $mode ) && ! self::is_oauth_connected( $mode ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Whether the webhook endpoint for the given mode is currently active.
+	 *
+	 * @since 1.58.0
+	 *
+	 * @param string $mode 'live' or 'test'.
+	 *
+	 * @return bool
+	 */
+	public static function is_webhook_active( $mode ) {
+		$option_name = self::get_webhook_option_name( $mode );
+		$webhook     = get_option( $option_name );
+		if ( ! empty( $webhook ) && ! empty( $webhook['id'] ) ) {
+			return self::check_webhook_endpoint_is_active( $mode, $webhook['id'] );
+		}
+		return false;
+	}
+
+	/**
+	 * Whether the webhook endpoint can be created for the given mode.
+	 *
+	 * @since 1.58.0
+	 *
+	 * @param string $mode 'live' or 'test'.
+	 *
+	 * @return bool
+	 */
+	public static function allow_webhook_creation( $mode ) {
+		$settings = self::get_stored_settings();
+		$prefix   = self::mode_prefix( $mode );
+
+		$has_key    = ! empty( $settings[ $prefix . 'key' ] ) && ! empty( $settings[ $prefix . 'secret' ] );
+		$secret_key = ! empty( $settings[ $prefix . 'secret' ] ) ? $settings[ $prefix . 'secret' ] : '';
+
+		return $has_key && strpos( $secret_key, 'sk_' ) === 0;
+	}
+
+	/**
+	 * Check if the webhook endpoint is valid.
+	 *
+	 * @since 1.58.0
+	 *
+	 * @param bool $stored_flag Optional. If true, check the stored option instead of making an API call. Default false.
+	 * @return bool True if the webhook endpoint is valid, false otherwise.
+	 */
+	public static function has_valid_webhook( $stored_flag = false ) {
+		if ( true === $stored_flag ) {
+			$has_valid_webhook = get_option( 'forminator_stripe_webhook_valid', 'invalid' );
+			return 'valid' === $has_valid_webhook;
+		}
+		$status = true;
+		if ( ( self::is_mode_configured( 'test' ) && false === self::is_webhook_active( 'test' ) )
+			|| ( self::is_mode_configured( 'live' ) && false === self::is_webhook_active( 'live' ) ) ) {
+			$status = false;
+		}
+		update_option( 'forminator_stripe_webhook_valid', $status ? 'valid' : 'invalid', true );
+		return $status;
+	}
+
+	/**
+	 * Check if any of the webhook endpoints (test or live) is valid.
+	 *
+	 * @since 1.58.0
+	 *
+	 * @return bool True if any of the webhook endpoints is valid, false otherwise.
+	 */
+	public static function has_any_valid_webhook() {
+		if ( ( self::is_mode_configured( 'test' ) && true === self::is_webhook_active( 'test' ) )
+			|| ( self::is_mode_configured( 'live' ) && true === self::is_webhook_active( 'live' ) ) ) {
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Check if the webhook URL is reachable.
+	 *
+	 * @since 1.58.0
+	 *
+	 * @return bool True if the webhook URL is reachable, false otherwise.
+	 */
+	public static function is_webhook_reachable() {
+		$cached_status = get_transient( 'forminator_stripe_webhook_reachable' );
+		if ( false !== $cached_status ) {
+			return 'enabled' === $cached_status;
+		}
+		$url      = self::get_webhook_url();
+		$response = wp_remote_post( $url );
+		if ( ! is_wp_error( $response ) && 200 === wp_remote_retrieve_response_code( $response ) ) {
+			$status = 'enabled';
+		} else {
+			$status = 'disabled';
+		}
+		// Cache the status for 1 day to avoid frequent API calls.
+		set_transient( 'forminator_stripe_webhook_reachable', $status, DAY_IN_SECONDS );
+		return 'enabled' === $status;
+	}
+
+	/**
+	 * Check if the webhook endpoint is active by retrieving its status from Stripe.
+	 *
+	 * @since 1.58.0
+	 *
+	 * @param string $mode 'live' or 'test'.
+	 * @param string $webhook_id The ID of the webhook endpoint to check.
+	 *
+	 * @return bool True if the webhook endpoint is active, false otherwise.
+	 */
+	private static function check_webhook_endpoint_is_active( $mode, $webhook_id ) {
+		$transient_key = 'forminator_stripe_webhook_endpoint_status_' . $mode . '_' . $webhook_id;
+		$cached_status = get_transient( $transient_key );
+		if ( false !== $cached_status ) {
+			return 'enabled' === $cached_status;
+		}
+		try {
+			$stripe = new self();
+			$status = 'disabled';
+			if ( 'test' !== $mode ) {
+				$stripe->set_live( true );
+			}
+
+			$api_key = $stripe->is_live() ? $stripe->get_live_secret( true ) : $stripe->get_test_secret( true );
+			\Forminator\Stripe\Stripe::setApiKey( $api_key );
+			self::set_stripe_app_info();
+
+			$webhook = \Forminator\Stripe\WebhookEndpoint::retrieve( $webhook_id );
+
+			if ( ! empty( $webhook ) && 'enabled' === $webhook->status ) {
+				$enabled_events = $webhook->enabled_events;
+				if ( self::get_webhook_url() === $webhook->url && true === self::is_webhook_events_matched( $enabled_events ) ) {
+					$status = 'enabled';
+				}
+			}
+			// Cache the status for 1 day to avoid frequent API calls.
+			set_transient( $transient_key, $status, DAY_IN_SECONDS );
+			return 'enabled' === $status;
+		} catch ( Exception $e ) {
+			// Cache the status as 'disabled' for 1 day to avoid frequent API calls in case of errors.
+			set_transient( $transient_key, 'disabled', DAY_IN_SECONDS );
+			forminator_maybe_log(
+				__METHOD__,
+				array(
+					'error_class'   => get_class( $e ),
+					'error_message' => $e->getMessage(),
+					'error_code'    => $e->getCode(),
+				)
+			);
+			return false;
+		}
+	}
+
+	/**
+	 * Get the webhook URL for Stripe to send events to.
+	 *
+	 * @since 1.58.0
+	 *
+	 * @return string The webhook URL.
+	 */
+	private static function get_webhook_url() {
+		return site_url( '/wp-json/forminator/v1/webhook/stripe' );
+	}
+
+	/**
+	 * Check if the enabled events of the webhook match the required events.
+	 *
+	 * @since 1.58.0
+	 *
+	 * @param array $events The enabled events of the webhook.
+	 *
+	 * @return bool True if the events match, false otherwise.
+	 */
+	private static function is_webhook_events_matched( $events ) {
+		if ( count( array_intersect( $events, self::ENABLED_WEBHOOK_EVENTS ) ) === count( self::ENABLED_WEBHOOK_EVENTS ) ) {
+			foreach ( self::ENABLED_WEBHOOK_EVENTS as $event ) {
+				if ( ! in_array( $event, $events, true ) ) {
+					return false;
+				}
+			}
+			return true;
+		}
+		return false;
+	}
+
+	/**
 	 * Resolve a human-readable Stripe account name for a connected account.
 	 *
 	 * @since 1.56.0
@@ -468,11 +687,11 @@ class Forminator_Gateway_Stripe {
 		$keys_to_encrypt = array();
 
 		foreach ( array( 'test_secret', 'live_secret' ) as $secret_key ) {
-			$encrypted_key = $secret_key . '_encrypted';
-
+			// Only encrypt the secret key if it is not empty and does not already contain masked characters.
+			// This prevents re-encrypting an already encrypted key or encrypting a masked key.
+			// We must encrypt the key even if _encrypted is already set because reencrypt_settings() leaves the unencrypted key in place while migrating the encrypted key based on the FORMINATOR_ENCRYPTION_KEY constant.
 			if (
 				! empty( $settings[ $secret_key ] )
-				&& empty( $settings[ $encrypted_key ] )
 				&& false === strpos( $settings[ $secret_key ], '**********' )
 			) {
 				$keys_to_encrypt[] = $secret_key;
@@ -591,5 +810,177 @@ class Forminator_Gateway_Stripe {
 		} else {
 			return new WP_Error( $e->getError()->code, $e->getError()->message );
 		}
+	}
+
+	/**
+	 * Maybe create webhook endpoints
+	 *
+	 * @return void
+	 */
+	public static function maybe_create_webhook_endpoint() {
+		$modes = array( 'test', 'live' );
+		foreach ( $modes as $mode ) {
+			if ( self::allow_webhook_creation( $mode ) ) {
+				$option_name = self::get_webhook_option_name( $mode );
+				if ( ! get_option( $option_name ) ) {
+					self::create_webhook_endpoint( $mode );
+				}
+			}
+		}
+	}
+
+	/**
+	 * Get webhook option name
+	 *
+	 * @param string $mode Mode.
+	 * @return string
+	 */
+	public static function get_webhook_option_name( $mode ) {
+		return ( 'live' === $mode ) ? 'forminator_stripe_webhook_endpoint_live' : 'forminator_stripe_webhook_endpoint_test';
+	}
+
+	/**
+	 * Create webhook endpoint
+	 *
+	 * @param string $mode Mode.
+	 * @return mixed
+	 */
+	public static function create_webhook_endpoint( $mode ) {
+		$option_name = self::get_webhook_option_name( $mode );
+		try {
+			$stripe = new Forminator_Gateway_Stripe();
+
+			if ( 'test' !== $mode ) {
+				$stripe->set_live( true );
+			}
+
+			$api_key = $stripe->is_live() ? $stripe->get_live_secret( true ) : $stripe->get_test_secret( true );
+			$url     = self::get_webhook_url();
+
+			\Forminator\Stripe\Stripe::setApiKey( $api_key );
+			self::set_stripe_app_info();
+
+			// Create a new webhook endpoint with the specified URL and events.
+			$webhook = \Forminator\Stripe\WebhookEndpoint::create(
+				array(
+					'url'            => $url,
+					'enabled_events' => self::ENABLED_WEBHOOK_EVENTS,
+					'api_version'    => FORMINATOR_STRIPE_LIB_DATE,
+				)
+			);
+
+			if ( ! empty( $webhook->id ) ) {
+				$data = array(
+					'id'             => $webhook->id,
+					'secret'         => $webhook->secret,
+					'enabled_events' => $webhook->enabled_events,
+				);
+				update_option( $option_name, $data, false );
+
+				// Deletes any previously configured webhooks with the same URL but different ID.
+				self::delete_previously_created_webhooks( $mode, $webhook->id );
+			}
+			return true;
+		} catch ( Exception $e ) {
+			forminator_maybe_log(
+				__METHOD__,
+				array(
+					'error_class'   => get_class( $e ),
+					'error_message' => $e->getMessage(),
+					'error_code'    => $e->getCode(),
+				)
+			);
+			return $e->getMessage();
+		}
+	}
+
+	/**
+	 * Delete previously created webhooks with the same URL but different ID.
+	 *
+	 * @param string $mode Mode.
+	 * @param string $webhook_id Webhook ID.
+	 * @return bool
+	 */
+	private static function delete_previously_created_webhooks( $mode, $webhook_id ) {
+		try {
+			$stripe = new Forminator_Gateway_Stripe();
+
+			if ( 'test' !== $mode ) {
+				$stripe->set_live( true );
+			}
+
+			$api_key = $stripe->is_live() ? $stripe->get_live_secret( true ) : $stripe->get_test_secret( true );
+			$url     = self::get_webhook_url();
+
+			\Forminator\Stripe\Stripe::setApiKey( $api_key );
+			self::set_stripe_app_info();
+
+			$webhooks = \Forminator\Stripe\WebhookEndpoint::all();
+
+			if ( ! empty( $webhooks->data ) ) {
+				foreach ( $webhooks->data as $webhook ) {
+					if ( $webhook->id !== $webhook_id && $webhook->url === $url ) {
+						$webhook->delete();
+					}
+				}
+			}
+			return true;
+		} catch ( Exception $e ) {
+			forminator_maybe_log(
+				__METHOD__,
+				array(
+					'error_class'   => get_class( $e ),
+					'error_message' => $e->getMessage(),
+					'error_code'    => $e->getCode(),
+				)
+			);
+			return false;
+		}
+	}
+
+	/**
+	 * Delete webhook endpoint
+	 *
+	 * @param string $mode Mode.
+	 * @return bool
+	 */
+	public static function delete_webhook_endpoint( $mode ) {
+		$option_name    = self::get_webhook_option_name( $mode );
+		$webhook_option = get_option( $option_name, false );
+		if ( empty( $webhook_option ) || empty( $webhook_option['id'] ) ) {
+			return false;
+		}
+		$webhook_id = $webhook_option['id'];
+		try {
+			$stripe = new Forminator_Gateway_Stripe();
+
+			if ( 'test' !== $mode ) {
+				$stripe->set_live( true );
+			}
+
+			$api_key = $stripe->is_live() ? $stripe->get_live_secret( true ) : $stripe->get_test_secret( true );
+			$url     = self::get_webhook_url();
+
+			\Forminator\Stripe\Stripe::setApiKey( $api_key );
+			self::set_stripe_app_info();
+
+			delete_option( $option_name );
+			$webhook = \Forminator\Stripe\WebhookEndpoint::retrieve( $webhook_id );
+			// Delete the webhook only if it exists and matches the expected URL.
+			if ( ! empty( $webhook ) && ! empty( $webhook->url ) && $webhook->url === $url ) {
+				$webhook->delete();
+			}
+			return true;
+		} catch ( Exception $e ) {
+			forminator_maybe_log(
+				__METHOD__,
+				array(
+					'error_class'   => get_class( $e ),
+					'error_message' => $e->getMessage(),
+					'error_code'    => $e->getCode(),
+				)
+			);
+		}
+		return false;
 	}
 }

@@ -469,8 +469,8 @@ class Forminator_Email extends Forminator_Field {
 			$item = preg_quote( $item, '/' );
 			// Support * as wildcard.
 			$item = str_replace( '\*', '.*', $item );
-			// Add start and end delimiters.
-			$item = '/' . $item . '$/';
+			// Add start and end delimiters (case-insensitive; email domains are not case-sensitive).
+			$item = '/' . $item . '$/i';
 			if ( preg_match( $item, $email ) ) {
 				return true;
 			}

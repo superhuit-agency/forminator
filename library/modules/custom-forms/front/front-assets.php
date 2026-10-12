@@ -231,7 +231,16 @@ class Forminator_Assets_Enqueue_Form extends Forminator_Assets_Enqueue {
 
 		// load date picker scripts always.
 		wp_enqueue_script( 'jquery-ui-datepicker' );
-		wp_localize_script( 'jquery-ui-datepicker', 'datepickerLang', self::get_datepicker_data() );
+
+		// Use a dedicated handle: another plugin may print the shared core handle
+		// early, which makes wp_localize_script() on it a silent no-op.
+		wp_register_script( 'forminator-datepicker-lang', false, array( 'jquery-ui-datepicker' ), FORMINATOR_VERSION, false );
+		wp_enqueue_script( 'forminator-datepicker-lang' );
+		wp_add_inline_script(
+			'forminator-datepicker-lang',
+			'var datepickerLang = window.datepickerLang || ' . wp_json_encode( self::get_datepicker_data() ) . ';',
+			'before'
+		);
 	}
 
 	/**
@@ -299,7 +308,7 @@ class Forminator_Assets_Enqueue_Form extends Forminator_Assets_Enqueue {
 		$script_src     = forminator_plugin_url() . 'assets/js/library/intlTelInput.min.js';
 		$script_version = FORMINATOR_VERSION;
 
-		Forminator_Assets_Enqueue::fui_enqueue_style( 'intlTelInput-forminator-css', $style_src, array(), $style_version ); // intlTelInput.
+		Forminator_Assets_Enqueue::fui_enqueue_style( 'intlTelInput-forminator', $style_src, array(), $style_version ); // intlTelInput.
 		wp_enqueue_script( 'forminator-intlTelInput', $script_src, array( 'jquery' ), $script_version, false ); // intlTelInput.
 	}
 

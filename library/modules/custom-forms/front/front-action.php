@@ -101,34 +101,18 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 	private static $is_paypal_payment = false;
 
 	/**
-	 * Flag if form has post image field
+	 * Is processing webhook
 	 *
-	 * @var false
+	 * @var bool
 	 */
-	private static $has_post_image = false;
+	private static $is_processing_webhook = false;
 
 	/**
-	 * Flag add signature from storage
+	 * Is fields visibility checked
 	 *
-	 * @var false
+	 * @var bool
 	 */
-	private static $add_signature_from_storage = false;
-
-	/**
-	 * Flag is stripe checkout validation
-	 *
-	 * @var false
-	 */
-
-	private static $is_stripe_checkout_validation = false;
-
-	/**
-	 * Flag if form has signature field
-	 *
-	 * @var false
-	 */
-	public static $has_signature_field = false;
-
+	public static $is_fields_visibility_checked = false;
 
 	/**
 	 * Forminator_CForm_Front_Action constructor
@@ -156,7 +140,7 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 	 * Return the plugin instance
 	 *
 	 * @since 1.0
-	 * @return Forminator_Front_Action
+	 * @return Forminator_CForm_Front_Action
 	 */
 	public static function get_instance() {
 		if ( is_null( self::$instance ) ) {
@@ -216,52 +200,173 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 			wp_send_json_error( esc_html__( 'Error: PayPal field doesn\'t exist in your form!', 'forminator' ) );
 		}
 
-		// Check if form data is set.
-		if ( isset( $data['form_data'] ) && isset( $data['form_data']['purchase_units'] ) ) {
-			$paypal_field   = self::$info['paypal_field'];
-			$field_object   = Forminator_Core::get_field_object( 'paypal' );
-			$payment_amount = $field_object->get_payment_amount( $paypal_field );
-
-			// Check if payment amount is bigger than zero.
-			if ( floatval( $payment_amount ) <= 0 ) {
-				wp_send_json_error( esc_html__( 'The payment total must be greater than 0.', 'forminator' ) );
+		// A v2 invisible widget is never executed on the PayPal flow, so it has no token to
+		// verify. That combination stays as it was, the rest are checked before the order.
+		if ( 'v2_invisible' !== ( self::$info['captcha_settings']['captcha_type'] ?? '' ) ) {
+			$captcha_error = self::verify_payment_captcha();
+			if ( '' !== $captcha_error ) {
+				wp_send_json_error( esc_html( $captcha_error ) );
 			}
+		}
 
-			$data['form_data']['purchase_units'][0]['amount'] = self::prepare_pp_price(
+		$paypal_field   = self::$info['paypal_field'];
+		$field_object   = Forminator_Core::get_field_object( 'paypal' );
+		$payment_amount = $field_object->get_payment_amount( $paypal_field );
+
+		// Check if payment amount is bigger than zero.
+		if ( floatval( $payment_amount ) <= 0 ) {
+			wp_send_json_error( esc_html__( 'The payment total must be greater than 0.', 'forminator' ) );
+		}
+
+		// The order is built from the saved field settings only. The request body is never
+		// merged into it, so the payer can't add purchase units, a payee, a payment source,
+		// an application context or a different intent.
+		$purchase_unit = array(
+			'amount' => self::prepare_pp_price(
 				array(
 					'value'         => $payment_amount,
 					'currency_code' => Forminator_Field::get_property( 'currency', $paypal_field, 'USD' ),
 				)
-			);
+			),
+		);
 
-			$data = $this->get_temporary_country_code( $data );
-			$data = $this->get_state_code( $data );
-
-			$paypal = new Forminator_PayPal_Express();
-
-			$request = array_merge( array( 'intent' => 'CAPTURE' ), $data['form_data'] );
-			$request = apply_filters( 'forminator_paypal_create_order_request', $request, $data );
-
-			if ( empty( $request['payer'] ) || empty( array_filter( $request['payer'] ) ) ) {
-				unset( $request['payer'] );
-			}
-
-			if ( isset( $request['payer']['name'] ) && empty( $request['payer']['name'] ) ) {
-				unset( $request['payer']['name'] );
-			}
-
-			$order = $paypal->create_order( $request, $data['mode'] );
-
-			if ( is_wp_error( $order ) ) {
-				wp_send_json_error( esc_html__( 'Cannot create a new order on PayPal. If the error persists, please contact us for further assistance.', 'forminator' ) );
-			}
-
-			$response = array(
-				'order_id' => $order->id,
-			);
-
-			wp_send_json_success( $response );
+		$payment_description = $field_object->get_payment_description( $paypal_field );
+		if ( ! empty( $payment_description ) ) {
+			$purchase_unit['description'] = $payment_description;
 		}
+
+		$request = array(
+			'intent'         => 'CAPTURE',
+			'purchase_units' => array( $purchase_unit ),
+		);
+
+		if ( 'enable' !== Forminator_Field::get_property( 'shipping_address', $paypal_field, 'disable' ) ) {
+			$request['application_context'] = array(
+				'shipping_preference' => 'NO_SHIPPING',
+			);
+		}
+
+		// Billing details are the only part of the payload that comes from the payer, and only through an allowlist.
+		$payer = self::sanitize_pp_payer( $data['form_data']['payer'] ?? null );
+		if ( null !== $payer ) {
+			$request['payer'] = $payer;
+		}
+
+		$request = $this->get_temporary_country_code( $request );
+		$request = $this->get_state_code( $request );
+
+		$request = apply_filters( 'forminator_paypal_create_order_request', $request, $data );
+
+		if ( isset( $request['payer'] ) && empty( array_filter( $request['payer'] ) ) ) {
+			unset( $request['payer'] );
+		}
+
+		// The mode picks the API credentials, so it's taken from the saved settings and not from the request.
+		$mode = 'live' === Forminator_Field::get_property( 'mode', $paypal_field, 'sandbox' ) ? 'live' : 'sandbox';
+
+		$paypal = new Forminator_PayPal_Express();
+		$order  = $paypal->create_order( $request, $mode );
+
+		if ( is_wp_error( $order ) || empty( $order->id ) ) {
+			wp_send_json_error( esc_html__( 'Cannot create a new order on PayPal. If the error persists, please contact us for further assistance.', 'forminator' ) );
+		}
+
+		$response = array(
+			'order_id' => $order->id,
+		);
+
+		wp_send_json_success( $response );
+	}
+
+	/**
+	 * Build the PayPal payer object from an allowlist of billing details.
+	 *
+	 * Only the properties Forminator maps from the form fields are kept, anything else
+	 * sent with the request is dropped.
+	 *
+	 * @since 1.58.0
+	 *
+	 * @param mixed $payer Payer data from the request body.
+	 *
+	 * @return array|null Sanitized payer, or null when no payer was sent.
+	 */
+	private static function sanitize_pp_payer( $payer ) {
+		if ( ! is_array( $payer ) ) {
+			return null;
+		}
+
+		$sanitized = array();
+
+		if ( isset( $payer['name'] ) && is_array( $payer['name'] ) ) {
+			$name = self::sanitize_pp_strings( $payer['name'], array( 'given_name', 'surname' ) );
+			if ( ! empty( $name ) ) {
+				$sanitized['name'] = $name;
+			}
+		}
+
+		if ( isset( $payer['email_address'] ) && is_scalar( $payer['email_address'] ) ) {
+			$email = sanitize_email( (string) $payer['email_address'] );
+			if ( is_email( $email ) ) {
+				$sanitized['email_address'] = $email;
+			}
+		}
+
+		// An empty address is kept so the temporary country code can still be added to it.
+		if ( isset( $payer['address'] ) && is_array( $payer['address'] ) ) {
+			$address = self::sanitize_pp_strings(
+				$payer['address'],
+				array(
+					'address_line_1',
+					'address_line_2',
+					'admin_area_1',
+					'admin_area_2',
+					'postal_code',
+					'country_code',
+				)
+			);
+
+			// The Address field only ever submits an ISO 3166-1 alpha-2 code, PayPal rejects anything else.
+			if ( isset( $address['country_code'] ) ) {
+				$country_code = strtoupper( $address['country_code'] );
+
+				if ( preg_match( '/^[A-Z]{2}$/', $country_code ) ) {
+					$address['country_code'] = $country_code;
+				} else {
+					unset( $address['country_code'] );
+				}
+			}
+
+			$sanitized['address'] = $address;
+		}
+
+		return $sanitized;
+	}
+
+	/**
+	 * Keep the allowed keys of an array as sanitized non empty strings.
+	 *
+	 * @since 1.58.0
+	 *
+	 * @param array $values Values to filter.
+	 * @param array $allowed_keys Keys to keep.
+	 *
+	 * @return array
+	 */
+	private static function sanitize_pp_strings( $values, $allowed_keys ) {
+		$sanitized = array();
+
+		foreach ( $allowed_keys as $key ) {
+			if ( ! isset( $values[ $key ] ) || ! is_scalar( $values[ $key ] ) ) {
+				continue;
+			}
+
+			$value = sanitize_text_field( (string) $values[ $key ] );
+			if ( '' !== $value ) {
+				$sanitized[ $key ] = $value;
+			}
+		}
+
+		return $sanitized;
 	}
 
 	/**
@@ -320,6 +425,11 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 
 		self::check_fields_visibility();
 
+		// A Stripe field hidden by visibility conditions has no payment amount to update or validate.
+		if ( self::is_in_hidden_fields( 'stripe-' ) ) {
+			wp_send_json_success( array( 'paymentFieldHidden' => true ) );
+		}
+
 		$first_intent = ! empty( self::$prepared_data['stripe_first_payment_intent'] );
 		$is_intent    = ! empty( self::$prepared_data['stripe-intent'] );
 		$validate     = ! empty( self::$prepared_data['stripe_validate_submission'] );
@@ -332,6 +442,21 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 				)
 			);
 		}
+
+		// Stripe calls this on page load and on field changes, before a token exists. Those
+		// updates take no payment, so one is only demanded when the submission is validated.
+		$captcha_error = self::verify_payment_captcha( $validate );
+		if ( '' !== $captcha_error ) {
+			wp_send_json_error(
+				array(
+					'message' => esc_html( $captcha_error ),
+					'errors'  => array(),
+					// Without this Checkout reads it as a stale session and rebuilds itself.
+					'notice'  => 'error',
+				)
+			);
+		}
+
 		$forminator_stripe_field = Forminator_Core::get_field_object( 'stripe' );
 
 		if ( $forminator_stripe_field instanceof Forminator_Stripe ) {
@@ -340,7 +465,7 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 				&& 'subscription' === $forminator_stripe_field->payment_plan['payment_method'];
 
 			if ( $validate && $is_checkout_session ) {
-				$this->validate_payment_submission();
+				$this->submit_form_with_pending_status();
 			}
 
 			// Subscription stripe-intent must always reach update_paymentIntent() — amount is returned for wallet preview remounts (variable price/qty).
@@ -390,18 +515,18 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 			);
 		}
 
-		// A Checkout Session that already produced an entry can never be recovered again.
-		if ( Forminator_Stripe::is_consumed_checkout_session( $payment_id ) ) {
-			wp_send_json_error(
-				array(
-					'message'     => esc_html__( 'Checkout Session ID is not valid', 'forminator' ),
-					'recoverable' => false,
-				)
-			);
-		}
-
 		$this->init_properties();
 		self::check_fields_visibility();
+
+		if ( empty( self::$info['stripe_field'] ) ) {
+			foreach ( self::get_fields() as $field ) {
+				$field_settings = $field->to_formatted_array();
+				if ( 'stripe-ocs' === Forminator_Field::get_property( 'type', $field_settings ) ) {
+					self::$info['stripe_field'] = $field_settings;
+					break;
+				}
+			}
+		}
 
 		if ( empty( self::$info['stripe_field'] ) ) {
 			wp_send_json_error(
@@ -423,11 +548,33 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 			);
 		}
 
+		// Only the browser that started the payment may resume it.
+		$session_data = Forminator_Stripe::get_pending_checkout_session_data( $payment_id );
+		if ( is_array( $session_data ) && ! Forminator_Stripe::is_payment_owner( $session_data['owner'] ?? '' ) ) {
+			wp_send_json_error(
+				array(
+					'message'     => self::get_foreign_payment_message(),
+					'recoverable' => false,
+				)
+			);
+		}
+
 		self::$prepared_data['paymentid'] = $payment_id;
 		$session                          = $stripe_field->get_checkout_session( self::$info['stripe_field'] );
 
-		if ( ! Forminator_Stripe::has_pending_checkout_session( $payment_id ) ) {
+		if ( ! Forminator_Stripe::has_pending_checkout_session( $payment_id ) && Forminator_Stripe::can_restore_pending_checkout_session( $payment_id ) ) {
 			$session_form_id = is_object( $session ) && ! empty( $session->client_reference_id ) ? (string) $session->client_reference_id : '';
+			$payment_status  = is_object( $session ) && ! empty( $session->payment_status ) ? (string) $session->payment_status : '';
+
+			// For payment methods like Cash App, the payment might redirect to another tab, where the user can complete the payment. In that case, we can restore the session and show a success message to the user.
+			if ( ! is_wp_error( $session ) && $session_form_id === (string) $form_id
+				&& ( 'paid' === $payment_status || 'no_payment_required' === $payment_status ) ) {
+				wp_send_json_success(
+					array(
+						'recoverable' => true,
+					)
+				);
+			}
 
 			// If local pending state was lost, trust only a Stripe session that still belongs to this form and is recoverable.
 			if ( is_wp_error( $session ) || $session_form_id !== (string) $form_id || ! Forminator_Stripe::is_recoverable_checkout_session( $session ) ) {
@@ -462,99 +609,40 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 	}
 
 	/**
-	 * Process file uploads for Stripe Checkout sessions.
+	 * Submit the form with a pending status for Stripe Checkout sessions.
+	 * This is used to validate the form submission and store the entry in a pending state before redirecting to Stripe Checkout.
 	 *
 	 * @return void
 	 */
-	private function process_file_uploads() {
-		if ( ! self::$is_draft && ! empty( self::$info['field_data_array'] )
-			&& ( self::$has_upload || self::$has_post_image || self::$has_signature_field )
-			&& ! empty( self::$prepared_data['paymentid'] ) && ! empty( self::$info['stripe_field'] ) ) {
-			$forminator_stripe_field = Forminator_Core::get_field_object( 'stripe' );
-			// Check if the Stripe Checkout Session is still valid for file uploads.
-			$is_valid = $forminator_stripe_field->is_valid_session_for_file_upload( self::$prepared_data['paymentid'], self::$info['stripe_field'] );
-			if ( $is_valid ) {
-				$uploaded_files = array();
-				$post_images    = array();
-				$signatures     = array();
-				// Check if the form has any file upload fields and process them.
-				if ( self::$has_upload ) {
-					self::process_uploads( 'upload' );
-				}
-				foreach ( self::$info['field_data_array'] as $field ) {
-					if ( ! empty( $field['field_type'] ) && ! empty( $field['value'] ) ) {
-						if ( 'upload' === $field['field_type'] ) {
-							$uploaded_files[ $field['name'] ] = $field['value'];
-						} elseif ( 'postdata' === $field['field_type'] && ! empty( $field['value']['post-image'] ) ) {
-							$post_images[ $field['name'] ] = $field['value']['post-image'];
-						} elseif ( 'signature' === $field['field_type'] && ! empty( $field['value']['file'] ) ) {
-							$signatures[ $field['name'] ] = $field['value']['file'];
-						}
-					}
-				}
-				// Add the uploaded files, post images, and signatures to the options table for the Stripe Checkout Session to retrieve later upon payment completion.
-				if ( self::$has_upload ) {
-					$forminator_stripe_field->add_uploaded_files_on_checkout_session( self::$prepared_data['paymentid'], $uploaded_files );
-				}
-				if ( self::$has_post_image ) {
-					$forminator_stripe_field->add_uploaded_files_on_checkout_session( self::$prepared_data['paymentid'], $post_images, 'postdata' );
-				}
-				if ( self::$has_signature_field ) {
-					$forminator_stripe_field->add_uploaded_files_on_checkout_session( self::$prepared_data['paymentid'], $signatures, 'signature' );
-				}
-			}
-		}
-	}
-
-	/**
-	 * Check if the current request is a Stripe Checkout validation request.
-	 *
-	 * @return bool
-	 */
-	public static function is_stripe_checkout_validation() {
-		return self::$is_stripe_checkout_validation;
-	}
-
-	/**
-	 * Check if the signature should be added from storage for Stripe Checkout sessions.
-	 *
-	 * @return bool
-	 */
-	public static function should_add_signature_from_storage() {
-		return self::$add_signature_from_storage;
-	}
-
-	/**
-	 * Validate submitted fields before handing off to Stripe Checkout.
-	 *
-	 * @throws Exception When validation fails.
-	 *
-	 * @return void
-	 */
-	private function validate_payment_submission() {
-		// Set the flag to indicate that this is a Stripe Checkout validation request, allowing the signature field to be added to storage if necessary.
-		self::$is_stripe_checkout_validation = true;
-		try {
-			$response = self::prepare_fields_info();
-			if ( is_array( $response ) && isset( $response['success'] ) && ! $response['success'] ) {
-				wp_send_json_error(
-					array(
-						'message' => $response['message'],
-						'errors'  => $response['errors'] ?? self::$submit_errors,
-					)
-				);
-			}
-			self::process_file_uploads();
-		} catch ( Exception $e ) {
+	private function submit_form_with_pending_status() {
+		// Only the browser that started the session may submit it.
+		$session_data = Forminator_Stripe::get_pending_checkout_session_data( self::$prepared_data['paymentid'] ?? '' );
+		if ( ! Forminator_Stripe::is_payment_owner( $session_data['owner'] ?? '' ) ) {
 			wp_send_json_error(
 				array(
-					'message' => $e->getMessage(),
-					'errors'  => self::$submit_errors,
+					'message' => esc_html__( 'Checkout Session ID is not valid', 'forminator' ),
+					'errors'  => array(),
 				)
 			);
 		}
 
-		wp_send_json_success();
+		$response = $this->handle_form( false, true );
+		if ( is_array( $response ) && isset( $response['success'] ) && $response['success'] ) {
+			// If the form is a login form, return the full response to the front end to handle the login process.
+			if ( isset( self::$module_settings['form-type'] ) && 'login' === self::$module_settings['form-type'] ) {
+				wp_send_json_success(
+					$response
+				);
+			} else {
+				wp_send_json_success(
+					array(
+						'message'  => $response['message'],
+						'entry_id' => $response['entry_id'],
+					)
+				);
+			}
+		}
+		wp_send_json_error( $response );
 	}
 
 	/**
@@ -565,45 +653,45 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 	 * This only prevents error from Paypal in case the country is not enabled/required in the Address field.
 	 * Users will be able to choose the country again in Paypal window or credit card form.
 	 *
-	 * @param array $data Data for paypal order.
+	 * @param array $request PayPal create order request.
 	 *
 	 * @return array
 	 */
-	private function get_temporary_country_code( $data ) {
-		if ( isset( $data['form_data']['payer']['address'] ) ) {
+	private function get_temporary_country_code( $request ) {
+		if ( isset( $request['payer']['address'] ) ) {
 			if (
-				empty( $data['form_data']['payer']['address'] ) ||
+				empty( $request['payer']['address'] ) ||
 				(
-					isset( $data['form_data']['payer']['address']['country_code'] ) &&
-					empty( $data['form_data']['payer']['address']['country_code'] )
+					isset( $request['payer']['address']['country_code'] ) &&
+					empty( $request['payer']['address']['country_code'] )
 				)
 			) {
-				$currency = $data['form_data']['purchase_units'][0]['amount']['currency_code'];
+				$currency = $request['purchase_units'][0]['amount']['currency_code'];
 				if ( 'EUR' === $currency ) {
 					$country_code = 'AT';
 				} else {
 					$country_code = substr( $currency, 0, -1 );
 				}
 
-				$data['form_data']['payer']['address']['country_code'] = $country_code;
+				$request['payer']['address']['country_code'] = $country_code;
 			}
 		}
 
-		return $data;
+		return $request;
 	}
 
 	/**
 	 * Get state code
 	 *
-	 * @param array $data Data for paypal order.
+	 * @param array $request PayPal create order request.
 	 *
 	 * @return array
 	 */
-	private function get_state_code( $data ) {
-		if ( ! empty( $data['form_data']['payer']['address']['admin_area_1'] ) ) {
-			$data['form_data']['payer']['address']['admin_area_1'] = forminator_get_state_code( $data['form_data']['payer']['address']['admin_area_1'] );
+	private function get_state_code( $request ) {
+		if ( ! empty( $request['payer']['address']['admin_area_1'] ) ) {
+			$request['payer']['address']['admin_area_1'] = forminator_get_state_code( $request['payer']['address']['admin_area_1'] );
 		}
-		return $data;
+		return $request;
 	}
 
 	/**
@@ -629,56 +717,126 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 	 * @throws Exception When there is an error.
 	 */
 	private static function check_captcha() {
-		// Ignore captcha re-check if we have Stripe/PayPal field.
-		if (
-			self::$is_draft || self::$is_abandoned ||
-			! empty( self::$info['stripe_field'] ) ||
-			self::is_in_hidden_fields( 'stripe-' ) ||
-			! empty( self::$info['paypal_field'] )
-		) {
+		// PayPal's token is spent by submit time and was verified when the order was created.
+		// Everything else is checked here, from the token the front end kept.
+		if ( self::$is_draft || self::$is_abandoned || ! empty( self::$info['paypal_field'] ) ) {
 			return;
 		}
 
-		$form_id           = self::$module_id;
-		$field_captcha_obj = Forminator_Core::get_field_object( 'captcha' );
-		if ( self::$info['captcha_settings'] && $field_captcha_obj ) {
-			$field_id              = Forminator_Field::get_property( 'element_id', self::$info['captcha_settings'] );
-			$captcha_user_response = '';
+		$has_stripe = ! empty( self::$info['stripe_field'] ) || self::is_in_hidden_fields( 'stripe-' );
 
-			if ( isset( self::$prepared_data['g-recaptcha-response'] ) ) {
-				// Ignore CAPTCHA re-check (only for the v2 checkbox option) during two-factor authentication.
-				if ( isset( self::$module_settings['form-type'] ) && 'login' === self::$module_settings['form-type'] ) {
-					if ( ! empty( self::$prepared_data['auth_method'] ) && 'v2_checkbox' === self::$info['captcha_settings']['captcha_type'] ) {
-						return;
-					}
-				}
-				$captcha_user_response = self::$prepared_data['g-recaptcha-response'];
-			} elseif ( isset( self::$prepared_data['h-captcha-response'] ) ) {
-				$captcha_user_response = self::$prepared_data['h-captcha-response'];
-			} elseif ( isset( self::$prepared_data['forminator-turnstile-response'] ) ) {
-				$captcha_user_response = self::$prepared_data['forminator-turnstile-response'];
-			}
+		// Stripe verified this token at payment setup, and a token is only accepted once.
+		$error = $has_stripe ? self::verify_payment_captcha() : self::validate_captcha_response();
 
-			/**
-			 * Filter captcha user response, default is from `g-recaptcha-response`
-			 *
-			 * @since 1.5.3
-			 *
-			 * @param string $captcha_user_response
-			 * @param int $form_id
-			 * @param array $submitted_data
-			 *
-			 * @return string captcha user response
-			 */
-			$captcha_user_response = apply_filters( 'forminator_captcha_user_response', $captcha_user_response, $form_id, self::$prepared_data );
+		if ( '' !== $error ) {
+			throw new Exception( esc_html( $error ) );
+		}
+	}
 
-			$field_captcha_obj->validate_entry( self::$info['captcha_settings'], $captcha_user_response );
-			$valid_response = $field_captcha_obj->is_valid_entry();
-			if ( is_array( $valid_response ) && ! empty( $valid_response[ $field_id ] ) ) {
-				// if captcha invalid.
-				throw new Exception( esc_html( $valid_response[ $field_id ] ) );
+	/**
+	 * Read the captcha token the visitor submitted.
+	 *
+	 * @since 1.58.0
+	 *
+	 * @return string
+	 */
+	private static function get_captcha_user_response() {
+		$captcha_user_response = '';
+
+		// The last key is Forminator's own copy, kept for payment forms because the
+		// provider's field is reset before the payment request is sent.
+		foreach ( array( 'g-recaptcha-response', 'h-captcha-response', 'forminator-turnstile-response', 'forminator-captcha-token' ) as $key ) {
+			if ( ! empty( self::$prepared_data[ $key ] ) && is_string( self::$prepared_data[ $key ] ) ) {
+				$captcha_user_response = self::$prepared_data[ $key ];
+				break;
 			}
 		}
+
+		/**
+		 * Filter captcha user response, default is from `g-recaptcha-response`
+		 *
+		 * @since 1.5.3
+		 *
+		 * @param string $captcha_user_response
+		 * @param int $form_id
+		 * @param array $submitted_data
+		 *
+		 * @return string captcha user response
+		 */
+		return apply_filters( 'forminator_captcha_user_response', $captcha_user_response, self::$module_id, self::$prepared_data );
+	}
+
+	/**
+	 * Verify the submitted captcha token against the provider.
+	 *
+	 * @since 1.58.0
+	 *
+	 * @return string Empty when the form has no captcha or the token is good, the error message otherwise.
+	 */
+	private static function validate_captcha_response() {
+		$field_captcha_obj = Forminator_Core::get_field_object( 'captcha' );
+
+		if ( empty( self::$info['captcha_settings'] ) || ! $field_captcha_obj ) {
+			return '';
+		}
+
+		// Ignore CAPTCHA re-check (only for the v2 checkbox option) during two-factor authentication.
+		if ( isset( self::$prepared_data['g-recaptcha-response'] )
+			&& isset( self::$module_settings['form-type'] ) && 'login' === self::$module_settings['form-type']
+			&& ! empty( self::$prepared_data['auth_method'] )
+			&& 'v2_checkbox' === self::$info['captcha_settings']['captcha_type'] ) {
+			return '';
+		}
+
+		$field_id = Forminator_Field::get_property( 'element_id', self::$info['captcha_settings'] );
+
+		$field_captcha_obj->validate_entry( self::$info['captcha_settings'], self::get_captcha_user_response() );
+		$valid_response = $field_captcha_obj->is_valid_entry();
+
+		if ( is_array( $valid_response ) && ! empty( $valid_response[ $field_id ] ) ) {
+			return $valid_response[ $field_id ];
+		}
+
+		return '';
+	}
+
+	/**
+	 * Verify the captcha before a payment is set up.
+	 *
+	 * Verified while the token is fresh and before any money moves. The verdict is cached
+	 * because a token is single use and these endpoints run more than once per submission.
+	 *
+	 * @since 1.58.0
+	 *
+	 * @param bool $require_token Whether a missing token should fail. Early amount updates
+	 *                            run before one exists and take no payment.
+	 *
+	 * @return string Empty when the form has no captcha or the token is good, the error message otherwise.
+	 */
+	private static function verify_payment_captcha( $require_token = true ) {
+		if ( empty( self::$info['captcha_settings'] ) ) {
+			return '';
+		}
+
+		$token = self::get_captcha_user_response();
+
+		if ( ! is_string( $token ) || '' === $token ) {
+			return $require_token ? __( 'Captcha verification failed. Please try again.', 'forminator' ) : '';
+		}
+
+		$cache_key = 'forminator_captcha_' . md5( self::$module_id . '|' . $token );
+		$cached    = get_transient( $cache_key );
+
+		if ( false !== $cached ) {
+			return '1' === $cached ? '' : (string) $cached;
+		}
+
+		$error = self::validate_captcha_response();
+
+		// Long enough to cover a 3D Secure detour before the submit.
+		set_transient( $cache_key, '' === $error ? '1' : $error, 5 * MINUTE_IN_SECONDS );
+
+		return $error;
 	}
 
 	/**
@@ -857,85 +1015,16 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 	}
 
 	/**
-	 * Does the form have files in the temporary storage for Stripe Checkout sessions?
-	 *
-	 * @param string $type Field type.
-	 *
-	 * @return bool
-	 */
-	private static function has_files_in_temp_storage( $type = 'upload' ) {
-		if ( empty( self::$info['stripe_field'] ) || empty( self::$prepared_data['paymentid'] ) ) {
-			return false;
-		}
-		$forminator_stripe_field = Forminator_Core::get_field_object( 'stripe' );
-		$is_checkout_session     = $forminator_stripe_field->is_checkout_session( self::$info['stripe_field'] );
-		if ( $is_checkout_session ) {
-			$files = $forminator_stripe_field->get_uploaded_files_on_checkout_session( self::$prepared_data['paymentid'], $type );
-			if ( ! empty( $files ) ) {
-				return true;
-			}
-		}
-		return false;
-	}
-
-	/**
-	 * Maybe set data from storage for Stripe Checkout sessions.
-	 *
-	 * @return array Stored fields.
-	 */
-	private static function maybe_set_data_from_storage() {
-		$stored_fields = array();
-		// If the form is submitted and there are files in the session, process them.
-		if ( ! self::$is_draft && ! empty( self::$prepared_data['paymentid'] )
-			&& ! empty( self::$info['stripe_field'] ) ) {
-			$forminator_stripe_field = Forminator_Core::get_field_object( 'stripe' );
-			$is_checkout_session     = $forminator_stripe_field->is_checkout_session( self::$info['stripe_field'] );
-			if ( ! $is_checkout_session ) {
-				return $stored_fields;
-			}
-			// Check if there are files for upload field and process them.
-			if ( self::has_files_in_temp_storage() ) {
-				$files = $forminator_stripe_field->get_uploaded_files_on_checkout_session( self::$prepared_data['paymentid'] );
-				foreach ( $files as $key => $value ) {
-					$stored_fields[]             = $key;
-					self::$prepared_data[ $key ] = $value;
-					self::$has_upload            = true;
-				}
-			}
-			// Check if there are files for post image field and process them.
-			if ( self::has_files_in_temp_storage( 'postdata' ) ) {
-				$post_images = $forminator_stripe_field->get_uploaded_files_on_checkout_session( self::$prepared_data['paymentid'], 'postdata' );
-				foreach ( $post_images as $key => $post_image ) {
-					self::$prepared_data[ $key ]['post-image'] = $post_image;
-				}
-			}
-			if ( self::has_files_in_temp_storage( 'signature' ) ) {
-				// Flag to indicate that the signature field should be added from storage for Stripe Checkout sessions.
-				self::$add_signature_from_storage = true;
-			}
-		}
-		return $stored_fields;
-	}
-
-	/**
 	 * Prepare fields info
-	 *
-	 * @param bool $is_form_submission Whether the form is being submitted or not.
 	 */
-	private static function prepare_fields_info( $is_form_submission = false ) {
+	private static function prepare_fields_info() {
 		self::check_fields_visibility();
-
-		$stored_fields = array();
-		if ( $is_form_submission ) {
-			$stored_fields = self::maybe_set_data_from_storage();
-		}
-
 		self::$is_leads    = isset( self::$module_settings['form-type'] ) && 'leads' === self::$module_settings['form-type'];
 		self::$has_payment = empty( self::$info['stripe_field'] ) && empty( self::$info['paypal_field'] ) ? false : true;
 
 		$fields = self::get_fields();
 		foreach ( $fields as $field_index => $field ) {
-			self::set_field_data_array( $field_index, $field, $stored_fields );
+			self::set_field_data_array( $field_index, $field );
 		}
 
 		if ( ! self::$is_draft && ! self::$is_abandoned && ! empty( self::$info['stripe_field'] ) ) {
@@ -974,12 +1063,9 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 	 *
 	 * @param int    $field_index Int key.
 	 * @param object $field Forminator_Form_Field_Model.
-	 *
-	 * @since 1.56.0
-	 * @param array  $stored_fields Fields that are stored in temp folder (uploaded files) for Stripe Checkout sessions.
 	 * @return null
 	 */
-	private static function set_field_data_array( $field_index, $field, $stored_fields = array() ) {
+	private static function set_field_data_array( $field_index, $field ) {
 		$field_array = $field->to_formatted_array();
 		$field_type  = $field_array['type'];
 		$element_id  = Forminator_Field::get_property( 'element_id', $field_array );
@@ -1033,7 +1119,7 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 			}
 			self::maybe_handle_custom_option( $clonned_field );
 
-			self::set_field_data( $field_id, $clonned_field, $field_index, $clonned_field['original_id'] ?? null, $stored_fields );
+			self::set_field_data( $field_id, $clonned_field, $field_index, $clonned_field['original_id'] ?? null );
 		}
 	}
 
@@ -1068,12 +1154,9 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 	 * @param int         $field_index Field index.
 	 * @param string|null $original_id Original field ID.
 	 *
-	 * @since 1.56.0
-	 * @param array       $stored_fields Fields that are stored in temp folder (uploaded files) for Stripe Checkout sessions.
-	 *
 	 * @return null
 	 */
-	private static function set_field_data( $field_id, $field_array, $field_index, $original_id = null, $stored_fields = array() ) {
+	private static function set_field_data( $field_id, $field_array, $field_index, $original_id = null ) {
 		$field_type     = $field_array['type'];
 		$form_field_obj = Forminator_Core::get_field_object( $field_type );
 		// Skip if field object is not found.
@@ -1111,24 +1194,26 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 			return;
 		}
 
-		/**
-		 * Sanitize data
-		 *
-		 * @since 1.0.2
-		 *
-		 * @param array $field
-		 * @param array|string $data - the data to be sanitized.
-		 */
-		$field_data = $form_field_obj->sanitize( $field_array, $field_data );
+		// Skip sanitization for webhook processing, as the data is already trusted.
+		if ( ! self::$is_processing_webhook ) {
+			/**
+			 * Sanitize data
+			 *
+			 * @since 1.0.2
+			 *
+			 * @param array $field
+			 * @param array|string $data - the data to be sanitized.
+			 */
+			$field_data = $form_field_obj->sanitize( $field_array, $field_data );
+		}
 
 		// Legitimate file_path is added in process_uploads(); clearing request values here is intentional.
-		// Ignore this check if the field is already stored in the temp folder for Stripe Checkout sessions as it is already processed through this function.
-		if ( 'upload' === $field_type && ! empty( $field_data['file']['file_path'] ) && ! in_array( $field_id, $stored_fields, true ) ) {
+		if ( 'upload' === $field_type && ! empty( $field_data['file']['file_path'] ) ) {
 			$field_data = array();
 			unset( self::$prepared_data[ $field_id ] );
 		}
 
-		if ( ! self::$is_draft && ! self::$is_abandoned ) {
+		if ( ! self::$is_draft && ! self::$is_abandoned && ! self::$is_processing_webhook ) {
 			$field_data = $form_field_obj->validate_entry( $field_array, $field_data );
 		}
 		$form_field_obj->is_valid_entry();
@@ -1284,7 +1369,7 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 	 * @return null|object
 	 */
 	public static function subscription_payment_intent() {
-		if ( class_exists( 'Forminator_Stripe_Subscription' ) ) {
+		if ( ! forminator_is_stripe_addon_compatible() ) {
 			return;
 		}
 		try {
@@ -1326,7 +1411,7 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 	 * @throws Exception When there is an error.
 	 */
 	private static function handle_stripe_subscription( $field_object, $field, $entry, $payment_plan ) {
-		if ( class_exists( 'Forminator_Stripe_Subscription' ) ) {
+		if ( forminator_is_stripe_addon_compatible() ) {
 			try {
 				$stripe_addon = Forminator_Stripe_Subscription::get_instance();
 				$amount_type  = isset( $payment_plan['subscription_amount_type'] ) ? $payment_plan['subscription_amount_type'] : 'fixed';
@@ -1397,7 +1482,7 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 	 * @throws Exception When there is an error.
 	 */
 	private static function handle_stripe_single( $field_object, $field, $entry, $mode ) {
-		$entry_data = $field_object->process_to_entry_data( $field );
+		$entry_data = $field_object->process_to_entry_data( $field, $entry );
 
 		$stripe_entry_data = array(
 			'name'  => $field['element_id'],
@@ -1472,8 +1557,10 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 			return new WP_Error( 'forminator_stripe_error', $e->getMessage() );
 		}
 
-		if ( 'succeeded' !== $intent->status ) {
-			return new WP_Error( 'forminator_stripe_error', esc_html__( 'Payment failed, please try again!', 'forminator' ) );
+		// The confirmed intent must have succeeded for the expected amount.
+		$payment_state = $field_object->validate_intent_payment( $intent, $field, true );
+		if ( is_wp_error( $payment_state ) ) {
+			return $payment_state;
 		}
 
 		$result                     = array(
@@ -1547,10 +1634,15 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 
 			return $response;
 		}
+
+		$field_object = Forminator_Core::get_field_object( 'stripe' );
+		if ( ! empty( $stripe_field_data['value'] ) && is_object( $field_object ) && $field_object->is_checkout_session( self::$info['stripe_field'] ) ) {
+			return $stripe_field_data['value'];
+		}
 	}
 
 	/**
-	 * Check if the current Stripe payment already has an active submission.
+	 * Check if the current Stripe payment already has a submission.
 	 *
 	 * @since 1.56
 	 *
@@ -1576,7 +1668,7 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 			return false;
 		}
 
-		$duplicate_entry_id = Forminator_Form_Entry_Model::get_active_entry_id_by_payment_identifier(
+		$duplicate_entry_id = Forminator_Form_Entry_Model::get_entry_id_by_payment_identifier(
 			self::$module_id,
 			self::$info['stripe_field']['element_id'],
 			$identifier_key,
@@ -1618,6 +1710,855 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 	}
 
 	/**
+	 * Validate form submission
+	 *
+	 * @return void
+	 */
+	public function validate_form_submission() {
+		self::can_submit();
+		self::prepare_fields_info();
+		self::check_submit_visibility();
+		self::check_captcha();
+	}
+
+	/**
+	 * Post submission process
+	 *
+	 * @param Forminator_Form_Entry_Model $entry Form Entry.
+	 *
+	 * @return void
+	 */
+	private function post_submission_process( $entry ) {
+		if ( ! self::$is_draft && ! self::$is_abandoned ) {
+			$addon_data = array();
+			// Process integrated addons and attach their data to the entry.
+			$addon_data = self::attach_addons_add_entry_fields( $addon_data, $entry );
+			$entry->set_fields( $addon_data );
+		}
+		self::maybe_create_post( $entry );
+		self::attach_addons_after_entry_saved( $entry );
+		self::maybe_registration( $entry );
+		if ( ! self::$is_draft && ! empty( self::$previous_draft_id ) ) {
+			$entry->delete_previous_draft( self::$previous_draft_id );
+		}
+		self::send_email( $entry );
+	}
+
+	/**
+	 * Initialize properties to process webhooks
+	 *
+	 * @param Forminator_Form_Entry_Model $entry Form Entry.
+	 * @return bool
+	 */
+	private function init_properties_to_process_webhooks( $entry ) {
+		self::$is_processing_webhook = true;
+		static::$module_object       = Forminator_Base_Form_Model::get_model( $entry->form_id );
+		if ( ! static::$module_object ) {
+			forminator_maybe_log( __METHOD__, esc_html__( 'Error: Module object is corrupted!', 'forminator' ), $entry );
+			return false;
+		}
+
+		self::$is_leads = false;
+		if ( 'quizzes' === $entry->entry_type ) {
+			$quiz_settings = static::$module_object->settings;
+			if ( $quiz_settings['hasLeads'] && ! empty( $quiz_settings['leadsId'] ) ) {
+				self::$is_leads        = true;
+				static::$module_object = Forminator_Base_Form_Model::get_model( $quiz_settings['leadsId'] );
+				if ( ! static::$module_object ) {
+					forminator_maybe_log( __METHOD__, esc_html__( 'Error: Module object is corrupted!', 'forminator' ), $entry );
+					return false;
+				}
+			} else {
+				forminator_maybe_log( __METHOD__, esc_html__( 'Error: Invalid module', 'forminator' ), $entry );
+				return false;
+			}
+		}
+		// Prepare data from entry.
+		self::$prepared_data   = recreate_prepared_data( static::$module_object, $entry );
+		self::$module_id       = isset( self::$prepared_data['form_id'] ) ? self::$prepared_data['form_id'] : false;
+		self::$module_settings = method_exists( static::$module_object, 'get_form_settings' )
+			? static::$module_object->get_form_settings() : static::$module_object->settings;
+
+		// Restore the draft ID kept on the pending entry, so the draft is deleted once the payment is completed.
+		self::$previous_draft_id = $entry->get_meta( '_previous_draft_id', null );
+		unset( self::$prepared_data['_previous_draft_id'], self::$prepared_data['_submitter_user_id'] );
+
+		// If the entry is pending, we need to re-prepare the fields info to handle post submission process.
+		$fields = self::get_fields();
+		foreach ( $fields as $field_index => $field ) {
+			$field_settings = $field->to_formatted_array();
+			$field_type     = Forminator_Field::get_property( 'type', $field_settings );
+			if ( 'stripe-ocs' === $field_type ) {
+				self::$info['stripe_field'] = $field_settings;
+			} else {
+				self::set_field_data_array( $field_index, $field );
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * Process pending stripe payment
+	 *
+	 * @param Forminator_Form_Entry_Model $entry Form Entry.
+	 * @return void
+	 * @throws Exception When there is an error.
+	 */
+	public function process_pending_stripe_payment( $entry ) {
+		if ( empty( $entry->entry_id ) || 'pending' !== $entry->status ) {
+			return;
+		}
+		if ( empty( $entry->meta_data ) || empty( $entry->meta_data['_stripe_checkout_session_id'] ) ) {
+			return;
+		}
+		$session_id = $entry->meta_data['_stripe_checkout_session_id']['value'] ?? '';
+		if ( empty( $session_id ) ) {
+			return;
+		}
+		$initialized = $this->init_properties_to_process_webhooks( $entry );
+		if ( ! $initialized ) {
+			return;
+		}
+		$webhook = Forminator_Handle_Webhooks::get_instance();
+		// Lock the webhook processing for this entry to prevent concurrent processing.
+		$locked = $webhook->lock_webhook_processing( $entry );
+		if ( true === $locked ) {
+			// Already processing the webhook for this entry, so we should not process it again.
+			return;
+		}
+		try {
+			$stripe_field = Forminator_Core::get_field_object( 'stripe' );
+			$session      = $stripe_field->get_checkout_session_by_id( $session_id, self::$info['stripe_field'] );
+			if ( empty( $session ) || is_wp_error( $session ) ) {
+				if ( is_wp_error( $session ) ) {
+					throw new Exception( $session->get_error_message() );
+				}
+				throw new Exception( esc_html__( 'Failed to load Stripe session.', 'forminator' ) );
+			}
+			$event_data = array(
+				'payment_intent' => null,
+				'session'        => $session,
+				'is_session'     => false,
+				'setup_intent'   => null,
+			);
+
+			if ( 'paid' === $session->payment_status || 'no_payment_required' === $session->payment_status ) {
+				$event_data['payment_intent'] = $event_data['session']->payment_intent ?? null;
+				$event_data['is_session']     = true;
+				// Payment is successful.
+				$this->process_successful_checkout( $entry, $event_data );
+			} elseif ( 'expired' === $session->status ) {
+				$event_data['is_session'] = true;
+				// Payment expired.
+				$this->process_failed_checkout( $entry, $event_data );
+			} elseif ( ! empty( $session->payment_intent ) ) {
+				$payment_intent = $stripe_field->get_stripe_payment_intent( self::$info['stripe_field'], $session->payment_intent );
+				if ( empty( $payment_intent ) || is_wp_error( $payment_intent ) ) {
+					if ( is_wp_error( $payment_intent ) ) {
+						throw new Exception( $payment_intent->get_error_message() );
+					}
+					throw new Exception( esc_html__( 'Failed to load Stripe payment intent.', 'forminator' ) );
+				}
+				$event_data['payment_intent'] = $payment_intent;
+				// Process the payment intent status and determine the next steps (success, processing, or failure).
+				$this->process_payment_intent_status( $entry, $event_data );
+			} elseif ( 'unpaid' === $session->payment_status
+				&& 'subscription' === $session->mode
+				&& ! empty( $session->customer ) ) {
+				// For subscriptions with failed payments, we need to check if there is a payment or setup intent for the session and process it accordingly.
+				$intents = $stripe_field->get_subscription_intents( self::$info['stripe_field'], $session );
+				if ( is_wp_error( $intents ) ) {
+					throw new Exception( $intents->get_error_message() );
+				}
+				$payment_intent = $intents['payment_intent'];
+				if ( ! empty( $payment_intent ) ) {
+					$event_data['payment_intent'] = $payment_intent;
+					// Process the payment intent status and determine the next steps (success, processing, or failure).
+					$this->process_payment_intent_status( $entry, $event_data );
+				} else {
+					// If the payment intent is not available, check for a setup intent.
+					$setup_intent = $intents['setup_intent'];
+					if ( ! empty( $setup_intent ) &&
+						( 'canceled' === $setup_intent->status
+						|| ( 'requires_payment_method' === $setup_intent->status && ! empty( $setup_intent->last_setup_error ) ) ) ) {
+						$event_data['setup_intent'] = $setup_intent;
+						$this->process_failed_checkout( $entry, $event_data );
+					}
+				}
+			}
+		} catch ( Exception $e ) {
+			forminator_maybe_log(
+				__METHOD__,
+				array(
+					'message' => $e->getMessage(),
+					'entry'   => $entry->entry_id,
+				),
+			);
+		} finally {
+			// Unlock the webhook processing for this entry after processing is complete.
+			$webhook->unlock_webhook_processing( $entry );
+		}
+	}
+
+	/**
+	 * Process checkout based on payment intent status
+	 *
+	 * @param Forminator_Form_Entry_Model $entry Form Entry.
+	 * @param array                       $event_data Stripe webhook event data.
+	 * @return void
+	 */
+	private function process_payment_intent_status( $entry, $event_data ) {
+		$payment_intent = $event_data['payment_intent'];
+		if ( 'succeeded' === $payment_intent->status ) {
+			$this->process_successful_checkout( $entry, $event_data );
+		} elseif ( 'processing' === $payment_intent->status ) {
+			$this->handle_processing_checkout_payment( $entry, $event_data );
+		} elseif ( 'canceled' === $payment_intent->status ||
+			( 'requires_payment_method' === $payment_intent->status && ! empty( $payment_intent->last_payment_error ) ) ) {
+			$this->process_failed_checkout( $entry, $event_data );
+		}
+	}
+
+	/**
+	 * Update entry status
+	 *
+	 * @param Forminator_Form_Entry_Model $entry Form Entry.
+	 * @param object                      $event Stripe webhook event.
+	 * @param object                      $session Stripe session object.
+	 * @return bool
+	 */
+	public function handle_stripe_webhook( $entry, $event, $session ) {
+		if ( empty( $event->type ) ) {
+			return false;
+		}
+		$initialized = $this->init_properties_to_process_webhooks( $entry );
+		if ( ! $initialized ) {
+			return false;
+		}
+		$event_data = array(
+			'payment_intent' => null,
+			'session'        => $session,
+			'is_session'     => false,
+			'setup_intent'   => null,
+		);
+		$status     = false;
+		switch ( $event->type ) {
+			case 'payment_intent.processing':
+				$event_data['payment_intent'] = $event->data->object;
+				$status                       = $this->handle_processing_checkout_payment( $entry, $event_data );
+				break;
+			case 'payment_intent.succeeded':
+				$event_data['payment_intent'] = $event->data->object;
+				$status                       = $this->process_successful_checkout( $entry, $event_data );
+				break;
+			case 'payment_intent.payment_failed':
+				$event_data['payment_intent'] = $event->data->object;
+				$status                       = $this->process_failed_checkout( $entry, $event_data );
+				break;
+			case 'setup_intent.setup_failed':
+				$event_data['setup_intent'] = $event->data->object;
+				$status                     = $this->process_failed_checkout( $entry, $event_data );
+				break;
+			case 'checkout.session.completed':
+			case 'checkout.session.async_payment_succeeded':
+				$event_data['is_session']     = true;
+				$event_data['session']        = $event->data->object;
+				$event_data['payment_intent'] = $event_data['session']->payment_intent ?? null;
+				// Payment is successful.
+				$status = $this->process_successful_checkout( $entry, $event_data );
+				break;
+			case 'checkout.session.expired':
+			case 'checkout.session.async_payment_failed':
+				$event_data['is_session'] = true;
+				$event_data['session']    = $event->data->object;
+				// Payment failed or expired.
+				$status = $this->process_failed_checkout( $entry, $event_data );
+				break;
+			default:
+				// Unexpected event type.
+				$status = false;
+		}
+		return $status;
+	}
+
+	/**
+	 * Update stripe data in entry meta.
+	 *
+	 * @param Forminator_Form_Entry_Model $entry Form Entry.
+	 * @param array                       $stripe_data Stripe data.
+	 */
+	private function update_stripe_meta( $entry, $stripe_data ) {
+		if ( empty( self::$info['stripe_field'] ) || empty( $entry->meta_data ) || empty( $stripe_data ) ) {
+			return false;
+		}
+		$element_id   = self::$info['stripe_field']['element_id'];
+		$meta_id      = $entry->meta_data[ $element_id ]['id'];
+		$date_updated = date_i18n( 'Y-m-d H:i:s' );
+
+		// Update stripe data in entry meta.
+		$entry->update_meta( $meta_id, $element_id, $stripe_data, $date_updated );
+
+		// Update stripe data in prepared data for further processing.
+		self::$prepared_data[ $element_id ] = $stripe_data;
+	}
+
+	/**
+	 * Handle processing checkout payment
+	 *
+	 * @param Forminator_Form_Entry_Model $entry Form Entry.
+	 * @param array                       $event_data Stripe webhook event data.
+	 * @return bool
+	 */
+	private function handle_processing_checkout_payment( $entry, $event_data ) {
+		try {
+			$forminator_stripe_field = Forminator_Core::get_field_object( 'stripe' );
+			$stripe_data             = $forminator_stripe_field->process_pending_transaction( self::$info['stripe_field'], $entry, $event_data );
+			if ( ! empty( $stripe_data ) ) {
+				// Update stripe data in entry meta.
+				$this->update_stripe_meta( $entry, $stripe_data );
+				return true;
+			}
+		} catch ( Exception $e ) {
+			forminator_maybe_log( __METHOD__, $e->getMessage(), $entry );
+		}
+		return false;
+	}
+
+	/**
+	 * Process successful checkout
+	 *
+	 * @param Forminator_Form_Entry_Model $entry Form Entry.
+	 * @param array                       $event_data Stripe webhook event data.
+	 * @param bool                        $is_immediate Whether the processing is immediate or not.
+	 * @return bool
+	 */
+	private function process_successful_checkout( $entry, $event_data, $is_immediate = false ) {
+		try {
+			$forminator_stripe_field = Forminator_Core::get_field_object( 'stripe' );
+			$stripe_data             = $forminator_stripe_field->process_successful_transaction( self::$info['stripe_field'], $entry, self::$module_object, $event_data );
+			if ( is_wp_error( $stripe_data ) ) {
+				forminator_maybe_log( __METHOD__, $stripe_data->get_error_message(), $entry );
+				return false;
+			}
+			if ( ! empty( $stripe_data ) ) {
+				// Update stripe data in entry meta.
+				$this->update_stripe_meta( $entry, $stripe_data );
+				$session = $event_data['session'];
+				if ( false === $event_data['is_session'] || ( 'paid' === $session->payment_status || 'no_payment_required' === $session->payment_status ) ) {
+					if ( self::$is_leads ) {
+
+						// Update the entry status to active.
+						$entry->update_status( 'active' );
+
+						// Process integrated add-ons and emails for quizzes.
+						$form_action = new Forminator_Quiz_Front_Action();
+						$form_action->run_post_submission_process( $entry );
+
+						// Remove the submitter from entry meta, as integrations have been processed.
+						$entry->remove_field( '_submitter_user_id' );
+
+						return true;
+					}
+
+					if ( isset( self::$module_settings['form-type'] ) && 'registration' === self::$module_settings['form-type'] ) {
+						if ( ! self::$registration ) {
+							self::$registration = new Forminator_CForm_Front_User_Registration();
+						}
+						if ( ! empty( self::$prepared_data['_user_registration_data'] ) && is_array( self::$prepared_data['_user_registration_data'] ) ) {
+							if ( isset( self::$prepared_data['_user_registration_data']['user_pass'] ) ) {
+								// Decrypt the user password before processing the registration.
+								$decrypted_password = Forminator_CForm_Front_User_Registration::openssl_decrypt( self::$prepared_data['_user_registration_data']['user_pass'] );
+								if ( false !== $decrypted_password ) {
+									self::$prepared_data['_user_registration_data']['user_pass'] = $decrypted_password;
+									// Set the user registration data to the registration object for further processing.
+									self::$registration->set_user_registration_data( self::$prepared_data['_user_registration_data'] );
+								} else {
+									forminator_maybe_log(
+										__METHOD__,
+										array(
+											'message'  => esc_html__( 'Failed to decrypt user password.', 'forminator' ),
+											'entry_id' => $entry->entry_id,
+										),
+									);
+									return false;
+								}
+							} else {
+								// Set the user registration data to the registration object for further processing.
+								self::$registration->set_user_registration_data( self::$prepared_data['_user_registration_data'] );
+							}
+						}
+						$user_auto_login = $entry->get_meta( '_user_registration_automatic_login', false );
+						if ( $is_immediate && ! empty( $user_auto_login ) ) {
+							self::$registration->set_auto_login( true );
+						}
+					}
+
+					// Update the entry status to active.
+					$entry->update_status( 'active' );
+
+					// Update hidden fields with submission ID if they exist in the prepared data.
+					$this->maybe_update_hidden_fields( $entry );
+
+					// Process integrated addons, create WP posts, user registration and emails.
+					$this->post_submission_process( $entry );
+
+					// Remove the user registration data from entry fields, as it's already processed and won't be needed anymore.
+					if ( isset( self::$module_settings['form-type'] ) && 'registration' === self::$module_settings['form-type'] ) {
+						$entry->remove_field( '_user_registration_data' );
+						$entry->remove_field( '_user_registration_automatic_login' );
+					}
+
+					// Remove the user login data from entry fields, as it is no longer needed after successful processing.
+					if ( isset( self::$module_settings['form-type'] ) && 'login' === self::$module_settings['form-type'] ) {
+						$entry->remove_field( '_user_login_data' );
+					}
+
+					// Remove the hidden submission ID fields from entry meta, as they are no longer needed after successful processing.
+					if ( self::is_custom_sequence_enabled() ) {
+						$entry->remove_field( '_hidden_submission_id_fields' );
+					}
+
+					// Remove the Stripe checkout session ID from entry meta, as it's no longer needed after successful processing.
+					$entry->remove_field( '_stripe_checkout_session_id' );
+
+					// Remove the draft ID from entry meta, as it's no longer needed after successful processing.
+					$entry->remove_field( '_previous_draft_id' );
+
+					// Remove the submitter from entry meta, as integrations have been processed.
+					$entry->remove_field( '_submitter_user_id' );
+
+					// If the form is set to prevent storing entries, delete the entry after processing.
+					if ( self::prevent_store() ) {
+						$key = 'forminator_entry_object_temporary_storage_' . $entry->entry_id;
+						set_transient( $key, $entry, DAY_IN_SECONDS );
+						$entry->delete();
+					}
+				}
+				return true;
+			}
+		} catch ( Exception $e ) {
+			forminator_maybe_log( __METHOD__, $e->getMessage(), $entry );
+		}
+		return false;
+	}
+
+	/**
+	 * Update hidden fields with submission ID if they exist in the prepared data.
+	 *
+	 * @param Forminator_Form_Entry_Model $entry Form Entry.
+	 */
+	private function maybe_update_hidden_fields( $entry ) {
+		if ( ! empty( self::$prepared_data['_hidden_submission_id_fields'] ) && is_array( self::$prepared_data['_hidden_submission_id_fields'] )
+			&& ! empty( $entry->meta_data ) ) {
+			$meta_data = $entry->meta_data;
+			foreach ( self::$prepared_data['_hidden_submission_id_fields'] as $field_id ) {
+				if ( ! empty( $meta_data[ $field_id ] ) && ! empty( $meta_data[ $field_id ]['id'] ) ) {
+					$meta_id       = $meta_data[ $field_id ]['id'];
+					$submission_id = forminator_get_submission_id( null, $entry );
+					// Update the hidden field with custom sequence submission ID in entry meta.
+					$entry->update_meta( $meta_id, $field_id, $submission_id );
+					// Update the prepared data with the custom sequence submission ID for the hidden field.
+					self::$prepared_data[ $field_id ] = $submission_id;
+				}
+			}
+		}
+	}
+
+	/**
+	 * Process failed checkout session
+	 *
+	 * @param Forminator_Form_Entry_Model $entry Form Entry.
+	 * @param array                       $event_data Stripe webhook event data.
+	 * @return bool
+	 */
+	private function process_failed_checkout( $entry, $event_data ) {
+		try {
+			$forminator_stripe_field = Forminator_Core::get_field_object( 'stripe' );
+			$stripe_data             = $forminator_stripe_field->process_failed_transaction( self::$info['stripe_field'], $entry, self::$module_object, $event_data );
+			if ( is_wp_error( $stripe_data ) ) {
+				forminator_maybe_log( __METHOD__, $stripe_data->get_error_message(), $entry );
+				return false;
+			}
+			if ( ! empty( $stripe_data ) ) {
+				// Update stripe data in entry meta.
+				$this->update_stripe_meta( $entry, $stripe_data );
+			}
+			// Update the entry status to failed.
+			$entry->update_status( 'failed' );
+
+			// Remove the user registration data from entry fields, as the payment failed and it is no longer needed.
+			if ( isset( self::$module_settings['form-type'] ) && 'registration' === self::$module_settings['form-type'] ) {
+				$entry->remove_field( '_user_registration_data' );
+				$entry->remove_field( '_user_registration_automatic_login' );
+			}
+
+			// Remove the user login data from entry fields, as the payment failed and it is no longer needed.
+			if ( isset( self::$module_settings['form-type'] ) && 'login' === self::$module_settings['form-type'] ) {
+				$entry->remove_field( '_user_login_data' );
+			}
+
+			// Remove the hidden submission ID fields from entry meta, as the payment failed and they are no longer needed.
+			if ( self::is_custom_sequence_enabled() ) {
+				$entry->remove_field( '_hidden_submission_id_fields' );
+			}
+
+			// Remove the Stripe checkout session ID from entry meta, as the payment failed and it is no longer needed.
+			$entry->remove_field( '_stripe_checkout_session_id' );
+
+			// Remove the draft ID from entry meta, as the payment failed and the draft is kept for another attempt.
+			$entry->remove_field( '_previous_draft_id' );
+
+			// Remove the submitter from entry meta, as the payment failed.
+			$entry->remove_field( '_submitter_user_id' );
+
+			// Process the failed email notification if it's set in the form settings.
+			$this->process_failed_email( $entry );
+			return true;
+		} catch ( Exception $e ) {
+			forminator_maybe_log( __METHOD__, $e->getMessage(), $entry );
+			return false;
+		}
+	}
+
+	/**
+	 * Update payment status for pending entry
+	 *
+	 * @param Forminator_Form_Entry_Model $entry Form Entry.
+	 * @param string                      $session_id Stripe session ID.
+	 * @return null|WP_Error
+	 */
+	private function update_payment_status_for_pending_entry( $entry, $session_id ) {
+		$initialized = $this->init_properties_to_process_webhooks( $entry );
+		// Reset the payment ID in prepared data as it may reset on `init_properties_to_process_webhooks` call.
+		self::$prepared_data['paymentid'] = $session_id;
+		if ( ! $initialized ) {
+			return;
+		}
+		$stripe_field = Forminator_Core::get_field_object( 'stripe' );
+		$session      = $stripe_field->get_checkout_session_by_id( $session_id, self::$info['stripe_field'] );
+		if ( ! empty( $session ) && ! is_wp_error( $session ) && 'complete' === $session->status
+			&& ( 'paid' === $session->payment_status || 'no_payment_required' === $session->payment_status ) ) {
+			$webhook = Forminator_Handle_Webhooks::get_instance();
+
+			// Lock the webhook processing for this entry to prevent concurrent processing.
+			$locked = $webhook->lock_webhook_processing( $entry );
+			if ( true === $locked ) {
+				// Already processing the webhook for this entry, so we should not process it again.
+				return;
+			}
+
+			$data = array(
+				'payment_intent' => $session->payment_intent ?? null,
+				'session'        => $session,
+				'is_session'     => true,
+				'setup_intent'   => null,
+			);
+			try {
+				$result = $this->process_successful_checkout( $entry, $data, true );
+				// If the form is a login form and the payment was successful, attempt to log in the user.
+				if ( true === $result && isset( self::$module_settings['form-type'] ) && 'login' === self::$module_settings['form-type'] ) {
+					if ( ! empty( self::$prepared_data['_user_login_data'] ) && is_array( self::$prepared_data['_user_login_data'] ) ) {
+						if ( isset( self::$prepared_data['_user_login_data']['user_password'] ) ) {
+							$user_data = self::$prepared_data['_user_login_data'];
+							// Decrypt the user password before login.
+							$decrypted_password = Forminator_CForm_Front_User_Registration::openssl_decrypt( $user_data['user_password'] );
+							if ( false !== $decrypted_password ) {
+								$user_data['user_password'] = $decrypted_password;
+								$sign_on                    = wp_signon( $user_data );
+								if ( is_wp_error( $sign_on ) ) {
+									return $sign_on;
+								}
+							} else {
+								return new WP_Error( 'failed_decrypt_password', esc_html__( 'Failed to decrypt user password.', 'forminator' ) );
+							}
+						}
+					}
+				}
+			} finally {
+				// Unlock the webhook processing for this entry after processing is complete.
+				$webhook->unlock_webhook_processing( $entry );
+			}
+		}
+	}
+
+	/**
+	 * Check if we should check the payment status on submission for pending entries.
+	 *
+	 * @param Forminator_Form_Entry_Model $entry Form Entry.
+	 * @return bool
+	 */
+	private function should_check_payment_status_on_submission( $entry ) {
+		$check_payment_status = false;
+		$fields               = self::get_fields();
+		$stripe_field         = null;
+		foreach ( $fields as $field ) {
+			$field_settings = $field->to_formatted_array();
+			$field_type     = Forminator_Field::get_property( 'type', $field_settings );
+			if ( 'stripe-ocs' === $field_type ) {
+				$stripe_field = $field_settings;
+				break;
+			}
+		}
+		if ( ! empty( $stripe_field ) ) {
+			$stripe_field_obj = Forminator_Core::get_field_object( 'stripe' );
+			$stripe_meta      = $stripe_field_obj->get_stripe_meta( $entry, $stripe_field );
+			if ( ! empty( $stripe_meta ) && ! empty( $stripe_meta['mode'] ) ) {
+				$has_active_webhook = Forminator_Gateway_Stripe::is_webhook_active( $stripe_meta['mode'] );
+				if ( ! $has_active_webhook ) {
+					$check_payment_status = true;
+				}
+			}
+		}
+		// For login and registration forms with automatic login enabled, we should check the payment status on submission to ensure that the user is logged in only after a successful payment.
+		if ( self::allow_only_immediate_payments( self::$module_settings ) ) {
+			$check_payment_status = true;
+		}
+		return apply_filters( 'forminator_check_payment_status_on_successful_submission', $check_payment_status, $entry );
+	}
+
+	/**
+	 * Check if the form is a login or registration form with automatic login enabled.
+	 * Allow only immediate payments for these forms to ensure that the user is logged in only after a successful payment.
+	 *
+	 * @param array $module_settings The module settings.
+	 * @return bool
+	 */
+	public static function allow_only_immediate_payments( $module_settings ) {
+		if ( ! isset( $module_settings['form-type'] ) ) {
+			return false;
+		}
+		if ( 'login' === $module_settings['form-type'] ) {
+			return true;
+		}
+		if ( 'registration' === $module_settings['form-type']
+			&& isset( $module_settings['automatic-login'] ) && ! empty( $module_settings['automatic-login'] ) ) {
+			return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Process the failed email notification if it's set in the form settings.
+	 *
+	 * @param Forminator_Form_Entry_Model $entry Form Entry.
+	 */
+	public function process_failed_email( $entry ) {
+		$form = clone self::$module_object;
+		if ( 'quizzes' === $entry->entry_type ) {
+			// For quizzes, we need to get the quiz form instead of the leads form.
+			$form = Forminator_Base_Form_Model::get_model( $entry->form_id );
+		}
+		if ( empty( $form ) || empty( $form->notifications ) ) {
+			return;
+		}
+		$failed_notification = $this->get_stripe_payment_failed_notification( $form->notifications );
+		if ( $failed_notification ) {
+			unset( $form->notifications );
+			$form->notifications[] = $failed_notification;
+			if ( 'custom-forms' === $entry->entry_type ) {
+				$forminator_mail_sender = new Forminator_CForm_Front_Mail();
+				$forminator_mail_sender->process_mail( $form, $entry );
+			} elseif ( self::$is_leads && 'quizzes' === $entry->entry_type ) {
+				$forminator_mail_sender = new Forminator_Quiz_Front_Mail();
+				$forminator_mail_sender->process_mail( $form, $entry );
+			}
+		}
+	}
+
+	/**
+	 * Get the stripe payment failed notification from the form notifications.
+	 *
+	 * @param array $notifications The form notifications.
+	 * @return array|false The stripe payment failed notification if found, false otherwise.
+	 */
+	private function get_stripe_payment_failed_notification( $notifications ) {
+		foreach ( $notifications as $notification ) {
+			if ( isset( $notification['type'] ) && 'stripe-payment-failed' === $notification['type']
+				&& isset( $notification['enabled'] ) && 'true' === $notification['enabled'] ) {
+				return $notification;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Get the stripe field settings from the form fields.
+	 *
+	 * @return array|null The stripe field settings if found, null otherwise.
+	 */
+	private function get_stripe_field_settings() {
+		$stripe_settings = ! empty( self::$info['stripe_field'] ) ? self::$info['stripe_field'] : null;
+		if ( empty( $stripe_settings ) ) {
+			foreach ( self::get_fields() as $field ) {
+				$field_settings = $field->to_formatted_array();
+				if ( 'stripe-ocs' === Forminator_Field::get_property( 'type', $field_settings ) ) {
+					$stripe_settings = $field_settings;
+					break;
+				}
+			}
+		}
+		return $stripe_settings;
+	}
+
+	/**
+	 * Get response for pending entry
+	 *
+	 * @return array
+	 */
+	private function get_response_for_pending_entry() {
+		$response = array( 'return' => false );
+		if ( ! empty( self::$prepared_data['paymentid'] ) ) {
+			$session_id             = self::$prepared_data['paymentid'];
+			$transient_response_key = 'forminator_payment_completed_response_' . $session_id;
+			$session_data           = Forminator_Stripe::get_pending_checkout_session_data( $session_id );
+			// If the session data is empty or the entry ID is not set, then the entry has not been created yet.
+			if ( empty( $session_data ) || empty( $session_data['entry_id'] ) ) {
+				// Check if the payment has been completed and the response is stored in a transient.
+				if ( empty( $session_data ) ) {
+					$payment_response = get_transient( $transient_response_key );
+					if ( ! empty( $payment_response ) && isset( $payment_response['return'] ) && isset( $payment_response['data'] ) ) {
+						// The stored response is only for the browser that paid.
+						if ( ! Forminator_Stripe::is_payment_owner( $payment_response['owner'] ?? '' ) ) {
+							return self::get_foreign_payment_response();
+						}
+						// Delete the transient after retrieving the response, as it is no longer needed.
+						delete_transient( $transient_response_key );
+						return $payment_response;
+					}
+				}
+				return $response;
+			}
+
+			// Only the browser that started the payment may complete it or sign in with it.
+			if ( ! Forminator_Stripe::is_payment_owner( $session_data['owner'] ?? '' ) ) {
+				return self::get_foreign_payment_response();
+			}
+
+			// Processing swaps the module, keep the submitted form.
+			$current_form_id = (int) self::$module_object->id;
+
+			$transient_key = null;
+			$has_error     = false;
+			$error_message = '';
+			$entry         = new Forminator_Form_Entry_Model( $session_data['entry_id'] );
+			// If the entry is not found in the database, check if it's stored in a transient.
+			// This is necessary because the entry may have been deleted after the payment success handled through the webhook.
+			if ( empty( $entry->entry_id ) && self::prevent_store() ) {
+				// If the entry is not found in the database, check if it's stored in a transient.
+				$transient_key = 'forminator_entry_object_temporary_storage_' . $session_data['entry_id'];
+				$entry         = get_transient( $transient_key );
+			}
+			if ( $entry instanceof Forminator_Form_Entry_Model && ! empty( $entry->entry_id ) && in_array( $entry->entry_type, array( 'custom-forms', 'quizzes' ), true ) ) {
+				$form_id = $entry->form_id;
+				if ( 'quizzes' === $entry->entry_type ) {
+					$quiz_form = Forminator_Base_Form_Model::get_model( $entry->form_id );
+					if ( ! empty( $quiz_form->settings['hasLeads'] ) && $quiz_form->settings['leadsId'] ) {
+						// For quizzes, we need to check against the leads form ID instead of the quiz form ID.
+						$form_id = $quiz_form->settings['leadsId'];
+					}
+				}
+
+				// Only process entries of the current form.
+				if ( $current_form_id === (int) $form_id ) {
+					// Apply stored payment description once the PaymentIntent exists (after confirm).
+					$stripe_settings = $this->get_stripe_field_settings();
+					if ( ! empty( $stripe_settings ) ) {
+						$stripe_field_obj = Forminator_Core::get_field_object( 'stripe' );
+						if ( $stripe_field_obj instanceof Forminator_Stripe ) {
+							$stripe_field_obj->apply_stored_checkout_payment_description(
+								$stripe_settings,
+								$entry,
+								$session_id
+							);
+						}
+					}
+
+					if ( 'pending' === $entry->status && $this->should_check_payment_status_on_submission( $entry ) ) {
+						// Update the payment status.
+						$update_status = $this->update_payment_status_for_pending_entry( $entry, $session_id );
+						if ( ! empty( $update_status ) && is_wp_error( $update_status ) ) {
+							$has_error     = true;
+							$error_message = $update_status->get_error_message();
+						}
+					}
+
+					// We should return the response to the front end as the entry is found and belongs to the current form.
+					$response['return'] = true;
+
+					// If the entry status is already marked as failed, we should return a failed response to the frontend, as the status may have already been updated through the webhook.
+					if ( 'failed' === $entry->status ) {
+						$has_error     = true;
+						$error_message = esc_html__( 'Payment failed, please try again!', 'forminator' );
+					}
+					if ( $has_error ) {
+						// Clear the submit errors to prevent them from being displayed on the frontend, as form is already submitted.
+						self::$submit_errors = array();
+						$response['data']    = self::return_error( $error_message );
+					} else {
+						// Recreate the prepared data for the entry, as it may have been lost after redirecting to the payment gateway and back to the form.
+						// This is necessary to ensure that the submission behavior is consistent with the behavior conditions set in the form settings.
+						self::$prepared_data = recreate_prepared_data( static::$module_object, $entry );
+						if ( empty( self::$info['stripe_field'] ) && ! empty( $stripe_settings ) ) {
+							// If the stripe field settings are not set in self::$info, we should set them to ensure that the submission behavior is consistent with the form settings.
+							self::$info['stripe_field'] = $stripe_settings;
+						}
+						$response['data'] = self::get_response( $entry );
+					}
+					if ( 'quizzes' === $entry->entry_type && 'failed' !== $entry->status ) {
+						$quiz_entry = $entry->get_meta( 'entry', null );
+						if ( empty( $quiz_entry ) ) {
+							// Set the entry_id so that the frontend can initiate the quiz.
+							$response['data']['entry_id'] = $entry->entry_id;
+							$entry_token                  = $entry->get_meta( 'entry_token', null );
+							if ( ! empty( $entry_token ) ) {
+								// Set the entry_token so that the frontend can initiate the quiz.
+								$response['data']['entry_token'] = $entry_token;
+							}
+						}
+					}
+					if ( ! empty( $transient_key ) ) {
+						// If the entry was retrieved from a transient, delete the transient after returning the response.
+						delete_transient( $transient_key );
+					}
+
+					// Store the response in a transient for 1 hour, so if the payment method redirects to another tab, we can retrieve the response from the transient and return it to the frontend.
+					// For payment methods like Cash App, the payment might redirect to another tab where the user can complete the payment.
+					set_transient( $transient_response_key, $response + array( 'owner' => $session_data['owner'] ), HOUR_IN_SECONDS );
+
+					// Remove the pending checkout session from the local tracking (options table), as it has been processed and is no longer needed.
+					Forminator_Stripe::remove_pending_checkout_session( $session_id );
+					return $response;
+				}
+			}
+		}
+		return $response;
+	}
+
+	/**
+	 * Message for a Stripe payment resumed in a browser that did not start it.
+	 *
+	 * @return string
+	 */
+	private static function get_foreign_payment_message() {
+		return esc_html__( 'This payment was started in a different browser. If it was completed, it will be processed shortly.', 'forminator' );
+	}
+
+	/**
+	 * Response for a Stripe payment resumed in a browser that did not start it.
+	 *
+	 * The webhook or status cron still completes the payment.
+	 *
+	 * @return array
+	 */
+	private static function get_foreign_payment_response() {
+		return array(
+			'return' => true,
+			'data'   => self::return_error( self::get_foreign_payment_message() ),
+		);
+	}
+
+	/**
 	 * Handle form
 	 *
 	 * @since 1.0
@@ -1625,28 +2566,32 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 	 * @since 1.5.1 utilize `_post_data` which already defined on submit
 	 *
 	 * @param bool $preview Is preview.
+	 * @param bool $is_pending Is pending.
 	 *
 	 * @return array|bool
 	 */
-	public function handle_form( $preview = false ) {
+	public function handle_form( $preview = false, $is_pending = false ) {
 		if ( ! self::$module_object ) {
 			return false;
 		}
 
-		try {
-			self::can_submit();
-			self::prepare_fields_info( true );
-			self::check_submit_visibility();
-			self::check_captcha();
+		if ( ! $preview && ! $is_pending ) {
+			$response = $this->get_response_for_pending_entry();
+			if ( true === $response['return'] ) {
+				return $response['data'];
+			}
+		}
 
-			$entry = self::get_entry();
-			self::maybe_login( $entry );
+		try {
+			$this->validate_form_submission();
 
 			$passed = self::is_honeypot();
 			if ( ! $passed ) {
 				// show success but dont save form.
 				return self::return_success();
 			}
+
+			$entry = self::get_entry();
 
 			self::maybe_log_legacy_stripe_deprecation();
 
@@ -1665,8 +2610,11 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 				self::attach_addons_on_form_submit();
 
 				$entry->draft_id = $this->set_entry_draft_id();
+
 				if ( self::$is_spam ) {
 					$entry->status = 'spam';
+				} elseif ( true === $is_pending ) {
+					$entry->status = 'pending';
 				} elseif ( self::$is_abandoned ) {
 					$entry->status = 'abandoned';
 					self::check_abandonment_required_fields();
@@ -1676,8 +2624,17 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 					$entry->status = 'active';
 				}
 
-				if ( self::$is_draft || self::$is_abandoned || ! self::prevent_store() ) {
-					$entry->save( null, null, self::$previous_draft_id );
+				self::maybe_login( $entry );
+				if ( $is_pending && ! empty( self::$response_attrs['authentication'] ) ) {
+					// To handle Defender 2FA, we should not create a pending entry if the user is not authenticated yet.
+					if ( in_array( self::$response_attrs['authentication'], array( 'invalid', 'show' ), true ) ) {
+						return self::return_success();
+					}
+				}
+
+				if ( ( $is_pending && ! self::$is_spam ) || self::$is_draft || self::$is_abandoned || ! self::prevent_store() ) {
+					$previous_draft = self::$is_draft || self::$is_abandoned ? self::$previous_draft_id : null;
+					$entry->save( null, null, $previous_draft );
 				}
 			}
 
@@ -1689,31 +2646,29 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 			// Delete submission if payment or file upload fails.
 			$delete_submission = true;
 
-			if ( ! self::has_files_in_temp_storage() ) {
-				self::process_uploads( 'upload' );
-			}
+			self::process_uploads( 'upload' );
 
 			$stripe_response = self::handle_stripe( $entry );
-			if ( ! empty( $stripe_response ) ) {
+			if ( ! empty( $stripe_response ) && false === $is_pending ) {
+				if ( ! empty( self::$previous_draft_id ) ) {
+					$entry->delete_previous_draft( self::$previous_draft_id );
+				}
+
 				return $stripe_response;
 			}
 			self::handle_paypal( $entry );
 			unset( $delete_submission );
 
 			self::process_uploads( 'transfer' );
-			self::maybe_create_post( $entry );
-
-			// save field_data_array with password field for registration forms.
-			$data_for_registration = self::$info['field_data_array'];
 
 			self::save_entry_fields( $entry );
 
-			self::attach_addons_after_entry_saved( $entry );
-			self::maybe_registration( $entry, $data_for_registration );
+			if ( 'pending' !== $entry->status ) {
+				$this->post_submission_process( $entry );
+			}
 
-			self::send_email( $entry );
-
-			$response = self::get_response( $entry );
+			$response             = self::get_response( $entry );
+			$response['entry_id'] = absint( $entry->entry_id );
 
 			// If is lead, and storing in database is disabled, then store the $entry object temporarily in transient.
 			if ( self::$is_leads && self::prevent_store() && 0 === $response['entry_id'] ) {
@@ -1724,6 +2679,11 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 				set_transient( $key, $entry, DAY_IN_SECONDS );
 			}
 			do_action( 'forminator_after_handle_form', $entry );
+
+			// If the entry is pending and there is a Stripe response, include the entry info in the pending checkout session for later processing.
+			if ( true === $is_pending && $stripe_response && ! empty( self::$prepared_data['paymentid'] ) ) {
+				Forminator_Stripe::update_pending_checkout_session( self::$prepared_data['paymentid'], $entry );
+			}
 		} catch ( Exception $e ) {
 			if ( ! empty( $delete_submission ) && ! empty( $entry->entry_id ) ) {
 				$entry->delete();
@@ -1800,6 +2760,7 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 	 * Save entry fields
 	 *
 	 * @param object $entry Entry object.
+	 * @throws Exception When there is an error.
 	 */
 	private static function save_entry_fields( $entry ) {
 		self::remove_password();
@@ -1821,11 +2782,9 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 		// @since 1.2 Add field_data_array to param.
 		$added_data_array = self::$info['field_data_array'];
 		if ( ! self::$is_draft && ! self::$is_abandoned ) {
-			$added_data_array = self::attach_addons_add_entry_fields( $added_data_array, $entry );
-
 			// Preserve raw choice values before labels replace them.
 			$choice_values = array();
-			foreach ( $added_data_array as $field_item ) {
+			foreach ( $added_data_array as $key => $field_item ) {
 				if ( empty( $field_item['name'] ) ) {
 					continue;
 				}
@@ -1835,6 +2794,11 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 					|| 0 === strpos( $slug, 'checkbox-' )
 				) {
 					$choice_values[ $slug ] = $field_item['value'];
+				}
+
+				// Remove postdata fields from the entry, as they are handled in the maybe_create_post method, and avoid resetting the postdata fields when the entry is updated.
+				if ( 'pending' !== $entry->status && 0 === strpos( $slug, 'postdata-' ) ) {
+					unset( $added_data_array[ $key ] );
 				}
 			}
 			if ( $choice_values ) {
@@ -1856,9 +2820,62 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 		if ( self::$is_leads ) {
 			self::$response_attrs['entry_id'] = $entry->entry_id;
 
+			// Bind the pending entry to this visitor so nobody else can complete it.
+			$entry_token                         = wp_generate_password( 32, false, false );
+			self::$response_attrs['entry_token'] = $entry_token;
+
+			$added_data_array[] = array(
+				'name'  => 'entry_token',
+				'value' => $entry_token,
+			);
+
 			$added_data_array[] = array(
 				'name'  => 'skip_form',
 				'value' => '0',
+			);
+		}
+
+		// Add user registration data to entry fields if the entry is pending and the form type is registration.
+		if ( 'pending' === $entry->status && isset( self::$module_settings['form-type'] ) && 'registration' === self::$module_settings['form-type']
+			&& self::$registration && method_exists( self::$registration, 'get_user_registration_data' ) ) {
+			$user_data = self::$registration->get_user_registration_data();
+			if ( ! empty( $user_data ) ) {
+				if ( isset( $user_data['user_pass'] ) ) {
+					// Encrypt the password before saving it to the entry fields.
+					$user_data['user_pass'] = Forminator_CForm_Front_User_Registration::openssl_encrypt( $user_data['user_pass'] );
+					if ( false === $user_data['user_pass'] ) {
+						// If encryption fails, delete the entry and throw an exception to prevent saving the entry with unencrypted password.
+						$entry->delete();
+						throw new Exception( esc_html__( 'Failed to encrypt the password.', 'forminator' ) );
+					}
+				}
+				$added_data_array[] = array(
+					'name'  => '_user_registration_data',
+					'value' => $user_data,
+				);
+				// Add automatic login flag to entry fields if the form type is registration and automatic login is enabled.
+				if ( isset( self::$module_settings['automatic-login'] ) && ! empty( self::$module_settings['automatic-login'] ) ) {
+					$added_data_array[] = array(
+						'name'  => '_user_registration_automatic_login',
+						'value' => 1,
+					);
+				}
+			}
+		}
+
+		// Keep the draft ID on the pending entry, so the draft can be deleted once the payment is completed.
+		if ( 'pending' === $entry->status && ! empty( self::$previous_draft_id ) ) {
+			$added_data_array[] = array(
+				'name'  => '_previous_draft_id',
+				'value' => self::$previous_draft_id,
+			);
+		}
+
+		// Keep the submitter, 0 for guests, as integrations run without them once the payment completes.
+		if ( 'pending' === $entry->status ) {
+			$added_data_array[] = array(
+				'name'  => '_submitter_user_id',
+				'value' => get_current_user_id(),
 			);
 		}
 
@@ -1925,9 +2942,32 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 	}
 
 	/**
+	 * Create post for lead form.
+	 *
+	 * @param Forminator_Form_Entry_Model $entry Form entry object.
+	 * @param int                         $lead_id Lead form ID.
+	 * @return void
+	 */
+	public static function maybe_create_post_for_lead_form( $entry, $lead_id = 0 ) {
+		if ( $lead_id ) {
+			self::$module_object = Forminator_Base_Form_Model::get_model( $lead_id );
+			self::$prepared_data = recreate_prepared_data( self::$module_object, $entry );
+			// Set the entry ID in the prepared data so that the form fields can be correctly processed for addon.
+			self::$prepared_data['entry_id'] = $entry->entry_id;
+			// If the entry is pending, we need to re-prepare the fields info to handle post submission process.
+			$fields = self::get_fields();
+			foreach ( $fields as $field_index => $field ) {
+				self::set_field_data_array( $field_index, $field );
+			}
+
+			self::maybe_create_post( $entry );
+		}
+	}
+
+	/**
 	 * Maybe create post
 	 *
-	 * @param object|null $entry Form entry object.
+	 * @param Forminator_Form_Entry_Model|null $entry Form entry object.
 	 * @throws Exception When there is an error.
 	 */
 	private static function maybe_create_post( $entry = null ) {
@@ -1948,14 +2988,17 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 
 		foreach ( $postdata_return as $postdata ) {
 			if ( 'success' === $postdata['type'] ) {
+				$post_field_data = array();
 				foreach ( self::$info['field_data_array'] as $field_key => $field_datum ) {
 					if ( $field_datum['name'] === $postdata['field_id'] ) {
 						self::$info['field_data_array'][ $field_key ] = array(
 							'name'  => $postdata['field_id'],
 							'value' => $postdata['field_data'],
 						);
+						$post_field_data[ $field_key ]                = self::$info['field_data_array'][ $field_key ];
 					}
 				}
+				$entry->reset_fields( $post_field_data );
 			} else {
 				throw new Exception( esc_html( $postdata['value'] ) );
 			}
@@ -2387,9 +3430,25 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 			wp_send_json_error( $response );
 		}
 
-		unset( $response['file_path'] );
+		// Do not return filesystem path, public URL, or stored file name.
+		// Client keeps only an opaque access token resolved server-side on submit.
+		unset( $response['file_path'], $response['file_url'], $response['file_name'] );
+		if ( empty( $response['access_token'] ) ) {
+			wp_send_json_error(
+				array(
+					'success' => false,
+					'message' => esc_html__( 'Error saving form. Upload error.', 'forminator' ),
+				)
+			);
+		}
 
-		wp_send_json_success( $response );
+		wp_send_json_success(
+			array(
+				'success'      => true,
+				'message'      => '',
+				'access_token' => $response['access_token'],
+			)
+		);
 	}
 
 	/**
@@ -2640,6 +3699,16 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 		$capture = $paypal->capture_order( $entry_data['transaction_id'], $mode );
 
 		if ( ! isset( $capture->status ) || 'COMPLETED' !== $capture->status ) {
+			forminator_maybe_log(
+				__METHOD__,
+				array(
+					'transaction_id' => $entry_data['transaction_id'],
+					'mode'           => $mode,
+					'order_status'   => isset( $capture->status ) ? $capture->status : '',
+					'capture_result' => $capture,
+				)
+			);
+
 			throw new Exception( esc_html__( 'Payment failed, please try again!', 'forminator' ) );
 		}
 		$paypal_entry_data['value']['status'] = 'COMPLETED';
@@ -2658,6 +3727,10 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 	 * Prepare hidden and visible fields
 	 */
 	public static function check_fields_visibility() {
+		// Check if visibility is already checked to avoid unnecessary processing.
+		if ( true === self::$is_fields_visibility_checked ) {
+			return;
+		}
 		$fields         = self::$module_object->get_fields();
 		$visible_fields = array(); // Visible fields with calculable values.
 		$unspecified    = array(); // it's not clear these fields are hidden or visible.
@@ -2811,6 +3884,13 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 			error_log( '[Forminator] Unspecified fields ' . wp_json_encode( array_keys( $unspecified ) ) );
 			self::$hidden_fields = array_merge( self::$hidden_fields, array_keys( $unspecified ) );
+
+			// An unresolved payment blocks the submission instead of being skipped. Drafts take no payment.
+			if ( ! self::$is_draft && ! self::$is_abandoned ) {
+				foreach ( preg_grep( '/^(stripe|stripe-ocs|paypal)-\d+$/', array_keys( $unspecified ) ) as $field_id ) {
+					self::$submit_errors[] = array( $field_id => esc_html__( 'Error! Invalid payment amount!', 'forminator' ) );
+				}
+			}
 		}
 
 		/**
@@ -2822,6 +3902,9 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 		 * @return array
 		 */
 		self::$prepared_data = apply_filters( 'forminator_prepared_data', self::$prepared_data, self::$module_object );
+
+		// Set a flag to indicate that field visibility has been processed, so we don't repeat this unnecessarily.
+		self::$is_fields_visibility_checked = true;
 	}
 
 	/**
@@ -2914,7 +3997,6 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 				if ( is_array( $post_image ) && $post_image['attachment_id'] > 0 ) {
 					self::$prepared_data[ $field_id ]['post-image'] = $post_image;
 					self::$prepared_data[ $mod_field_id ]           = $post_image;
-					self::$has_post_image                           = true;
 				} else {
 					self::$prepared_data[ $field_id ]['post-image'] = '';
 					self::$prepared_data[ $mod_field_id ]           = '';
@@ -2941,9 +4023,9 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 			if ( isset( self::$prepared_data[ $main_field ] ) ) {
 				$copied_fields = array( $main_field );
 			}
-			// If there are any field copy - add it to the array.
+			// If there are any field copy - add it to the array. Only copy keys end in their number.
 			foreach ( array_keys( self::$prepared_data ) as $key ) {
-				if ( 0 === strpos( $key, $main_field . '-' ) ) {
+				if ( preg_match( '/^' . preg_quote( $main_field, '/' ) . '-\d+$/', $key ) ) {
 					$copied_fields[] = $key;
 				}
 			}
@@ -3067,6 +4149,11 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 				}
 			}
 		}
+		// Never trust client-supplied post-custom; rebuild from field settings only.
+		if ( isset( self::$prepared_data[ $field_id ]['post-custom'] ) ) {
+			unset( self::$prepared_data[ $field_id ]['post-custom'] );
+		}
+
 		$custom_vars = Forminator_Field::get_property( 'post_custom_fields', $field_settings );
 		$custom_meta = Forminator_Field::get_property( 'options', $field_settings );
 		if ( empty( $custom_vars ) || empty( $custom_meta ) || self::$is_draft || self::$is_abandoned ) {
@@ -3410,6 +4497,8 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 	 * @param int   $module_id Module Id.
 	 */
 	private static function handle_hidden_fields_after_entry_save( $entry, $module_id = null ) {
+		$field_with_submission_id = array();
+		$custom_sequence_enabled  = self::is_custom_sequence_enabled();
 		foreach ( self::$info['field_data_array'] as $key => $field ) {
 			if ( 0 === strpos( $field['name'], 'hidden-' ) ) {
 				switch ( $field['field_array']['default_value'] ) {
@@ -3440,9 +4529,32 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 
 				if ( 'submission_id' === $field['value'] ) {
 					self::$info['field_data_array'][ $key ]['value'] = forminator_get_submission_id( null, $entry );
+					if ( $custom_sequence_enabled && ! empty( $entry->status ) && 'pending' === $entry->status ) {
+						$field_with_submission_id[] = $field['name'];
+					}
 				}
 			}
 		}
+		// Add metadata for hidden submission id fields if custom sequence is enabled.
+		// This will be used to update the hidden submission id fields after the entry status is updated to active.
+		if ( $custom_sequence_enabled && ! empty( $field_with_submission_id ) ) {
+			self::$info['field_data_array'][] = array(
+				'name'  => '_hidden_submission_id_fields',
+				'value' => $field_with_submission_id,
+			);
+		}
+	}
+
+	/**
+	 * Check if custom sequence is enabled for the form.
+	 *
+	 * @return bool
+	 */
+	private static function is_custom_sequence_enabled() {
+		$settings                = self::$module_settings;
+		$custom_sequence_enabled = isset( $settings['custom_sequence_enabled'] ) ? filter_var( $settings['custom_sequence_enabled'], FILTER_VALIDATE_BOOLEAN ) : false;
+
+		return $custom_sequence_enabled;
 	}
 
 	/**
@@ -3677,21 +4789,34 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 	/**
 	 * Draft link email submission
 	 *
+	 * Builds the draft link and retention period server-side from the stored draft.
+	 * Recipient comes from the send-draft form (same pattern as admin resend).
+	 * A one-time send token is consumed on use and rotated after success.
+	 *
 	 * @since 1.17.0
 	 */
 	public function submit_email_draft_link() {
 		$draft_id = Forminator_Core::sanitize_text_field( 'draft_id' );
 		$nonce    = 'forminator_nonce_email_draft_link_' . $draft_id;
-		if ( ! check_ajax_referer( $nonce, $nonce ) ) {
+		if ( ! check_ajax_referer( $nonce, $nonce, false ) ) {
 			wp_send_json_error( esc_html__( 'Invalid request, you are not allowed to do that action.', 'forminator' ) );
 		}
 
-		$submitted_data = Forminator_Core::sanitize_array( $_POST );
-		$form_id        = $submitted_data['form_id'];
-		$email          = $submitted_data['email-1'];
+		$email = Forminator_Core::sanitize_text_field( 'email-1' );
+		$token = Forminator_Core::sanitize_text_field( 'draft_email_token' );
+
+		$draft_entry = new Forminator_Form_Entry_Model( $draft_id );
+		if ( empty( $draft_entry->entry_id ) || empty( $draft_entry->form_id ) || empty( $draft_entry->draft_id ) ) {
+			wp_send_json_error( esc_html__( 'Draft entry was not found.', 'forminator' ) );
+		}
+
+		$form_id           = (int) $draft_entry->form_id;
+		$submitted_form_id = absint( Forminator_Core::sanitize_text_field( 'form_id' ) );
+		if ( $submitted_form_id && $submitted_form_id !== $form_id ) {
+			wp_send_json_error( esc_html__( 'Invalid request, you are not allowed to do that action.', 'forminator' ) );
+		}
 
 		if ( empty( $email ) ) {
-
 			wp_send_json_error(
 				array(
 					'field'   => 'email-1',
@@ -3702,8 +4827,7 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 					),
 				)
 			);
-		} elseif ( ! filter_var( $email, FILTER_VALIDATE_EMAIL ) ) {
-
+		} elseif ( ! is_email( $email ) ) {
 			wp_send_json_error(
 				array(
 					'field'   => 'email-1',
@@ -3716,9 +4840,18 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 			);
 		}
 
-		// Send email.
+		$stored_token = get_transient( self::get_draft_email_token_key( $draft_entry->draft_id ) );
+		if ( empty( $token ) || empty( $stored_token ) || ! hash_equals( (string) $stored_token, $token ) ) {
+			wp_send_json_error( esc_html__( 'Invalid request, you are not allowed to do that action.', 'forminator' ) );
+		}
+
+		// Consume immediately so the same pair cannot be replayed in parallel.
+		delete_transient( self::get_draft_email_token_key( $draft_entry->draft_id ) );
+
 		$custom_form = Forminator_Form_Model::model()->load( $form_id );
 		if ( ! is_object( $custom_form ) ) {
+			// Restore token so a legitimate retry is still possible after a hard failure.
+			set_transient( self::get_draft_email_token_key( $draft_entry->draft_id ), $token, DAY_IN_SECONDS );
 			wp_send_json_error(
 				array(
 					'message' => apply_filters(
@@ -3730,21 +4863,55 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 			);
 		}
 
+		$settings          = $custom_form->settings;
+		$save_and_continue = isset( $settings['use_save_and_continue'] ) ? filter_var( $settings['use_save_and_continue'], FILTER_VALIDATE_BOOLEAN ) : false;
+		$enable_email_link = isset( $settings['sc_email_link'] ) ? filter_var( $settings['sc_email_link'], FILTER_VALIDATE_BOOLEAN ) : true;
+		if ( ! $save_and_continue || ! $enable_email_link ) {
+			set_transient( self::get_draft_email_token_key( $draft_entry->draft_id ), $token, DAY_IN_SECONDS );
+			wp_send_json_error( esc_html__( 'Invalid request, you are not allowed to do that action.', 'forminator' ) );
+		}
+
+		$draft_page_id = absint( $draft_entry->get_meta( '_draft_page_id', 0 ) );
+		if ( empty( $draft_page_id ) ) {
+			set_transient( self::get_draft_email_token_key( $draft_entry->draft_id ), $token, DAY_IN_SECONDS );
+			wp_send_json_error( esc_html__( 'Could not determine the page for this draft. The draft link cannot be reconstructed.', 'forminator' ) );
+		}
+
+		$draft_link = self::get_draft_link( $draft_entry->draft_id, $draft_page_id );
+		$retention  = isset( $settings['sc_draft_retention'] ) ? $settings['sc_draft_retention'] : 30;
+
+		$submitted_data = array(
+			'email-1'          => $email,
+			'draft_link'       => $draft_link,
+			'retention_period' => $retention,
+			'action'           => 'forminator_email_draft_link',
+		);
+
 		$draft_notifications = $this->get_draft_notification( $custom_form->notifications, $submitted_data );
+		if ( empty( $draft_notifications ) ) {
+			set_transient( self::get_draft_email_token_key( $draft_entry->draft_id ), $token, DAY_IN_SECONDS );
+			wp_send_json_error( esc_html__( 'No draft email notification is configured for this form.', 'forminator' ) );
+		}
+
 		unset( $custom_form->notifications );
 		$custom_form->notifications[] = $draft_notifications;
 		$forminator_mail_sender       = new Forminator_CForm_Front_Mail();
-		$draft_entry                  = new Forminator_Form_Entry_Model( $draft_id );
 		$mail_sent                    = $forminator_mail_sender->process_mail( $custom_form, $draft_entry, $submitted_data );
-		$response['draft_mail_sent']  = $mail_sent;
+		$response                     = array(
+			'draft_mail_sent' => $mail_sent,
+		);
 
 		if ( $mail_sent ) {
+			// Issue a fresh token for optional "Change email" without replaying the old pair.
+			$response['draft_email_token']  = self::issue_draft_email_token( $draft_entry->draft_id );
 			$response['draft_mail_message'] = sprintf(
 				'<p>%s</p><a href="#" class="draft-resend-mail">%s</a>',
 				esc_html__( 'We\'ve sent the resume form link to your email address. Please check your spam folder if you can\'t find the link in your inbox.', 'forminator' ),
 				esc_html__( 'Change email', 'forminator' )
 			);
 		} else {
+			// Keep the same token so "Resend link" can retry.
+			set_transient( self::get_draft_email_token_key( $draft_entry->draft_id ), $token, DAY_IN_SECONDS );
 			$response['draft_mail_message'] = sprintf(
 				'<p>%s</p><a href="#" class="draft-resend-mail">%s</a>',
 				esc_html__( 'We couldn\'t send the form resume link to your email at this time. Click on the link below to resend it or manually copy and save the link in a safe place.', 'forminator' ),
@@ -3753,5 +4920,34 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 		}
 
 		wp_send_json_success( $response );
+	}
+
+	/**
+	 * Transient key for the one-time draft email send token.
+	 *
+	 * @param string $draft_id Draft ID.
+	 *
+	 * @since 1.57.3
+	 *
+	 * @return string
+	 */
+	public static function get_draft_email_token_key( $draft_id ) {
+		return 'forminator_draft_email_token_' . $draft_id;
+	}
+
+	/**
+	 * Issue (or replace) a one-time token used to send the draft resume email.
+	 *
+	 * @param string $draft_id Draft ID.
+	 *
+	 * @since 1.57.3
+	 *
+	 * @return string
+	 */
+	public static function issue_draft_email_token( $draft_id ) {
+		$token = wp_generate_password( 32, false, false );
+		set_transient( self::get_draft_email_token_key( $draft_id ), $token, DAY_IN_SECONDS );
+
+		return $token;
 	}
 }

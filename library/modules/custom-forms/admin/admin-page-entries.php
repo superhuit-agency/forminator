@@ -101,8 +101,9 @@ class Forminator_CForm_View_Page extends Forminator_Admin_View_Page {
 		$entry = isset( $_GET['entry'] ) ? Forminator_Core::sanitize_array( $_GET['entry'] ) : array(); // phpcs:ignore WordPress.Security.NonceVerification.Recommended, WordPress.Security.ValidatedSanitizedInput
 		if ( ! empty( $entry ) ) {
 			$entries = implode( ',', $entry );
-			Forminator_Form_Entry_Model::delete_by_entrys( $this->model->id, $entries );
+			// Remove signups first, while the entries are still readable.
 			$this->delete_signup_user_entry( $entry );
+			Forminator_Form_Entry_Model::delete_by_entrys( $this->model->id, $entries );
 			$this->maybe_redirect_to_referer();
 			exit;
 		}
@@ -112,12 +113,31 @@ class Forminator_CForm_View_Page extends Forminator_Admin_View_Page {
 	 * Action approve_users
 	 */
 	public function approve_users() {
+		// Approving a signup creates a WordPress account, so submissions access alone is not enough.
+		$settings = isset( $this->model->settings ) ? $this->model->settings : array();
+		if ( ! current_user_can( 'create_users' )
+				|| is_wp_error( forminator_check_registration_form_permissions( $settings ) ) ) {
+			$this->redirect_with_notice(
+				array(
+					'forminator_error_notice' => rawurlencode(
+						esc_html__( 'Unfortunately, you do not have the required permissions or user role to perform this action.', 'forminator' )
+					),
+				)
+			);
+		}
+
 		$entries = isset( $_GET['entry'] ) ? Forminator_Core::sanitize_array( $_GET['entry'] ) : array(); // phpcs:ignore WordPress.Security.NonceVerification.Recommended, WordPress.Security.ValidatedSanitizedInput
 		if ( ! empty( $entries ) ) {
 			$users_approved         = 0;
 			$email_activation_users = 0;
 			foreach ( $entries as $entry_id ) {
-				$entry             = new Forminator_Form_Entry_Model( $entry_id );
+				$entry = new Forminator_Form_Entry_Model( $entry_id );
+
+				// Only entries of the form being viewed may be approved.
+				if ( (int) $this->model->id !== (int) $entry->form_id ) {
+					continue;
+				}
+
 				$activation_key    = $entry->get_meta( 'activation_key' );
 				$activation_method = $entry->get_meta( 'activation_method' );
 				if ( ! $activation_key ) {
@@ -140,21 +160,29 @@ class Forminator_CForm_View_Page extends Forminator_Admin_View_Page {
 				/* Translators: 1. Opening <strong> tag, 2. closing <strong> tag. */
 				$notice .= '<br>' . sprintf( esc_html__( '%1$sNote:%2$s This action does not apply to user accounts awaiting email activation.', 'forminator' ), '<strong>', '</strong>' );
 			}
-			$args = array(
+			$this->redirect_with_notice( array( 'forminator_text_notice' => rawurlencode( $notice ) ) );
+		}
+	}
+
+	/**
+	 * Redirect back to the submissions listing carrying a notice
+	 *
+	 * @since 1.58
+	 *
+	 * @param array $notice_args Notice query args.
+	 */
+	private function redirect_with_notice( $notice_args ) {
+		$args = array_merge(
+			array(
 				'page'      => $this->get_admin_page(),
 				'form_type' => $this->get_form_type(),
 				'form_id'   => $this->get_form_id(),
-			);
+			),
+			$notice_args
+		);
 
-			$args['forminator_text_notice'] = rawurlencode( $notice );
-
-			$fallback_redirect = add_query_arg(
-				$args,
-				admin_url( 'admin.php' )
-			);
-			$this->maybe_redirect_to_referer( $fallback_redirect, false );
-			exit;
-		}
+		$this->maybe_redirect_to_referer( add_query_arg( $args, admin_url( 'admin.php' ) ), false );
+		exit;
 	}
 
 	/**
@@ -500,7 +528,7 @@ class Forminator_CForm_View_Page extends Forminator_Admin_View_Page {
 				'label'              => esc_html__( 'Status', 'forminator' ),
 				'transform_callback' => 'ucfirst',
 			);
-			if ( class_exists( 'Forminator_Stripe_Subscription' ) ) {
+			if ( forminator_is_stripe_addon_compatible() ) {
 				$manage_mapper                       = array(
 					'key'   => 'subscription_id',
 					'label' => esc_html__( 'Manage', 'forminator' ),
@@ -1152,7 +1180,13 @@ class Forminator_CForm_View_Page extends Forminator_Admin_View_Page {
 	 */
 	public function delete_signup_user_entry( $entry ) {
 		foreach ( $entry as $entry_id ) {
-			$entry_model    = new Forminator_Form_Entry_Model( $entry_id );
+			$entry_model = new Forminator_Form_Entry_Model( $entry_id );
+
+			// Only entries of the form being viewed may have their signup removed.
+			if ( (int) $this->model->id !== (int) $entry_model->form_id ) {
+				continue;
+			}
+
 			$activation_key = $entry_model->get_meta( 'activation_key' );
 			if ( ! empty( $activation_key ) ) {
 				$user_data = new Forminator_CForm_User_Data();

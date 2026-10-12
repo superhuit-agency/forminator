@@ -291,7 +291,7 @@
 		newBlock.find( '.forminator-uploaded-files.forminator-has-files, .forminator-slide' ).html('');
 
 		// Change id and name attributes.
-		let newHtml = newBlock.html().replace( /(id=|name=|for=|data-element=|wp.editor.initialize\()"([^"]+?)(\[\]|-multiselect-default-values|-label)?"/g, '$1"$2-' + newSuffix + '$3"' );
+		let newHtml = newBlock.html().replace( /(id=|name=|for=|data-element=|(?:wp.editor.initialize|tinymce.get|document.getElementById|forminator_init_wp_editor_on_visible)\(\s*|var editorId = )"([^"]+?)(\[\]|-multiselect-default-values|-label)?"/g, '$1"$2-' + newSuffix + '$3"' );
 
 		// for cloning Multiple Upload fields.
 		newHtml = newHtml.replace( /(forminator-upload-file--forminator-field-upload-|upload-container-upload-)([^" ]+)/g, '$1$2-' + newSuffix );
@@ -428,36 +428,5 @@
 		}
 
 	}
-
-	// Rebuild repeater copies after returning from Stripe Checkout (see front.stripe.js storeCheckoutFormState).
-	$( document ).on( 'forminator:restore-repeater-copies', function( e, groups ) {
-		const form = $( e.target );
-
-		if ( ! form.is( 'form.forminator-custom-form' ) || ! groups || ! groups.length ) {
-			return;
-		}
-
-		groups.forEach( function( group ) {
-			const groupField = form.find( '#' + group.groupId + ' .forminator-all-group-copies' ),
-				firstBlock = groupField.find( '>.forminator-grouped-fields:first-child' ),
-				fieldOptions = firstBlock.data( 'options' );
-
-			if ( ! groupField.length || ! fieldOptions || ! group.suffixes || ! group.suffixes.length ) {
-				return;
-			}
-
-			groupField.find( '>.forminator-grouped-fields:not(:first-child)' ).remove();
-
-			group.suffixes.forEach( function( suffix ) {
-				const newBlock = forminatorPrepareCloningBlock( firstBlock, suffix );
-				groupField.append( newBlock );
-				newBlock.trigger( 'forminator-clone-group' );
-			} );
-
-			forminatorHideIrrelevantActions( fieldOptions, groupField );
-		} );
-
-		form.trigger( 'forminator.front.condition.restart' );
-	} );
 
 })(jQuery, window, document);

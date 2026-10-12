@@ -516,8 +516,8 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 			}
 		}
 
-		// Load reCaptcha scripts.
-		if ( $this->has_captcha() ) {
+		// Load reCaptcha scripts. Skipped in the block editor, where the captcha is a placeholder.
+		if ( $this->has_captcha() && ! forminator_is_block_editor_render() ) {
 			$first_captcha = $this->find_first_captcha();
 			$language      = Forminator_Captcha::get_captcha_language( $first_captcha );
 			$ver           = FORMINATOR_VERSION;
@@ -568,24 +568,16 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 
 		// Load Stripe scripts.
 		if ( $this->has_stripe() ) {
-			$src = ( $this->uses_checkout_session_stripe() || $is_preview )
-				? 'https://js.stripe.com/dahlia/stripe.js'
-				: 'https://js.stripe.com/v3/';
+			$needs_checkout_session = $this->uses_checkout_session_stripe() || $is_preview;
 
 			if ( ! $is_ajax_load ) {
-				wp_enqueue_script(
-					'forminator-stripe',
-					$src,
-					array( 'jquery' ),
-					FORMINATOR_VERSION,
-					true
-				);
-			} else {
-				// load later via ajax to avoid cache.
-				$this->scripts['forminator-stripe'] = array(
-					'src'  => $src,
+				Forminator_Stripe_Script_Loader::enqueue( $needs_checkout_session );
+			} elseif ( ! Forminator_Stripe_Script_Loader::is_enqueued() ) {
+				// load later via ajax to avoid cache, unless it is already in the page head.
+				$this->scripts[ Forminator_Stripe_Script_Loader::SCRIPT_HANDLE ] = array(
+					'src'  => Forminator_Stripe_Script_Loader::get_src( $needs_checkout_session ),
 					'on'   => 'window',
-					'load' => 'StripeCheckout',
+					'load' => 'Stripe',
 				);
 			}
 		}
@@ -602,8 +594,8 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 				// load later via ajax to avoid cache.
 				$this->styles['intlTelInput-forminator-css'] = array( 'src' => add_query_arg( 'ver', $style_version, $style_src ) );
 				$this->scripts['forminator-intlTelInput']    = array(
-					'src'  => add_query_arg( 'ver', $style_version, $script_src ),
-					'on'   => '$',
+					'src'  => add_query_arg( 'ver', $script_version, $script_src ),
+					'on'   => 'window',
 					'load' => 'intlTelInput',
 				);
 			}
@@ -614,7 +606,7 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 			$paypal_src = $this->paypal_script_argument( 'https://www.paypal.com/sdk/js?enable-funding=venmo' );
 
 			// If there is more than 1 paypal field in a page, even if it's ajax loaded, enqueue script as usual to prevent paypal button errors.
-			if ( ! $is_ajax_load || forminator_count_field_type_in_page( 'paypal' ) > 1 ) {
+			if ( ! $is_ajax_load || forminator_count_field_type_in_page( 'paypal', $this->get_post_id() ) > 1 ) {
 				wp_enqueue_script(
 					'forminator-paypal-' . $this->model->id,
 					$paypal_src,
@@ -623,12 +615,13 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 					true
 				);
 			} else {
-				// load later via ajax to avoid cache.
+				// Load later via ajax to avoid cache. The SDK exposes itself as window.paypal,
+				// which is what the loader checks before injecting another copy.
 				$this->scripts[ 'forminator-paypal-' . $this->model->id ] = array(
 					'src'  => $paypal_src,
 					'on'   => 'window',
 					'id'   => $this->model->id,
-					'load' => 'PayPalCheckout',
+					'load' => 'paypal',
 				);
 			}
 
@@ -978,6 +971,21 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 	}
 
 	/**
+	 * Filter CSS classes of a forminator-row wrapper.
+	 *
+	 * @since 1.58.0
+	 *
+	 * @param string $classes Row CSS classes.
+	 * @param array  $fields  Row fields.
+	 * @param array  $wrapper Wrapper data. Empty for submit and PayPal rows.
+	 *
+	 * @return string
+	 */
+	private function filter_row_classes( $classes, $fields, $wrapper = array() ) {
+		return apply_filters( 'forminator_cform_row_classes', $classes, $this->model->id, $fields, $wrapper );
+	}
+
+	/**
 	 * Return before wrapper markup
 	 *
 	 * @since 1.0
@@ -987,14 +995,18 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 	 * @return mixed
 	 */
 	public function render_wrapper_before( $wrapper ) {
-		$class = 'forminator-row';
-		$style = '';
+		$class  = 'forminator-row';
+		$style  = '';
+		$fields = isset( $wrapper['fields'] ) ? $wrapper['fields'] : array();
+
 		if ( $this->is_only_hidden( $wrapper ) ) {
 			$class .= ' forminator-hidden';
-		} elseif ( isset( $wrapper['fields'] ) && $this->is_only_invisible_field( $wrapper['fields'] ) ) {
+		} elseif ( ! empty( $fields ) && $this->is_only_invisible_field( $fields ) ) {
 			// Remove margin for wrappers with only invisible fields.
 			$style = ' style="margin: 0;"';
 		}
+
+		$class = $this->filter_row_classes( $class, $fields, $wrapper );
 
 		$html = sprintf( '<div class="%1$s"%2$s>', esc_attr( $class ), $style );
 
@@ -1788,59 +1800,6 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 	}
 
 	/**
-	 * Return description markup
-	 *
-	 * @since 1.0
-	 *
-	 * @param array $field Field.
-	 *
-	 * @return mixed
-	 */
-	public function get_description( $field ) {
-		_deprecated_function( __METHOD__, '1.6' );
-		$type = $this->get_field_type( $field );
-		/**
-		 * Forminator_Field
-		 *
-		 * @var Forminator_Field $field_object */
-		$field_object              = Forminator_Core::get_field_object( $type );
-		$has_phone_character_limit = ( ( isset( $field['phone_validation'] ) && $field['phone_validation'] )
-										&& ( isset( $field['validation'] )
-											&& 'character_limit' === $field['validation'] ) );
-
-		if ( ( isset( $field['description'] ) && ! empty( $field['description'] ) ) || isset( $field['text_limit'] ) || $has_phone_character_limit ) {
-
-			$html = sprintf( '<div class="forminator-description">' );
-
-			if ( isset( $field['description'] ) && ! empty( $field['description'] ) ) {
-				$description = $this->sanitize_output( $field['description'] );
-				if ( 'false' === $description ) {
-					$description = '';
-				}
-
-				$html .= $description;
-			}
-
-			if ( ( isset( $field['text_limit'] ) || isset( $field['phone_limit'] ) ) && isset( $field['limit'] ) && ( $field_object->has_counter || $has_phone_character_limit ) ) {
-				if ( ( isset( $field['text_limit'] ) && $field['text_limit'] ) || ( isset( $field['phone_limit'] ) && $field['phone_limit'] ) || $has_phone_character_limit ) {
-					$limit = isset( $field['limit'] ) ? $field['limit'] : '';
-					if ( empty( $limit ) && $has_phone_character_limit ) {
-						$limit = 10;
-					}
-					$limit_type = isset( $field['limit_type'] ) ? $field['limit_type'] : '';
-					$html      .= sprintf( '<span data-limit="%s" data-type="%s">0 / %s</span>', esc_attr( $limit ), esc_attr( $limit_type ), esc_html( $limit ) );
-				}
-			}
-
-			$html .= sprintf( '</div>' );
-		} else {
-			$html = '';
-		}
-
-		return apply_filters( 'forminator_field_get_description', $html, $field );
-	}
-
-	/**
 	 * Return field before markup
 	 *
 	 * @since 1.0
@@ -1920,8 +1879,10 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 		$form_style     = $form_settings['form-style'] ?? 'default';
 		$form_sub_style = $form_settings['form-substyle'] ?? 'default';
 
-		return 'default' === $form_style ?
+		$design = 'default' === $form_style ?
 			$form_sub_style : $form_style;
+
+		return sanitize_html_class( $design );
 	}
 
 	/**
@@ -1936,7 +1897,10 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 		$field_style_key = 'basic' === $form_design ? 'basic-fields-style' : 'fields-style';
 
 		if ( isset( $form_settings[ $field_style_key ] ) ) {
-			return $form_settings[ $field_style_key ];
+			$fields_style = sanitize_html_class( $form_settings[ $field_style_key ] );
+			if ( in_array( $fields_style, array( 'open', 'enclosed', 'custom' ), true ) ) {
+				return $fields_style;
+			}
 		}
 
 		return 'open';
@@ -2349,7 +2313,9 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 			$class .= ' ' . $custom_class;
 		}
 
-		$html .= '<div class="forminator-row forminator-row-last">';
+		$row_classes = $this->filter_row_classes( 'forminator-row forminator-row-last', array( $this->get_submit_field() ) );
+
+		$html .= sprintf( '<div class="%s">', esc_attr( $row_classes ) );
 
 		$html .= '<div class="forminator-col">';
 
@@ -2404,9 +2370,10 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 
 				if ( 'paypal' === $field_type ) {
 
-					$id = Forminator_Field::get_property( 'element_id', $field_array );
+					$id          = Forminator_Field::get_property( 'element_id', $field_array );
+					$row_classes = $this->filter_row_classes( 'forminator-row forminator-paypal-row', array( $field_array ) );
 
-					$html  = '<div class="forminator-row forminator-paypal-row">';
+					$html  = sprintf( '<div class="%s">', esc_attr( $row_classes ) );
 					$html .= '<div class="forminator-col forminator-col-12">';
 					$html .= '<div class="forminator-field">';
 					$html .= '<div id="paypal-button-container-' . $form_id . '_' . self::$uid . '" class="' . esc_attr( $id ) . '-payment forminator-button-paypal">';
@@ -2711,62 +2678,6 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 		);
 
 		return wp_json_encode( $calendar );
-	}
-
-	/**
-	 * Return if form use google font
-	 *
-	 * @since 1.0
-	 * @since 1.2 Deprecate function
-	 * @return bool
-	 */
-	public function has_google_font() {
-
-		/**
-		 * Deprecate this function, since `use-fonts-settings` and `font-family` no longer valid on 1.2
-		 * Font / typography settings changed to different sections
-		 * such as `cform-label-font-family`, `cform-title-font-family` etc
-		 *
-		 * @since 1.2
-		 */
-		_deprecated_function( 'has_google_font', '1.2', 'get_google_fonts' );
-
-		$settings = $this->get_form_settings();
-
-		// Check if custom font enabled.
-		if ( ! isset( $settings['use-fonts-settings'] ) || empty( $settings['use-fonts-settings'] ) ) {
-			return false;
-		}
-
-		// Check if custom font.
-		if ( ! isset( $settings['font-family'] ) || empty( $settings['font-family'] ) || 'custom' === $settings['font-family'] ) {
-			return false;
-		}
-
-		return true;
-	}
-
-	/**
-	 * Return google font
-	 *
-	 * @since 1.0
-	 * @since 1.2 Deprecated Function
-	 * @return string
-	 */
-	public function get_google_font() {
-
-		/**
-		 * Deprecate this function, since `use-fonts-settings` and `font-family` no longer valid on 1.2
-		 * Font / typography settings changed to different sections
-		 * such as `cform-label-font-family`, `cform-title-font-family` etc
-		 *
-		 * @since 1.2
-		 */
-		_deprecated_function( 'get_google_font', '1.2', 'get_google_fonts' );
-
-		$settings = $this->get_form_settings();
-
-		return $settings['font-family'];
 	}
 
 	/**
@@ -3336,7 +3247,7 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 
 			$hidden_message_option = 'hidden-' . $form_type . '-form-message';
 			$html                  = isset( $form_settings[ $hidden_message_option ] )
-				? $form_settings[ $hidden_message_option ]
+				? wp_kses_post( $this->render_hidden_form_message( $form_settings[ $hidden_message_option ] ) )
 				: esc_html__( 'User is logged in.', 'forminator' );
 
 			return $html;
@@ -3353,8 +3264,15 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 			$form_settings = $this->get_form_settings();
 			$form_expired  = $this->model->check_form_expired( $form_settings );
 			if ( true === $form_expired['expired'] ) {
+				$this->set_forms_properties( $render_id );
 				?>
-				<div class="forminator-custom-form">
+				<div
+					id="forminator-module-<?php echo esc_attr( $this->model->id ); ?>"
+					class="forminator-ui forminator-custom-form forminator-custom-form-<?php echo esc_attr( $this->model->id ); ?> <?php echo esc_attr( $this->get_form_design_class() ); ?>"
+					data-forminator-render="<?php echo esc_attr( $render_id ); ?>"
+					data-form-id="<?php echo esc_attr( $this->model->id ); ?>"
+					data-design="<?php echo esc_attr( $this->get_form_design() ); ?>"
+				>
 					<?php
 					if ( isset( $form_settings['expire_message'] ) && '' !== $form_settings['expire_message'] ) {
 						$message = $form_settings['expire_message'];

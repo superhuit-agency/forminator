@@ -68,9 +68,12 @@ class Forminator_Quiz_View_Page extends Forminator_Admin_View_Page {
 	public function delete_all_action() {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended, WordPress.Security.ValidatedSanitizedInput
 		$ids = isset( $_GET['ids'] ) ? Forminator_Core::sanitize_array( $_GET['ids'] ) : array();
+		if ( ! is_array( $ids ) ) {
+			$ids = explode( ',', (string) $ids );
+		}
+		$ids = array_filter( array_map( 'absint', $ids ) );
 		if ( ! empty( $ids ) ) {
-			$entries = implode( ',', $ids );
-			Forminator_Form_Entry_Model::delete_by_entrys( $this->model->id, $entries );
+			Forminator_Form_Entry_Model::delete_by_entrys( $this->model->id, implode( ',', $ids ) );
 			$this->maybe_redirect_to_referer();
 			exit;
 		}

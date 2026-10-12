@@ -963,6 +963,30 @@ class Forminator_Migration {
 	}
 
 	/**
+	 * Migrate Stripe notifications
+	 *
+	 * @param array $notifications Notifications.
+	 *
+	 * @since 1.58
+	 *
+	 * @return array
+	 */
+	public static function migrate_stripe_notifications( $notifications ) {
+		$notification_exists = false;
+		foreach ( $notifications as $notification ) {
+			if ( isset( $notification['type'] ) && 'stripe-payment-failed' === $notification['type'] ) {
+				$notification_exists = true;
+				break;
+			}
+		}
+		if ( false === $notification_exists ) {
+			// Add Stripe payment notifications if they don't exist.
+			$notifications[] = forminator_get_stripe_payment_notifications();
+		}
+		return $notifications;
+	}
+
+	/**
 	 * Static method to combine all notification migrations
 	 *
 	 * @param array $notifications Notifications.

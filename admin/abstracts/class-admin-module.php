@@ -196,21 +196,6 @@ abstract class Forminator_Admin_Module {
 	}
 
 	/**
-	 * Highlight parent page in sidebar
-	 *
-	 * @deprecated 1.1 No longer used because this function override prohibited WordPress global of $plugin_page
-	 * @since      1.0
-	 *
-	 * @param mixed $file File.
-	 *
-	 * @return mixed
-	 */
-	public function highlight_admin_parent( $file ) {
-		_deprecated_function( __METHOD__, '1.1', null );
-		return $file;
-	}
-
-	/**
 	 * Prepare settings
 	 *
 	 * @param array $original_settings Sent settings.
@@ -218,7 +203,7 @@ abstract class Forminator_Admin_Module {
 	 */
 	protected static function validate_settings( $original_settings ) {
 		// Sanitize settings.
-		$settings = forminator_sanitize_array_field( $original_settings );
+		$settings = forminator_sanitize_array_field( $original_settings, true );
 
 		// Sanitize custom css.
 		if ( isset( $original_settings['custom_css'] ) ) {

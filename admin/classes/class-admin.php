@@ -481,10 +481,12 @@ class Forminator_Admin {
 	 * Shown in forminator pages. Per user notification.
 	 */
 	public function check_stripe_addon_version() {
-		$min_stripe_addon_version = '1.5.0';
-		// Show the notice only if Stripe Addon is active and its version is less than 1.0.4.
-		if ( ! defined( 'FORMINATOR_STRIPE_ADDON' ) || ! class_exists( 'Forminator_Stripe_Addon' )
-			|| version_compare( FORMINATOR_STRIPE_ADDON, $min_stripe_addon_version . '-alpha', '>=' ) ) {
+		// Show the notice only if the Stripe Addon is active but not compatible.
+		if ( ! defined( 'FORMINATOR_STRIPE_ADDON' ) || ! class_exists( 'Forminator_Stripe_Addon' ) ) {
+			return;
+		}
+
+		if ( forminator_is_stripe_addon_compatible() ) {
 			return;
 		}
 
@@ -495,7 +497,7 @@ class Forminator_Admin {
 
 		$message = '<p>';
 		/* translators: 1. Forminator version. 2. Min Stripe addon version. */
-		$message .= sprintf( esc_html__( 'We\'ve noticed you have updated to Forminator Pro version %1$s. Please ensure you also update your Forminator Stripe Subscriptions Add-on to version %2$s or higher to ensure compatibility with the new submissions processes.', 'forminator' ), FORMINATOR_VERSION, $min_stripe_addon_version );
+		$message .= sprintf( esc_html__( 'We\'ve noticed you have updated to Forminator Pro version %1$s. Please ensure you also update your Forminator Stripe Subscriptions Add-on to version %2$s or higher to ensure compatibility with the new submissions processes.', 'forminator' ), FORMINATOR_VERSION, FORMINATOR_MIN_STRIPE_ADDON_VERSION );
 		$message .= '</p>';
 
 		echo '<div class="forminator-grouped-notice notice notice-error"'
@@ -1176,7 +1178,7 @@ class Forminator_Admin {
 	/**
 	 * Get error notice
 	 *
-	 * @param string $error Error message. It should be already escaped.
+	 * @param string $error Error message.
 	 * @return string
 	 */
 	public static function get_red_notice( string $error ): string {
@@ -1186,7 +1188,7 @@ class Forminator_Admin {
 	/**
 	 * Get success notice
 	 *
-	 * @param string $message Success message. It should be already escaped.
+	 * @param string $message Success message.
 	 * @return string
 	 */
 	public static function get_green_notice( string $message ): string {
@@ -1197,12 +1199,21 @@ class Forminator_Admin {
 	 * Get SUI notice
 	 *
 	 * @param string $type Notice type.
-	 * @param string $message Message. It should be already escaped.
+	 * @param string $message Message. Limited HTML (p, strong, em, br) is allowed.
 	 * @return string
 	 */
 	public static function get_notice( string $type, string $message ): string {
 		$notice_class = 'green' === $type ? 'sui-notice-green' : 'sui-notice-red';
 		$icon_class   = 'green' === $type ? 'sui-icon-check-tick' : 'sui-icon-info';
+		$message      = wp_kses(
+			$message,
+			array(
+				'p'      => array(),
+				'strong' => array(),
+				'em'     => array(),
+				'br'     => array(),
+			)
+		);
 		return '<div role="alert" class="sui-notice ' . $notice_class . ' sui-active"
 				style="display: block; text-align: left;" aria-live="assertive">
 			<div class="sui-notice-content">

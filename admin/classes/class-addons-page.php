@@ -57,6 +57,17 @@ class Forminator_Admin_Addons_Page {
 		$pid        = intval( Forminator_Core::sanitize_text_field( 'pid' ) );
 		$is_network = 1 === intval( Forminator_Core::sanitize_text_field( 'is_network' ) ) && is_super_admin();
 
+		// Managing Forminator add-ons does not grant WordPress plugin management.
+		if ( ! self::can_perform_addon_action( $action, $is_network ) ) {
+			wp_send_json_error(
+				array(
+					'error' => array(
+						'message' => esc_html__( 'Unfortunately, you do not have the required permissions to perform this action.', 'forminator' ),
+					),
+				)
+			);
+		}
+
 		switch ( $action ) {
 			case 'addons-install-activate':
 			case 'addons-install':
@@ -193,6 +204,42 @@ class Forminator_Admin_Addons_Page {
 	}
 
 	/**
+	 * Check the plugin capability required by an add-on action
+	 *
+	 * @since 1.58
+	 *
+	 * @param string $action Add-on action.
+	 * @param bool   $is_network Whether the action is network wide.
+	 *
+	 * @return bool
+	 */
+	private static function can_perform_addon_action( $action, $is_network ) {
+		switch ( $action ) {
+			case 'addons-install-activate':
+				$allowed = current_user_can( 'install_plugins' ) && current_user_can( 'activate_plugins' );
+				break;
+			case 'addons-install':
+				$allowed = current_user_can( 'install_plugins' );
+				break;
+			case 'addons-activate':
+			case 'addons-deactivate':
+				$allowed = current_user_can( 'activate_plugins' );
+				break;
+			case 'addons-delete':
+				$allowed = current_user_can( 'delete_plugins' );
+				break;
+			case 'addons-update':
+				$allowed = current_user_can( 'update_plugins' );
+				break;
+			default:
+				// Unknown actions are rejected by the switch below.
+				return true;
+		}
+
+		return $allowed && ( ! $is_network || current_user_can( 'manage_network_plugins' ) );
+	}
+
+	/**
 	 * Activate addon
 	 *
 	 * @param string $pid The Project ID.
@@ -239,12 +286,13 @@ class Forminator_Admin_Addons_Page {
 	 */
 	public function addons_render( $name, $pid, $addons = array() ) {
 
-		$file_name = $name . '.php';
+		$views_root = realpath( forminator_plugin_dir() . 'admin/views/addons' );
+		$file_path  = realpath( forminator_plugin_dir() . 'admin/views/addons/' . $name . '.php' );
 
-		$file_path = forminator_plugin_dir() . 'admin/views/addons/' . $file_name;
-
+		// Only render views that resolve inside the add-on views directory.
 		$path = false;
-		if ( file_exists( $file_path ) ) {
+		if ( $views_root && $file_path
+			&& 0 === strpos( $file_path, $views_root . DIRECTORY_SEPARATOR ) ) {
 			$path = $file_path;
 		}
 
@@ -385,28 +433,37 @@ class Forminator_Admin_Addons_Page {
 	 * @return string
 	 */
 	public function render_template( $file, $params = array(), $return_value = false ) {
+		/*
+		 * Hold the method state in variables that are unlikely to be used by callers of the method,
+		 * then drop the originals so EXTR_SKIP does not skip a template variable sharing their name.
+		 */
+		$forminator_template = $file;
+		$forminator_buffered = $return_value;
+		$forminator_params   = $params;
+		unset( $file, $return_value, $params );
 
-		// Assign $file to a variable which is unlikely to be used by users of the method.
-		extract( $params, EXTR_OVERWRITE ); // phpcs:ignore WordPress.PHP.DontExtract.extract_extract
+		extract( $forminator_params, EXTR_SKIP ); // phpcs:ignore WordPress.PHP.DontExtract.extract_extract
 
-		if ( $return_value ) {
+		if ( $forminator_buffered ) {
 			ob_start();
 		}
 
-		$file_name = $file . '.php';
+		$forminator_template_root = realpath( forminator_plugin_dir() );
+		$forminator_template_path = realpath( forminator_plugin_dir() . $forminator_template . '.php' );
 
-		$file_path = forminator_plugin_dir() . $file_name;
-		if ( file_exists( $file_path ) ) {
-			include $file_path;
+		// Only include templates that resolve inside the plugin directory.
+		if ( $forminator_template_root && $forminator_template_path
+			&& 0 === strpos( $forminator_template_path, $forminator_template_root . DIRECTORY_SEPARATOR ) ) {
+			include $forminator_template_path;
 		}
 
-		if ( $return_value ) {
+		if ( $forminator_buffered ) {
 			return ob_get_clean();
 		}
 
-		if ( ! empty( $params ) ) {
-			foreach ( $params as $param ) {
-				unset( $param );
+		if ( ! empty( $forminator_params ) ) {
+			foreach ( $forminator_params as $forminator_param ) {
+				unset( $forminator_param );
 			}
 		}
 	}

@@ -98,6 +98,16 @@ final class Forminator_Slack extends Forminator_Integration {
 	protected $_sensitive_keys = array( 'client_secret' );
 
 	/**
+	 * Slack redirects back to a pre registered URL that cannot carry a per request
+	 * nonce, so the section nonce is not required here. CSRF protection for this
+	 * flow needs the nonce moved into the OAuth state parameter instead.
+	 *
+	 * @since 1.58
+	 * @var bool
+	 */
+	public $section_requires_nonce = false;
+
+	/**
 	 * Forminator_Slack constructor.
 	 *
 	 * @since 1.0 Slack Integration
@@ -531,6 +541,7 @@ final class Forminator_Slack extends Forminator_Integration {
 		$base_authorize_url = Forminator_Slack_Wp_Api::AUTHORIZE_URL;
 		$client_id          = $this->get_client_id();
 		$redirect_url       = rawurlencode( forminator_addon_integration_section_admin_url( $this, 'authorize', false ) );
+		$oauth_state        = forminator_integration_create_oauth_state( $this );
 		$scopes             = Forminator_Slack_Wp_Api::$oauth_scopes;
 
 		/**
@@ -542,14 +553,17 @@ final class Forminator_Slack extends Forminator_Integration {
 		 */
 		$scopes = apply_filters( 'forminator_addon_slack_oauth_scopes', $scopes );
 
-		$auth_url = add_query_arg(
-			array(
-				'client_id'    => $client_id,
-				'scope'        => implode( ',', $scopes ),
-				'redirect_uri' => $redirect_url,
-			),
-			$base_authorize_url
+		$auth_args = array(
+			'client_id'    => $client_id,
+			'scope'        => implode( ',', $scopes ),
+			'redirect_uri' => $redirect_url,
 		);
+
+		if ( ! empty( $oauth_state ) ) {
+			$auth_args['state'] = $oauth_state;
+		}
+
+		$auth_url = add_query_arg( $auth_args, $base_authorize_url );
 
 		/**
 		 * Filter Slack Auth Url
@@ -587,6 +601,11 @@ final class Forminator_Slack extends Forminator_Integration {
 
 		if ( isset( $query_args['code'] ) ) {
 			try {
+				$oauth_state = isset( $query_args['state'] ) ? $query_args['state'] : '';
+				if ( false === forminator_integration_validate_oauth_state( $this, $oauth_state ) ) {
+					throw new Forminator_Integration_Exception( esc_html__( 'Invalid authorization request.', 'forminator' ) );
+				}
+
 				$code  = $query_args['code'];
 				$token = '';
 

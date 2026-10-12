@@ -323,6 +323,7 @@ class Forminator_Export {
 		}
 
 		$receipts = array();
+		$files    = array();
 		foreach ( $export_schedules as $row ) {
 			if ( ! isset( $row['enabled'] ) || ( isset( $row['enabled'] ) && ( 'false' === $row['enabled'] || ! $row['enabled'] ) ) || ( isset( $row['email'] ) && empty( $row['email'] ) ) ) {
 				continue;
@@ -360,6 +361,9 @@ class Forminator_Export {
 					continue;
 				}
 
+				// Track every created file, including exports skipped below, so all of them are deleted.
+				$files[] = $info->file_path;
+
 				if ( ! empty( $row['email'] ) ) {
 					$export_email = is_array( $row['email'] ) ? $row['email'] : array( $row['email'] );
 					foreach ( $export_email as $email ) {
@@ -372,62 +376,67 @@ class Forminator_Export {
 			}
 		}
 
-		$files = array();
-		// now start to send.
-		foreach ( $receipts as $email => $info ) {
-			$current_files  = array();
-			$export_results = array();
-			foreach ( $info as $export_result ) {
+		try {
+			// now start to send.
+			foreach ( $receipts as $email => $info ) {
+				$current_files  = array();
+				$export_results = array();
+				foreach ( $info as $export_result ) {
 
-				/**
-				 * Forminator_Export_Result
-				 *
-				 * @var Forminator_Export_Result $export_result */
-				$schedule_key    = $export_result->model->id . $export_result->form_type;
-				$export_schedule = $this->get_entries_export_schedule( $schedule_key );
-				$last_row_id     = isset( $export_schedule['last_sent_row_id'] ) ? intval( $export_schedule['last_sent_row_id'] ) : 0;
-				$if_new          = isset( $export_schedule['if_new'] ) ? filter_var( $export_schedule['if_new'], FILTER_VALIDATE_BOOLEAN ) : false;
+					/**
+					 * Forminator_Export_Result
+					 *
+					 * @var Forminator_Export_Result $export_result */
+					$schedule_key    = $export_result->model->id . $export_result->form_type;
+					$export_schedule = $this->get_entries_export_schedule( $schedule_key );
+					$last_row_id     = isset( $export_schedule['last_sent_row_id'] ) ? intval( $export_schedule['last_sent_row_id'] ) : 0;
+					$if_new          = isset( $export_schedule['if_new'] ) ? filter_var( $export_schedule['if_new'], FILTER_VALIDATE_BOOLEAN ) : false;
 
-				// update last sent,.
-				// this options need to updated so it marked as email sent, and scheduled for next time.
-				$export_schedules[ $schedule_key ]['last_sent']        = current_time( 'timestamp' ); // phpcs:ignore WordPress.DateTime.CurrentTimeTimestamp.Requested -- We are using the current timestamp based on the site's timezone.
-				$export_schedules[ $schedule_key ]['last_sent_row_id'] = $export_result->latest_entry_id;
+					// update last sent,.
+					// this options need to updated so it marked as email sent, and scheduled for next time.
+					$export_schedules[ $schedule_key ]['last_sent']        = current_time( 'timestamp' ); // phpcs:ignore WordPress.DateTime.CurrentTimeTimestamp.Requested -- We are using the current timestamp based on the site's timezone.
+					$export_schedules[ $schedule_key ]['last_sent_row_id'] = $export_result->latest_entry_id;
 
-				// only send email when new entry avail.
-				if ( $if_new ) {
-					// skip sending this email.
-					if ( $last_row_id >= $export_result->latest_entry_id ) {
-						forminator_maybe_log(
-							__METHOD__,
-							sprintf(
-								'Scheduled Export email for %s ID %s skipped, due to no new submissions last_sent_row_id: %s latest_entry_id: %s',
-								$export_result->form_type,
-								$export_result->model->id,
-								$last_row_id,
-								$export_result->latest_entry_id
-							)
-						);
-						continue;
+					// only send email when new entry avail.
+					if ( $if_new ) {
+						// skip sending this email.
+						if ( $last_row_id >= $export_result->latest_entry_id ) {
+							forminator_maybe_log(
+								__METHOD__,
+								sprintf(
+									'Scheduled Export email for %s ID %s skipped, due to no new submissions last_sent_row_id: %s latest_entry_id: %s',
+									$export_result->form_type,
+									$export_result->model->id,
+									$last_row_id,
+									$export_result->latest_entry_id
+								)
+							);
+							continue;
+						}
 					}
+
+					$export_results[] = $export_result;
+
+					// Attach under a readable name, the temp file name is random.
+					$attachment_name = $export_result->file_name;
+					if ( isset( $current_files[ $attachment_name ] ) ) {
+						// Same form name exported twice in the same second, keep both files.
+						$attachment_name = $export_result->model->id . '-' . $attachment_name;
+					}
+					$current_files[ $attachment_name ] = $export_result->file_path;
 				}
-
-				// files reference needed for future deletion.
-				$current_files[]  = $export_result->file_path;
-				$export_results[] = $export_result;
+				if ( ! empty( $export_results ) ) {
+					$subject      = $this->get_mail_subject( $export_results );
+					$mail_content = $this->get_mail_content( $export_results );
+					$mail_headers = $this->get_mail_headers( $email, $export_results );
+					wp_mail( $email, $subject, $mail_content, $mail_headers, $current_files );
+				}
 			}
-			$files += $current_files;
-
-			if ( ! empty( $export_results ) ) {
-				$subject      = $this->get_mail_subject( $export_results );
-				$mail_content = $this->get_mail_content( $export_results );
-				$mail_headers = $this->get_mail_headers( $email, $export_results );
-				wp_mail( $email, $subject, $mail_content, $mail_headers, $current_files );
+		} finally {
+			// Always delete the exports, even when sending fails.
+			foreach ( array_unique( $files ) as $file ) {
+				wp_delete_file( $file );
 			}
-		}
-
-		$files = array_unique( $files );
-		foreach ( $files as $file ) {
-			wp_delete_file( $file );
 		}
 		if ( $receipts ) {
 			update_option( 'forminator_entries_export_schedule', $export_schedules );
@@ -856,36 +865,28 @@ class Forminator_Export {
 		$model = $export_result->model;
 		$data  = $export_result->data;
 
-		$upload_dirs = wp_upload_dir();
-		// temp write to uploads.
-		$tmp_path = $upload_dirs['basedir'] . '/forminator/';
-
 		require_once ABSPATH . 'wp-admin/includes/file.php';
-		/**
-		 * WP_Filesystem_Base
-		 *
-		 * @var WP_Filesystem_Base $wp_filesystem */
-		global $wp_filesystem;
-		WP_Filesystem();
 
-		if ( ! $wp_filesystem->is_dir( $tmp_path ) ) {
-			$wp_filesystem->mkdir( $tmp_path );
+		// Write to a random temp file outside the uploads directory, it is only needed as a mail attachment.
+		$tmp_path = wp_tempnam( 'forminator-export-' . wp_generate_password( 16, false ) );
+		if ( empty( $tmp_path ) || ! file_exists( $tmp_path ) ) {
+			forminator_maybe_log( __METHOD__, 'Failed to create the temporary export file.' );
+
+			return false;
 		}
 
-		$filename = sanitize_title( $model->name ) . '-' . gmdate( 'ymdHis' ) . '.csv';
-		$tmp_path = $tmp_path . $filename;
+		chmod( $tmp_path, 0600 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_chmod -- Restrict the export to the owner before writing it.
 
-		$mode = defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : false;
-
-		if ( ! $wp_filesystem->put_contents( $tmp_path, $this->csvstr( $data ), $mode ) ) {
-			if ( is_wp_error( $wp_filesystem->errors ) ) {
-				forminator_maybe_log( __METHOD__, $wp_filesystem->errors->get_error_message() );
-			}
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- WP_Filesystem may use FTP/SSH, which cannot write to the system temp directory.
+		if ( false === file_put_contents( $tmp_path, $this->csvstr( $data ) ) ) {
+			wp_delete_file( $tmp_path );
+			forminator_maybe_log( __METHOD__, 'Failed to write the export file.' );
 
 			return false;
 		}
 
 		$export_result->file_path = $tmp_path;
+		$export_result->file_name = sanitize_title( $model->name ) . '-' . gmdate( 'ymdHis' ) . '.csv';
 
 		return $export_result;
 	}
@@ -1477,8 +1478,11 @@ class Forminator_Export {
 			}
 		}
 
-		/* translators: %s is form name. */
-		$subject = sprintf( esc_html__( 'Submissions data for %s', 'forminator' ), implode( ', ', $form_names ) );
+		$subject = sprintf(
+			/* translators: %s is form name. */
+			esc_html__( 'Submissions data for %s', 'forminator' ),
+			implode( ', ', array_map( 'esc_html', $form_names ) )
+		);
 
 		/**
 		 * Filter mail subject used for scheduled export email
@@ -1542,7 +1546,7 @@ class Forminator_Export {
 		$total_new_entries = array_sum( $new_entries_counts );
 
 		/* translators: %s is Blog name. */
-		$mail_content = '<p>' . sprintf( esc_html__( 'Hi %s,', 'forminator' ), $blog_name ) . '</p>' . PHP_EOL;
+		$mail_content = '<p>' . sprintf( esc_html__( 'Hi %s,', 'forminator' ), esc_html( $blog_name ) ) . '</p>' . PHP_EOL;
 
 		$mail_content .= '<p>' . sprintf(
 			/* translators: 1$s is total new submission(s), %2$s is total submissions. */
@@ -1552,7 +1556,7 @@ class Forminator_Export {
 			),
 			'<strong>' . (int) $total_new_entries . '</strong>',
 			'<strong>' . (int) $total_entries . '</strong>',
-			implode( ', ', $form_names )
+			implode( ', ', array_map( 'esc_html', $form_names ) )
 		) . '</p>' . PHP_EOL;
 
 		$mail_content .= '<ul>' . PHP_EOL;
@@ -1566,12 +1570,12 @@ class Forminator_Export {
 							<li><a href="%6$s">%7$s</a></li>
 						</ul>
 					</li>',
-					$form_names[ $key ],
+					esc_html( $form_names[ $key ] ),
 					esc_html__( 'New Submissions', 'forminator' ),
 					(int) $new_entries_counts[ $key ],
 					esc_html__( 'Total Submissions', 'forminator' ),
 					(int) $entries_counts[ $key ],
-					$submission_links[ $key ],
+					esc_url( $submission_links[ $key ] ),
 					esc_html__( 'View Submissions', 'forminator' )
 				) . PHP_EOL;
 		}
@@ -1621,9 +1625,16 @@ class Forminator_Export {
 	 * @return string
 	 */
 	public static function escape_csv_data( $data ) {
-		$active_content_triggers = array( '=', '+', '-', '@', "\t", "\r", "\n" );
-		if ( in_array( mb_substr( $data, 0, 1 ), $active_content_triggers, true ) ) {
-			$data = "'" . $data . "'";
+		if ( ! is_scalar( $data ) || is_bool( $data ) ) {
+			return '';
+		}
+
+		$data                      = (string) $data;
+		$active_content_triggers   = array( '=', '+', '-', '@', "\t", "\r", "\n" );
+		$first_non_whitespace_char = mb_substr( ltrim( $data ), 0, 1 );
+
+		if ( in_array( $first_non_whitespace_char, $active_content_triggers, true ) ) {
+			$data = "'" . $data;
 		}
 
 		return $data;
@@ -1646,13 +1657,12 @@ class Forminator_Export {
 		$formatted_fields = array();
 
 		foreach ( $fields as $field ) {
-			if ( ! is_scalar( $field ) ) {
+			if ( ! is_scalar( $field ) || is_bool( $field ) ) {
 				$formatted_fields[] = '';
 				continue;
 			}
-			if ( is_scalar( $field ) ) {
-				$formatted_fields[] = self::escape_csv_data( $field );
-			}
+
+			$formatted_fields[] = self::escape_csv_data( $field );
 		}
 
 		return $formatted_fields;

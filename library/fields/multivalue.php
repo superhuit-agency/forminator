@@ -224,8 +224,8 @@ class Forminator_MultiValue extends Forminator_Field {
 			$option_default    = isset( $option['default'] ) ? filter_var( $option['default'], FILTER_VALIDATE_BOOLEAN ) : false;
 			$calculation_value = $calc_enabled && isset( $option['calculation'] ) ? $option['calculation'] : 0.0;
 			$option_image_url  = array_key_exists( 'image', $option ) ? $option['image'] : '';
-			$option_label      = '<span class="forminator-checkbox-label">' . wp_kses_post( $option['label'] ) . '</span>';
-			$aria_label        = '<span class="forminator-screen-reader-only">' . wp_kses_post( $option['label'] ) . '</span>';
+			$option_label      = '<span class="forminator-checkbox-label">' . wp_kses( $option['label'], self::get_choice_label_allowed_html() ) . '</span>';
+			$aria_label        = '<span class="forminator-screen-reader-only">' . wp_kses( $option['label'], self::get_choice_label_allowed_html() ) . '</span>';
 
 			$class = 'forminator-checkbox';
 
@@ -417,6 +417,18 @@ class Forminator_MultiValue extends Forminator_Field {
 	public function validate( $field, $data ) {
 		$id            = self::get_property( 'element_id', $field );
 		$option_values = array_map( 'forminator_normalize_choice_option_value', array_column( $field['options'], 'value' ) );
+
+		// Checkboxes always submit a list, a single value is not one of the options.
+		if ( ! is_array( $data ) ) {
+			$this->validation_message[ $id ] = apply_filters(
+				'forminator_checkbox_field_nonexistent_validation_message',
+				esc_html__( 'Selected value does not exist.', 'forminator' ),
+				$id,
+				$field
+			);
+
+			return;
+		}
 
 		foreach ( $data as $value ) {
 			if ( false === array_search( forminator_normalize_choice_option_value( $value ), $option_values, true ) ) {

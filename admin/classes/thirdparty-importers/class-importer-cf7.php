@@ -1076,7 +1076,7 @@ class Forminator_Admin_Import_CF7 extends Forminator_Import_Mediator {
 			$form_data = $wpdb->get_results( $wpdb->prepare( 'SELECT `form_value`,`form_date` FROM ' . esc_sql( $table_name ) . ' WHERE `form_post_id` = %d', $id ) );
 			if ( ! empty( $form_data ) ) {
 				foreach ( $form_data as $form_value ) {
-					$data_value = maybe_unserialize( $form_value->form_value );
+					$data_value = forminator_safe_maybe_unserialize( $form_value->form_value );
 					$data_date  = date_i18n( 'Y-m-d H:i:s', strtotime( $form_value->form_date ) );
 					if ( $entry->save( $data_date ) && ! empty( $data_value ) ) {
 						foreach ( $data_value as $key => $value ) {

@@ -220,7 +220,7 @@ function forminator_submissions_content_details( $detail_item, $inside_group = f
 						$precision = isset( $detail_item['precision'] ) ? $detail_item['precision'] : 2;
 						?>
 
-						<span class="sui-description" data-inputmask="'alias': 'decimal','rightAlign': false, 'digitsOptional': false, 'groupSeparator': '<?php echo esc_attr( $separator ); ?>', 'radixPoint': '<?php echo esc_attr( $point ); ?>', 'digits': '<?php echo esc_attr( $precision ); ?>'"><?php echo wp_kses_post( $detail_item['value'] ); ?></span>
+						<span class="sui-description forminator-numeric-span" data-inputmask="'alias': 'decimal','rightAlign': false, 'digitsOptional': false, 'groupSeparator': '<?php echo esc_attr( $separator ); ?>', 'radixPoint': '<?php echo esc_attr( $point ); ?>', 'digits': '<?php echo esc_attr( $precision ); ?>'"><?php echo esc_html( $detail_item['value'] ); ?></span>
 
 					<?php } elseif ( 'textarea' === $detail_item['type'] ) { ?>
 
@@ -241,7 +241,7 @@ function forminator_submissions_content_details( $detail_item, $inside_group = f
 
 					<?php } else { ?>
 
-						<span class="sui-description"><?php echo wp_kses_post( $detail_item['value'] ); ?></span>
+						<span class="sui-description"><?php echo forminator_submissions_value_filter( $detail_item['value'], $detail_item['type'] ); /* PHPCS:ignore WordPress.Security.EscapeOutput.OutputNotEscaped */ ?></span>
 
 					<?php } ?>
 
@@ -307,7 +307,7 @@ function forminator_submissions_render_entry_value( $entry_item, $value ) {
 		return wp_kses_post( forminator_format_html( $value ) );
 	}
 
-	return wp_kses_post( $value );
+	return forminator_submissions_value_filter( $value, $type );
 }
 
 /**

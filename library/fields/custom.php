@@ -211,12 +211,12 @@ class Forminator_Custom extends Forminator_Field {
 		$id            = self::get_property( 'element_id', $field );
 		$name          = $id;
 		$field_type    = self::get_property( 'field_type', $field );
-		$placeholder   = esc_html( self::get_property( 'placeholder', $field ) );
+		$placeholder   = self::get_property( 'placeholder', $field );
 		$description   = self::get_property( 'description', $field );
 		$label         = esc_html( self::get_property( 'field_label', $field ) );
 		$id            = $id . '-field';
 		$html          = '';
-		$default_value = esc_html( self::get_property( 'default_value', $field ) );
+		$default_value = self::get_property( 'default_value', $field );
 		$post_value    = self::get_post_data( $name, false );
 		$settings      = $views_obj->model->settings;
 
@@ -228,9 +228,9 @@ class Forminator_Custom extends Forminator_Field {
 					'<input class="forminator-name--field forminator-input" type="text" data-required="%s" name="%s" placeholder="%s" id="%s" %s/>',
 					esc_attr( $required ),
 					esc_attr( $name ),
-					$placeholder,
+					esc_attr( $placeholder ),
 					esc_attr( $id ),
-					( $post_value ? 'value= "' . $post_value . '"' : '' )
+					( $post_value ? 'value="' . esc_attr( $post_value ) . '"' : '' )
 				);
 				break;
 			case 'textarea':
@@ -253,8 +253,8 @@ class Forminator_Custom extends Forminator_Field {
 					'<input class="forminator-number--field forminator-input" type="number" data-required="%s" name="%s" placeholder="%s" value="%s" id="%s" />',
 					esc_attr( $required ),
 					esc_attr( $name ),
-					$placeholder,
-					( $post_value ? $post_value : $default_value ),
+					esc_attr( $placeholder ),
+					esc_attr( $post_value ? $post_value : $default_value ),
 					esc_attr( $id )
 				);
 				break;
@@ -263,7 +263,7 @@ class Forminator_Custom extends Forminator_Field {
 			case 'radio':
 				break;
 			case 'hidden':
-				$html .= sprintf( '<input class="forminator-hidden--field" type="hidden" id="%s" name="%s" value="%s" />', esc_attr( $id ), esc_attr( $name ), $default_value );
+				$html .= sprintf( '<input class="forminator-hidden--field" type="hidden" id="%s" name="%s" value="%s" />', esc_attr( $id ), esc_attr( $name ), esc_attr( $default_value ) );
 				break;
 			default:
 				break;

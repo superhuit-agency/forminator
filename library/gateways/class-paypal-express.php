@@ -415,10 +415,16 @@ class Forminator_PayPal_Express extends Forminator_Payment_Gateway {
 			}
 		}
 
+		// Always verify the TLS certificate, only sandbox requests on local or development sites may opt out.
+		$sslverify = true;
+		if ( 'sandbox' === $mode && in_array( wp_get_environment_type(), array( 'local', 'development' ), true ) ) {
+			$sslverify = (bool) apply_filters( 'forminator_paypal_request_sslverify', true );
+		}
+
 		$query_args = array(
 			'method'    => $method,
 			'headers'   => $headers,
-			'sslverify' => apply_filters( 'forminator_paypal_request_sslverify', false ),
+			'sslverify' => $sslverify,
 			'timeout'   => apply_filters( 'forminator_paypal_request_timeout', 30 ),
 		);
 
@@ -429,10 +435,27 @@ class Forminator_PayPal_Express extends Forminator_Payment_Gateway {
 		$query_result = wp_remote_request( $url, $query_args );
 
 		if ( is_wp_error( $query_result ) ) {
+			forminator_maybe_log(
+				__METHOD__,
+				array(
+					'request' => $request,
+					'method'  => $method,
+					'mode'    => $mode,
+					'error'   => $query_result->get_error_message(),
+				)
+			);
+
 			return $query_result;
 		}
 
-		$result_body = wp_remote_retrieve_body( $query_result );
+		$response_code    = wp_remote_retrieve_response_code( $query_result );
+		$response_message = wp_remote_retrieve_response_message( $query_result );
+		$response_headers = wp_remote_retrieve_headers( $query_result );
+		$result_body      = wp_remote_retrieve_body( $query_result );
+
+		if ( is_object( $response_headers ) && method_exists( $response_headers, 'getAll' ) ) {
+			$response_headers = $response_headers->getAll();
+		}
 
 		$body_decoded = json_decode( $result_body );
 
@@ -440,7 +463,61 @@ class Forminator_PayPal_Express extends Forminator_Payment_Gateway {
 			$body_decoded = array();
 		}
 
+		// Log HTTP errors and successful responses that still contain a declined capture.
+		if ( 400 <= $response_code || $this->response_has_declined_capture( $body_decoded ) ) {
+			forminator_maybe_log(
+				__METHOD__,
+				array(
+					'request'          => $request,
+					'method'           => $method,
+					'mode'             => $mode,
+					'response_code'    => $response_code,
+					'response_message' => $response_message,
+					'response_headers' => $response_headers,
+					'response_body'    => $body_decoded,
+					'raw_body'         => $result_body,
+				)
+			);
+		}
+
 		return $body_decoded;
+	}
+
+	/**
+	 * Check whether a PayPal API response includes a declined capture.
+	 *
+	 * PayPal can return HTTP 2xx with capture status DECLINED and processor_response details.
+	 *
+	 * @param mixed $body_decoded Decoded response body.
+	 *
+	 * @return bool
+	 */
+	private function response_has_declined_capture( $body_decoded ) {
+		if ( ! is_object( $body_decoded ) ) {
+			return false;
+		}
+
+		if ( isset( $body_decoded->status ) && 'DECLINED' === $body_decoded->status ) {
+			return true;
+		}
+
+		if ( empty( $body_decoded->purchase_units ) || ! is_array( $body_decoded->purchase_units ) ) {
+			return false;
+		}
+
+		foreach ( $body_decoded->purchase_units as $purchase_unit ) {
+			if ( empty( $purchase_unit->payments->captures ) || ! is_array( $purchase_unit->payments->captures ) ) {
+				continue;
+			}
+
+			foreach ( $purchase_unit->payments->captures as $capture ) {
+				if ( isset( $capture->status ) && 'DECLINED' === $capture->status ) {
+					return true;
+				}
+			}
+		}
+
+		return false;
 	}
 
 	/**

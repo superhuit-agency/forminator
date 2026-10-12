@@ -66,114 +66,33 @@
 
 	// Avoid Plugin.prototype conflicts
 	$.extend(ForminatorFrontStripe.prototype, {
-		// Include render_id so multiple embeds of the same form do not share Checkout storage.
-		getCheckoutStorageKeyBase: function() {
+		// Build a storage key for the lead quiz answers. Include render_id so multiple embeds of the same form do not share it.
+		getCheckoutQuizStateStorageKey: function() {
 			var formKey = this.$el.attr('id') || this.$el.data('form-id') || 'default';
 			var renderId = this.$el.data('forminator-render') || this.$el.find('[name="render_id"]').val() || '';
 
-			return renderId ? formKey + ':' + renderId : formKey;
+			return 'forminatorStripeCheckoutQuizState:' + ( renderId ? formKey + ':' + renderId : formKey );
 		},
 
-		// Build a storage key for the pending Stripe Checkout session ID.
-		getCheckoutStorageKey: function() {
-			return 'forminatorStripeCheckoutSession:' + this.getCheckoutStorageKeyBase();
-		},
+		// Get the quiz this lead form belongs to.
+		getLeadQuizForm: function() {
+			var quizId = this.$el.find('input[name="lead_quiz"]').val();
 
-		// Build a storage key for the form values we want to restore after redirect.
-		getCheckoutFormStateStorageKey: function() {
-			return 'forminatorStripeCheckoutFormState:' + this.getCheckoutStorageKeyBase();
-		},
-
-		// Build a storage key for the form-scoped marker used to recognize clean external Checkout returns.
-		getCheckoutReturnStateStorageKey: function() {
-			return 'forminatorStripeCheckoutReturnState:' + this.getCheckoutStorageKeyBase();
-		},
-
-		// Mark the form that initiated an external Checkout redirect. Some methods, like Amazon Pay, can return without a session_id in the URL.
-		storeCheckoutReturnState: function(paymentId) {
-			if ( ! paymentId ) {
-				return;
-			}
-
-			try {
-				window.sessionStorage.setItem(
-					this.getCheckoutReturnStateStorageKey(),
-					JSON.stringify(
-						{
-							paymentId: paymentId,
-							createdAt: Date.now(),
-						}
-					)
-				);
-			} catch ( error ) {
-				// Ignore storage errors.
-			}
-		},
-
-		getCheckoutReturnStateSessionId: function() {
-			var returnState = null;
-
-			try {
-				returnState = JSON.parse(window.sessionStorage.getItem(this.getCheckoutReturnStateStorageKey()) || 'null');
-			} catch ( error ) {
-				return '';
-			}
-
-			if ( ! returnState || ! returnState.paymentId || ! returnState.createdAt ) {
-				return '';
-			}
-
-			return returnState.paymentId;
-		},
-
-		clearCheckoutReturnState: function() {
-			try {
-				window.sessionStorage.removeItem(this.getCheckoutReturnStateStorageKey());
-			} catch ( error ) {
-				// Ignore storage errors.
-			}
-		},
-
-		// Save the session ID so we can recognize the same Checkout flow when the user comes back.
-		storePendingCheckoutSessionId: function(paymentId) {
-			if ( ! paymentId ) {
-				return;
-			}
-
-			try {
-				window.sessionStorage.setItem(this.getCheckoutStorageKey(), paymentId);
-			} catch ( error ) {
-				// Ignore storage errors.
-			}
+			return quizId ? $('#forminator-module-' + quizId) : $();
 		},
 
 		// Read the returned session ID from the URL and match it to this form's pending session.
 		getReturnedCheckoutSessionId: function() {
-			var storedSessionId = '';
-
-			try {
-				storedSessionId = window.sessionStorage.getItem(this.getCheckoutStorageKey()) || '';
-			} catch ( error ) {
-				storedSessionId = '';
-			}
-
 			if ( ! this.isCheckoutSession() ) {
 				return '';
 			}
 
-			var returnStateSessionId = this.getCheckoutReturnStateSessionId();
-
-			if ( ! window.location.search ) {
-				// Clean returns must match the explicit redirect marker, otherwise sibling forms with pending sessions could recover incorrectly.
-				return storedSessionId && storedSessionId === returnStateSessionId ? storedSessionId : '';
-			}
-
 			try {
 				var params = new window.URLSearchParams(window.location.search);
-				var returnedSessionId = params.get('session_id') || '';
+				var returnedSessionId = params.get('stripe_session_id') || '';
 
 				if ( returnedSessionId ) {
-					return storedSessionId === returnedSessionId ? returnedSessionId : '';
+					return returnedSessionId;
 				}
 
 				// Some Stripe redirect returns include status/error params without session_id; only then fall back to the form-scoped return marker.
@@ -183,7 +102,7 @@
 					|| params.get('error_code')
 					|| params.get('error_message')
 					|| params.get('error_description')
-				) && storedSessionId === returnStateSessionId ? storedSessionId : '';
+				) ? this.getStripeData('paymentid') : '';
 			} catch ( error ) {
 				return '';
 			}
@@ -227,7 +146,7 @@
 
 			try {
 				var url = new window.URL(window.location.href);
-				var paramsToClear = [ 'session_id', 'error', 'error_code', 'error_message', 'error_description', 'redirect_status' ];
+				var paramsToClear = [ 'stripe_session_id', 'session_id', 'error', 'error_code', 'error_message', 'error_description', 'redirect_status' ];
 				var hasChanges = false;
 
 				paramsToClear.forEach(function(param) {
@@ -260,152 +179,126 @@
 			return message;
 		},
 
-		// Clear the stored Checkout session ID after a successful submission.
-		clearPendingCheckoutSessionId: function() {
-			try {
-				window.sessionStorage.removeItem(this.getCheckoutStorageKey());
-			} catch ( error ) {
-				// Ignore storage errors.
+		// Explain in the console why the loaded Stripe.js cannot run Checkout Sessions.
+		reportStripeReleaseConflict: function(error) {
+			if ( ! window.console || typeof window.console.error !== 'function' ) {
+				return;
 			}
 
-			this.clearCheckoutReturnState();
+			var conflict = window.ForminatorStripeConflict,
+				message  = 'Forminator: the Stripe.js library on this page does not support Stripe Checkout Sessions.';
+
+			if ( conflict ) {
+				message += ' It was loaded by another script ("' + conflict + '") from an older release.'
+					+ ' Stripe.js can only be loaded once per page - configure the other plugin to stop loading it globally.';
+			}
+
+			window.console.error(message, error);
 		},
 
 		// Drop the Checkout session state so the form can request a brand new session.
 		clearRecoveredCheckoutSessionState: function() {
-			this.clearPendingCheckoutSessionId();
-			this.$el.find('#forminator-stripe-paymentid').val('');
-			this._stripeData['paymentid'] = '';
+			this.clearCheckoutSessionPaymentData();
 			this._returnedCheckoutSessionId = '';
 			this._isCheckoutReturnFlow = false;
 		},
 
-		// Save field values so the form can be restored after the Stripe redirect.
-		storeCheckoutFormState: function() {
-			var values = {};
+		// Save the lead quiz answers so they survive the redirect.
+		storeCheckoutQuizState: function() {
+			var $quiz = this.getLeadQuizForm();
+			var answers = [];
 
-			this.$el.find('input, select, textarea').each(function() {
-				var $field = $(this);
-				var name = $field.attr('name');
-				var type = ( $field.attr('type') || '' ).toLowerCase();
-
-				if (
-					! name
-					|| 'file' === type
-					|| 'hidden' === type
-					|| 'paymentid' === name
-					|| 'paymentmethod' === name
-					|| 'subscriptionid' === name
-					|| 'save_draft' === name
-				) {
-					return;
-				}
-
-				if ( ( 'checkbox' === type || 'radio' === type ) && ! $field.is(':checked') ) {
-					return;
-				}
-
-				if ( ! Array.isArray(values[name]) ) {
-					values[name] = [];
-				}
-
-				values[name].push($field.val());
-			});
-
-			var repeaterGroups = [];
-			this.$el.find('.forminator-all-group-copies').each(function() {
-				var $groupField = $(this);
-				var groupId = $groupField.closest('div[id^="group-"]').prop('id');
-				var suffixes = [];
-
-				if ( ! groupId ) {
-					return;
-				}
-
-				$groupField.find('>.forminator-grouped-fields:not(:first-child)').each(function() {
-					var suffix = $(this).data('suffix');
-					if ( suffix ) {
-						suffixes.push(suffix);
-					}
-				});
-
-				if ( suffixes.length ) {
-					repeaterGroups.push({ groupId: groupId, suffixes: suffixes });
-				}
-			});
-
-			if ( repeaterGroups.length ) {
-				values.__forminator_repeater_copies__ = repeaterGroups;
-			}
-
-			try {
-				window.sessionStorage.setItem(this.getCheckoutFormStateStorageKey(), JSON.stringify(values));
-			} catch ( error ) {
-				// Ignore storage errors.
-			}
-		},
-
-		// Restore saved field values when the user returns from Stripe Checkout.
-		restoreCheckoutFormState: function() {
-			var storedValues = null;
-
-			try {
-				storedValues = JSON.parse(window.sessionStorage.getItem(this.getCheckoutFormStateStorageKey()) || 'null');
-			} catch ( error ) {
-				storedValues = null;
-			}
-
-			if ( ! storedValues ) {
+			if ( ! $quiz.length ) {
 				return;
 			}
 
-			if ( storedValues.__forminator_repeater_copies__ ) {
-				this.$el.trigger('forminator:restore-repeater-copies', [ storedValues.__forminator_repeater_copies__ ]);
-				delete storedValues.__forminator_repeater_copies__;
-			}
+			$quiz.find('.forminator-answer input:checked').each(function() {
+				answers.push({ name: $(this).attr('name'), value: $(this).val() });
+			});
 
-			Object.keys(storedValues).forEach(function(name) {
-				var values = Array.isArray(storedValues[name]) ? storedValues[name] : [ storedValues[name] ];
-				var escapedName = name.replace(/"/g, '\\"');
-				var $fields = this.$el.find('[name="' + escapedName + '"]');
-
-				if ( ! $fields.length ) {
-					return;
-				}
-
-				var firstField = $fields.first();
-				var tagName = ( firstField.prop('tagName') || '' ).toLowerCase();
-				var type = ( firstField.attr('type') || '' ).toLowerCase();
-
-				if ( 'hidden' === type ) {
-					return;
-				}
-
-				if ( 'checkbox' === type || 'radio' === type ) {
-					$fields.each(function() {
-						var $field = $(this);
-						$field.prop('checked', values.indexOf($field.val()) !== -1);
-					});
-					$fields.trigger('change', [ 'forminator_emulate_trigger' ]);
-					return;
-				}
-
-				if ( 'select' === tagName && firstField.prop('multiple') ) {
-					firstField.val(values).trigger('change', [ 'forminator_emulate_trigger' ]);
-					return;
-				}
-
-				firstField.val(values[0]).trigger('change', [ 'forminator_emulate_trigger' ]);
-			}, this);
-		},
-
-		// Clear the restored form values once the submission has completed.
-		clearCheckoutFormState: function() {
 			try {
-				window.sessionStorage.removeItem(this.getCheckoutFormStateStorageKey());
+				if ( answers.length ) {
+					window.sessionStorage.setItem(this.getCheckoutQuizStateStorageKey(), JSON.stringify(answers));
+				} else {
+					window.sessionStorage.removeItem(this.getCheckoutQuizStateStorageKey());
+				}
 			} catch ( error ) {
 				// Ignore storage errors.
 			}
+		},
+
+		// Restore the lead quiz answers. Call on DOM ready, after the quiz is initialized.
+		restoreCheckoutQuizState: function() {
+			var $quiz = this.getLeadQuizForm();
+			var answers = null;
+
+			if ( ! $quiz.length ) {
+				return false;
+			}
+
+			try {
+				answers = JSON.parse(window.sessionStorage.getItem(this.getCheckoutQuizStateStorageKey()) || 'null');
+			} catch ( error ) {
+				answers = null;
+			}
+
+			if ( ! Array.isArray(answers) || ! answers.length ) {
+				return false;
+			}
+
+			var $pages = $quiz.find('.forminator-pagination');
+
+			// Start paginated quizzes so they can move to results.
+			if ( $pages.length && ! $quiz.data('forminatorFrontPagination') ) {
+				$quiz.closest('.forminator-quiz-leads').find('.forminator-quiz-intro').hide();
+				$quiz.prepend('<button class="forminator-button forminator-quiz-start forminator-hidden"></button>')
+					.find('.forminator-quiz-start').trigger('click').remove();
+			}
+
+			var $inputs = $quiz.find('.forminator-answer input');
+
+			answers.forEach(function(answer) {
+				if ( ! answer || ! answer.name ) {
+					return;
+				}
+
+				// Match by property to avoid building selectors from stored values.
+				$inputs.filter(function() {
+					return this.name === String(answer.name) && this.value === String(answer.value);
+				}).prop('checked', true).trigger('change');
+			});
+
+			var pagination = $quiz.data('forminatorFrontPagination');
+			if ( pagination && $pages.length > 1 ) {
+				// Go to the last question page; the final step holds the results.
+				pagination.go_to($pages.length - 2);
+				pagination.update_buttons();
+			}
+
+			return true;
+		},
+
+		// Restore the answers and lead form after a failed redirect so the payment can be retried.
+		reopenCheckoutLeadForm: function() {
+			if ( this.restoreCheckoutQuizState() ) {
+				// Submitting without a lead entry shows the lead form again.
+				this.getLeadQuizForm().trigger('submit');
+			}
+		},
+
+		clearCheckoutQuizState: function() {
+			try {
+				window.sessionStorage.removeItem(this.getCheckoutQuizStateStorageKey());
+			} catch ( error ) {
+				// Ignore storage errors.
+			}
+		},
+
+		// Clear the currently mounted Checkout Session identifiers before the next payment attempt.
+		clearCheckoutSessionPaymentData: function() {
+			this.$el.find('#forminator-stripe-paymentid').val('');
+			this._stripeData['paymentid'] = '';
+			this._stripeData['secret'] = '';
 		},
 
 		// Ask server, whether the returned Checkout Session is still safe to reuse before resuming submission.
@@ -421,7 +314,7 @@
 				return Promise.reject(new Error(window.ForminatorFront.cform.payment_failed));
 			}
 
-			// Include restored field values so conditional Stripe fields are evaluated in the same state used before redirect.
+			// Include current field values so conditional Stripe fields can be evaluated during recovery.
 			formData.forEach(function(value, key) {
 				if ( key !== 'action' && key !== 'paymentid' ) {
 					recoveryFormData.append(key, value);
@@ -486,10 +379,6 @@
 			// }
 			this._form = this.$el;
 
-			if ( this._checkoutReturnError ) {
-				this.clearPendingCheckoutSessionId();
-			}
-
 			if ( this.isCheckoutSession() ) {
 				this.addCheckoutRequiredRule(this.getStripeData('checkoutEmail'));
 				this.addCheckoutRequiredRule(this.getStripeData('checkoutPhone'));
@@ -520,7 +409,6 @@
 
 			if ( this.isCheckoutSession() ) {
 				this.bindCheckoutSessionFields();
-				this.restoreCheckoutFormState();
 				this._checkoutVisibilitySnapshot = this.getCheckoutVisibilitySnapshot();
 			}
 
@@ -530,12 +418,16 @@
 					self.$el.find('#forminator-stripe-paymentid').val(recoveredPaymentId);
 					self._stripeData['paymentid'] = recoveredPaymentId;
 
-					window.setTimeout(function() {
+					$(function() {
+						self.restoreCheckoutQuizState();
 						self.$el.trigger('forminator:stripe:return:ready');
-					}, 0);
+					});
 				}).catch(function(error) {
 					var errorMessage = error && error.message ? error.message : window.ForminatorFront.cform.payment_failed;
 					self._isCheckoutReturnFlow = false;
+					$(function() {
+						self.reopenCheckoutLeadForm();
+					});
 					self.intent = false;
 					self.show_error(errorMessage);
 					self.intent = true;
@@ -550,9 +442,11 @@
 			}
 
 			if ( this._checkoutReturnError ) {
-				window.setTimeout(function() {
+				// Wait for DOM ready so the quiz is initialized first.
+				$(function() {
+					self.reopenCheckoutLeadForm();
 					self.show_error(self._checkoutReturnError);
-				}, 0);
+				});
 			}
 
 			$(this.element).on('payment.before.submit.forminator', async (e, formData, callback) => {
@@ -576,14 +470,18 @@
 					var hasValidator = self.$el.data('validator');
 
 					if ( ! self._isCheckoutReturnFlow ) {
-						self.storeCheckoutFormState();
+						try {
+							await self.syncCheckoutSessionBeforeConfirm();
+						} catch ( error ) {
+							return;
+						}
 
 						try {
 							await self.validateCheckoutSessionSubmission();
 						} catch ( error ) {
 							// updateAmount() already renders regular Forminator validation errors.
 							// Only object-shaped Checkout/session failures should rebuild Stripe.
-							var hasFormValidationErrors = error && $.isPlainObject(error) && typeof error.errors !== 'undefined' && error.errors.length;
+							var hasFormValidationErrors = error && $.isPlainObject(error) && ( ( typeof error.errors !== 'undefined' && error.errors.length ) || ( typeof error.notice !== 'undefined' && error.notice === 'error' ) );
 							var hasCheckoutValidationError = error && $.isPlainObject(error) && ! hasFormValidationErrors;
 
 							if ( hasCheckoutValidationError ) {
@@ -593,6 +491,11 @@
 							}
 							return;
 						}
+					}
+
+					if ( self._isCheckoutReturnFlow ) {
+						self.verifyCheckoutSessionSubmission();
+						return;
 					}
 
 					if ( hasValidator && $checkoutEmailField.length && typeof self.$el.validate === 'function' && ! self.$el.validate().element($checkoutEmailField) ) {
@@ -625,17 +528,6 @@
 						)
 					) {
 						callback();
-						return;
-					}
-
-					if ( self._isCheckoutReturnFlow ) {
-						self.verifyCheckoutSessionSubmission();
-						return;
-					}
-
-					try {
-						await self.syncCheckoutSessionBeforeConfirm();
-					} catch ( error ) {
 						return;
 					}
 
@@ -694,14 +586,32 @@
 				} );
 			});
 
-			this.$el.on('forminator:form:submit:success', function() {
+			// Lead forms trigger their own success event.
+			this.$el.on('forminator:form:submit:success forminator:form:submit:leads:success', function(e, formData, data) {
 				if ( ! self.isCheckoutSession() ) {
 					return;
 				}
 
 				self._isCheckoutReturnFlow = false;
-				self.clearPendingCheckoutSessionId();
-				self.clearCheckoutFormState();
+				self._beforeSubmitCallback = null;
+				self.clearCheckoutSessionPaymentData();
+				self.clearCheckoutQuizState();
+
+				// The lead form is hidden once the quiz shows, so there is no Checkout to refresh.
+				if ( 'forminator:form:submit:leads:success' === e.type ) {
+					return;
+				}
+
+				var responseData = data && data.data ? data.data : {};
+				var hideForm = responseData.behav && responseData.behav === 'behaviour-hide';
+				var redirectSameTab = responseData.url && responseData.newtab && responseData.newtab === 'sametab';
+				var redirectNewTabHide = responseData.url && responseData.newtab && responseData.newtab === 'newtab_hide';
+
+				if ( hideForm || redirectSameTab || redirectNewTabHide ) {
+					return;
+				}
+
+				self.refreshCheckoutSession().catch(function() {});
 			});
 
 		},
@@ -763,6 +673,33 @@
 
 		isCheckoutSessionPreview: function() {
 			return this.isCheckoutSession() && this.settings.is_preview;
+		},
+
+		// Detect whether the Stripe field is hidden by visibility conditions.
+		// forminatorUtils().is_hidden() is avoided here because it also reports fields on an inactive page.
+		isStripeFieldHidden: function() {
+			var $paymentEl = this.settings.paymentEl;
+
+			if ( ! $paymentEl || ! $paymentEl.length ) {
+				return false;
+			}
+
+			var $column = $paymentEl.closest('.forminator-col');
+
+			return $column.hasClass('forminator-hidden') || $column.closest('.forminator-row').hasClass('forminator-hidden');
+		},
+
+		// Re-enable the form after a skipped amount update, leaving the response message untouched.
+		resumeAfterSkippedAmountUpdate: function(options, data) {
+			// Keep the form locked if a submit started while this update was in flight.
+			if ( this.intent ) {
+				this._form.find('button').removeAttr('disabled');
+				this.enable_form();
+			}
+
+			if ( typeof options.onSuccess === 'function' ) {
+				options.onSuccess(data);
+			}
 		},
 
 		getPreviewData: function() {
@@ -909,6 +846,8 @@
 			var $checkoutPhoneField = checkoutPhone ? this.get_form_field(checkoutPhone) : $();
 
 			return JSON.stringify({
+				// Track the Stripe field so Checkout is rebuilt once its conditions show it again.
+				stripeFieldVisible: ! this.isStripeFieldHidden(),
 				checkoutEmailVisible: $checkoutEmailField.length && ! forminatorUtils().is_hidden( $checkoutEmailField ),
 				checkoutPhoneVisible: $checkoutPhoneField.length && ! forminatorUtils().is_hidden( $checkoutPhoneField ),
 			});
@@ -1081,6 +1020,12 @@
 		// Rebuild the Checkout Session before we try to confirm it.
 		refreshCheckoutSession: function() {
 			var self = this;
+
+			// Nothing to rebuild while the Stripe field is hidden by visibility conditions.
+			if ( self.isStripeFieldHidden() ) {
+				return Promise.resolve();
+			}
+
 			var previousIntent = self.intent;
 			var refreshRequestId = self.getNextCheckoutRefreshRequestId();
 			var restoreIntent = function() {
@@ -1324,24 +1269,20 @@
 				confirmOptions.billingAddress = checkoutBillingAddress;
 			}
 			try {
-				let paymentId = this.getStripeData('paymentid') || '';
-				this.storeCheckoutFormState();
-				this.storePendingCheckoutSessionId(paymentId);
-				this.storeCheckoutReturnState(paymentId);
+				// Checkout may redirect away from the page, so keep the lead quiz answers for the return.
+				this.storeCheckoutQuizState();
 				const result = await this._checkoutActions.confirm(confirmOptions);
 
 				if ( result && result.type === 'error' ) {
 					this.logStripeClientError('checkout_confirm_result_error', result.error || result);
-					this.clearPendingCheckoutSessionId();
-					this.show_error(this.getStripeCheckoutErrorMessage(result.error));
+					await this.resetCheckoutSession(result.error);
 					return;
 				}
 
 				this.verifyCheckoutSessionSubmission();
 			} catch ( error ) {
 				this.logStripeClientError('checkout_confirm_exception', error);
-				this.clearPendingCheckoutSessionId();
-				this.show_error(this.getStripeCheckoutErrorMessage(error));
+				await this.resetCheckoutSession(error);
 			}
 		},
 
@@ -1350,9 +1291,12 @@
 			var self = this;
 
 			self.updateAmount(null, {
-				onSuccess: function() {},
+				onSuccess: function() {
+					window.setTimeout(function() {
+						self.clearCheckoutSessionPaymentData();
+					}, 0);
+				},
 				onFailure: async function() {
-					self.clearPendingCheckoutSessionId();
 					// Server validation failed while checking the returned session, so rebuild Checkout before another attempt.
 					await self.resetCheckoutSession();
 				},
@@ -1433,9 +1377,28 @@
 			if ( e && typeof e.preventDefault === 'function' ) {
 				e.preventDefault();
 			}
+
+			// Skip background refreshes for a hidden Stripe field, otherwise its payment errors
+			// overwrite the form response message. Submit requests are left to the server.
+			if ( this.intent && this.isStripeFieldHidden() ) {
+				this.resumeAfterSkippedAmountUpdate(options);
+
+				return;
+			}
+
 			var formData = new FormData( this.$el[0] );
 			var self = this;
+
+			// Set raw values for number, currency, and calculation fields instead of their masked values.
+			self.$el.find('.forminator-number--field, .forminator-currency, .forminator-calculation').each(function () {
+				if ( $( this ).inputmask ) {
+					formData.set( $( this ).attr('name'), $( this ).val() );
+				}
+			});
+			
 			var updateFormData = new FormData();
+			// Remember whether this request is the submit, since the intent flag can change before the response arrives.
+			var isSubmitRequest = ! this.intent;
 
 			// Every Checkout update can create or remount a Session, including the first page load.
 			if ( this.isCheckoutSession() && ! options.checkoutRefreshRequestId ) {
@@ -1509,6 +1472,12 @@
 					self._form.find('button').attr('disabled', true);
 				},
 				success: function (data) {
+						if ( options.validateOnly ) {
+							const authentication = forminatorUtils().handle_authentication_error( data, self, updateFormData );
+							if ( false === authentication ) {
+								return false;
+							}
+						}
 						if (
 							self.isCheckoutSession()
 							&& options.checkoutRefreshRequestId
@@ -1521,6 +1490,21 @@
 						}
 
 						self._lastMountFailed = false;
+
+						// The server skipped the Stripe field because it is hidden.
+						if ( data.success === true && data.data && data.data.paymentFieldHidden ) {
+							if ( isSubmitRequest ) {
+								// Nothing to charge, so resume the pending submission instead of confirming a payment.
+								self.handlePayment();
+
+								return;
+							}
+
+							self.resumeAfterSkippedAmountUpdate(options, data);
+
+							return;
+						}
+
 						if (data.success === true) {
 							if ( self.isCheckoutSession() && options.validateOnly ) {
 								if ( typeof options.onSuccess === 'function' ) {
@@ -1612,7 +1596,7 @@
 						}
 					} else if ( ! self.intent ) {
 						// Not success for payment.
-						self.show_error(typeof data.data.message !== 'undefined' ? data.data.message : data.data);
+						self.show_error( typeof data.data.message !== 'undefined' ? data.data.message : data.data, true );
 						if ( typeof options.onFailure === 'function' ) {
 							options.onFailure(data.data);
 						}
@@ -1646,7 +1630,7 @@
 
 						var error_message = data.data && typeof data.data.message !== 'undefined' ? data.data.message : data.data;
 						if ( error_message ) {
-							self.show_error(error_message);
+							self.show_error( error_message, true );
 							if ( typeof options.onFailure === 'function' ) {
 								options.onFailure(data.data);
 							}
@@ -1688,11 +1672,19 @@
 				})
 			},
 
-		show_error: function(message) {
+		show_error: function( message, allowHTML = false ) {
 			var $target_message = this._form.find('.forminator-response-message');
 			var wasSubmitIntent = ! this.intent;
+			if ( allowHTML ) {
+				$target_message
+					.empty()
+					.append( $( '<p></p>' ).html( message ) );
+			} else {
+				$target_message
+					.empty()
+					.append( $( '<p></p>' ).text( message ) );
+			}
 
-			$target_message.empty().append($('<p></p>').text(message));
 			this.unfrozeForm($target_message);
 
 			if ( wasSubmitIntent ) {
@@ -2104,13 +2096,20 @@
 
 			if ( ! checkoutInitializer ) {
 				this.show_error(window.ForminatorFront.cform.payment_failed);
-				if ( window.console && typeof window.console.error === 'function' ) {
-					window.console.error('Stripe Checkout SDK is not available on the loaded Stripe.js version.');
-				}
+				this.reportStripeReleaseConflict('Stripe Checkout SDK is not available on the loaded Stripe.js version.');
 				return false;
 			}
 
-			let checkoutInit = checkoutInitializer(stripeObject);
+			let checkoutInit;
+			try {
+				checkoutInit = checkoutInitializer(stripeObject);
+			} catch ( error ) {
+				// Releases older than Basil expose the initializers but throw when they are called.
+				this.show_error(this.getStripeCheckoutErrorMessage(error));
+				this.reportStripeReleaseConflict(error);
+				return false;
+			}
+
 			let self = this;
 			this._mountPromise = new Promise(function(resolve, reject) {
 

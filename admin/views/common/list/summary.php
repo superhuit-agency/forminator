@@ -27,7 +27,7 @@ if ( $count > 0 || $is_search ) {
 
 			<div class="sui-summary-details">
 
-				<span id="forminator-summary-active-<?php echo esc_attr( static::$module_slug ); ?>-count" class="sui-summary-large"><?php echo esc_html( $count_active ); ?></span>
+				<span id="forminator-summary-active-<?php echo esc_attr( $this::$module_slug ); ?>-count" class="sui-summary-large"><?php echo esc_html( $count_active ); ?></span>
 
 				<span class="sui-summary-sub">
 				<?php

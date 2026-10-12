@@ -172,10 +172,11 @@ function forminator_remove_zero_width_chars( $content ) {
  * Used for sanitizing form integration settings description field.
  *
  * @param array $fields Fields.
+ * @param bool  $admin_settings Is admin settings.
  *
  * @return mixed
  */
-function forminator_sanitize_array_field( $fields ) {
+function forminator_sanitize_array_field( $fields, $admin_settings = false ) {
 	$allow_html = array(
 		'consent_description',
 		'variations',
@@ -191,12 +192,12 @@ function forminator_sanitize_array_field( $fields ) {
 			$value = forminator_remove_zero_width_chars( $value );
 		}
 		if ( is_array( $value ) ) {
-			$value = forminator_sanitize_array_field( $value );
-		} elseif ( in_array( $key, $allow_html, true ) ) {
+			$value = forminator_sanitize_array_field( $value, $admin_settings );
+		} elseif ( true === $admin_settings && in_array( $key, $allow_html, true ) ) {
 				$value = wp_kses_post( $value );
-		} elseif ( 'card_description' === $key
+		} elseif ( true === $admin_settings && ( 'card_description' === $key
 						|| 'gdpr_text' === $key
-						|| 'message' === $key
+						|| 'message' === $key )
 			) {
 			$value = sanitize_textarea_field( $value );
 		} else {
@@ -324,19 +325,6 @@ function forminator_get_pro_fields() {
 	$forminator = Forminator_Core::get_instance();
 
 	return $forminator->pro_fields;
-}
-
-/**
- * Return all existing custom fields
- *
- * @since      1.0
- * @deprecated 1.5.4
- * @return mixed
- */
-function forminator_get_existing_cfields() {
-	_deprecated_function( 'forminator_get_existing_cfields', '1.5.4' );
-
-	return array();
 }
 
 /**
@@ -696,10 +684,9 @@ function forminator_replace_form_data( $content, ?Forminator_Form_Model $custom_
 
 	$content = forminator_replace_form_payment_data( $content, $custom_form, $entry );
 
-	$randomed_field_pattern  = 'field-\d+-\d+';
 	$increment_field_pattern = sprintf( '(%s)-\d+', implode( '|', $field_types ) );
 
-	$pattern = '/\{((' . $randomed_field_pattern . ')|(' . $increment_field_pattern . '))(\-[A-Za-z0-9-_]+)?(\-\*)?\}/';
+	$pattern = '/\{((' . $increment_field_pattern . ')(\-[A-Za-z0-9-_]+)?(\-\*)?)\}/';
 
 	// Find all field ID's.
 	if ( preg_match_all( $pattern, $content, $matches ) ) {
@@ -1266,7 +1253,7 @@ function forminator_prepare_formatted_form_entry(
 		if ( 'section' === $field_type ) {
 			$value = $form_field->__get( 'section_title' );
 			$html .= '</' . $list_tag . '>';
-			$html .= '<h4><b>' . (string) $value . '</b></h4>';
+			$html .= '<h4><b>' . esc_html( (string) $value ) . '</b></h4>';
 			$html .= '<' . $list_tag . '>';
 		} elseif ( 'html' === $field_type ) {
 			$label = $form_field->__get( 'field_label' );
@@ -1280,10 +1267,19 @@ function forminator_prepare_formatted_form_entry(
 			}
 			$content = forminator_replace_form_data( $value, $custom_form, $entry, true, false, false, $is_pdf );
 			$content = forminator_replace_variables( $content, $custom_form->id );
+			// We do not support nested {all_fields} here — it would walk every field again (including this HTML field) and recurse.
+			$content = str_ireplace(
+				array(
+					'{all_fields}',
+					'{all_non_empty_fields}',
+				),
+				'',
+				$content
+			);
 			$content = forminator_replace_custom_form_data( $content, $custom_form, $entry );
 			$html   .= '</' . $list_tag . '>';
 			if ( ! empty( $label ) && $show_label ) {
-				$html .= '<h4><b>' . Forminator_Field::convert_markdown( $label ) . '</b></h4>';
+				$html .= '<h4><b>' . wp_kses_post( Forminator_Field::convert_markdown( esc_html( $label ) ) ) . '</b></h4>';
 			}
 			$html .= $content;
 			$html .= '<' . $list_tag . '>';
@@ -1298,7 +1294,7 @@ function forminator_prepare_formatted_form_entry(
 
 			$label = $form_field->get_label_for_entry();
 			if ( ! empty( $label ) && $show_label ) {
-				$html .= '<b>' . Forminator_Field::convert_markdown( $label ) . '</b><br/>';
+				$html .= '<b>' . wp_kses_post( Forminator_Field::convert_markdown( esc_html( $label ) ) ) . '</b><br/>';
 			}
 
 			$html .= $group_content;
@@ -1328,11 +1324,17 @@ function forminator_prepare_formatted_form_entry(
 				}
 
 				if ( ! empty( $label ) && $display_label ) {
-					$html .= '<b>' . Forminator_Field::convert_markdown( $label ) . '</b><br/>';
+					$html .= '<b>' . wp_kses_post( Forminator_Field::convert_markdown( esc_html( $label ) ) ) . '</b><br/>';
 				}
 				if ( isset( $value ) && '' !== $value ) {
 					if ( 'textarea' === $field_type ) {
-						$value = forminator_replace_linebreaks( $value );
+						$editor_type = Forminator_Field::get_property( 'editor-type', $field_array, false, 'bool' );
+						if ( true === $editor_type ) {
+							$value = forminator_format_html( $value );
+						} else {
+							// Escape first so line-break conversion cannot revive markup.
+							$value = forminator_replace_linebreaks( esc_html( $value ) );
+						}
 					}
 					$html .= $value . '<br/>';
 				}
@@ -1417,7 +1419,7 @@ function forminator_get_field_from_form_entry( $element_id, Forminator_Form_Mode
 }
 
 /**
- * Get Html Formatted of form name
+ * Get form name with HTML entities decoded.
  *
  * @since 1.0.3
  *
@@ -1427,7 +1429,7 @@ function forminator_get_field_from_form_entry( $element_id, Forminator_Form_Mode
  * @return string
  */
 function forminator_get_formatted_form_name( Forminator_Form_Model $custom_form, Forminator_Form_Entry_Model $entry ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-	return esc_html( forminator_get_form_name( $custom_form->id ) );
+	return html_entity_decode( forminator_get_form_name( $custom_form->id ), ENT_QUOTES, 'UTF-8' );
 }
 
 /**
@@ -1482,7 +1484,8 @@ function forminator_get_referer_url( $embed_url = '' ) {
 		$referer_url = $embed_url;
 	}
 
-	return $referer_url;
+	// Strip registered shortcodes from request-controlled referer values.
+	return strip_shortcodes( $referer_url );
 }
 
 /**
@@ -1542,7 +1545,7 @@ function forminator_get_formatted_username( Forminator_Form_Model $custom_form, 
 	if ( isset( $custom_form->settings['registration-username-field'] ) && ! empty( $custom_form->settings['registration-username-field'] ) ) {
 		$username = $custom_form->settings['registration-username-field'];
 		if ( ! empty( Forminator_CForm_Front_Action::$prepared_data[ $username ] ) ) {
-			$username = '<b>' . Forminator_CForm_Front_Action::$prepared_data[ $username ] . '</b>';
+			$username = '<b>' . esc_html( Forminator_CForm_Front_Action::$prepared_data[ $username ] ) . '</b>';
 		}
 	}
 
@@ -1649,7 +1652,8 @@ function forminator_replace_variables( $content, $id = false, $entry = null ) {
 			'{embed_url}'           => $embed_url,
 			// Handle HTTP User Agent variable.
 			// some browser not sending HTTP_USER_AGENT or some servers probably stripped this value.
-			'{user_agent}'          => isset( $_SERVER['HTTP_USER_AGENT'] ) ? esc_html( sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ) ) : '',
+			// strip_shortcodes() blocks shortcode payloads that survive sanitize_text_field()/esc_html().
+			'{user_agent}'          => isset( $_SERVER['HTTP_USER_AGENT'] ) ? esc_html( strip_shortcodes( sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ) ) ) : '',
 			// Handle site url variable.
 			'{site_url}'            => site_url(),
 			// Handle login url variable.
@@ -1671,7 +1675,7 @@ function forminator_replace_variables( $content, $id = false, $entry = null ) {
 		if ( $id ) {
 			// Handle form_name data.
 			if ( strpos( $content, '{form_name}' ) !== false ) {
-				$variables['{form_name}'] = esc_html( forminator_get_form_name( $id ) );
+				$variables['{form_name}'] = html_entity_decode( forminator_get_form_name( $id ), ENT_QUOTES, 'UTF-8' );
 			}
 			// handle form_id.
 			$variables['{form_id}'] = $id;
@@ -2744,7 +2748,7 @@ function forminator_get_ext_types_with_mime() {
 function forminator_replace_poll_form_data( $content, Forminator_Poll_Model $poll, $data, Forminator_Form_Entry_Model $entry ) {
 	if ( stripos( $content, '{poll_name}' ) !== false ) {
 		$poll_name = forminator_get_name_from_model( $poll );
-		$content   = str_ireplace( '{poll_name}', $poll_name, $content );
+		$content   = str_ireplace( '{poll_name}', esc_html( $poll_name ), $content );
 	}
 
 	if ( stripos( $content, '{poll_answer}' ) !== false ) {
@@ -2753,8 +2757,9 @@ function forminator_replace_poll_form_data( $content, Forminator_Poll_Model $pol
 		$fields_labels = $poll->pluck_fields_array( 'title', 'element_id', '1' );
 
 		$answer_label = isset( $fields_labels[ $answer_data ] ) ? $fields_labels[ $answer_data ] : '';
+		$answer_label = esc_html( $answer_label );
 		if ( ! empty( $extra_field ) ) {
-			$answer_label .= ' ' . $extra_field;
+			$answer_label .= ' ' . esc_html( $extra_field );
 		}
 		$content = str_ireplace( '{poll_answer}', $answer_label, $content );
 	}
@@ -2783,7 +2788,7 @@ function forminator_replace_poll_form_data( $content, Forminator_Poll_Model $pol
 		$poll_results_html = '<ul>';
 		foreach ( $poll_results as $poll_result ) {
 			$poll_results_html .= '<li>';
-			$poll_results_html .= '<strong>' . $poll_result['label'] . '</strong> : ' . $poll_result['value'];
+			$poll_results_html .= '<strong>' . esc_html( $poll_result['label'] ) . '</strong> : ' . esc_html( (string) $poll_result['value'] );
 			$poll_results_html .= '</li>';
 		}
 		$poll_results_html .= '</ul>';
@@ -2834,7 +2839,7 @@ function forminator_replace_quiz_form_data( $content, Forminator_Quiz_Model $qui
 
 	if ( stripos( $content, '{quiz_name}' ) !== false ) {
 		$quiz_name = forminator_get_name_from_model( $quiz );
-		$content   = str_ireplace( '{quiz_name}', $quiz_name, $content );
+		$content   = str_ireplace( '{quiz_name}', esc_html( $quiz_name ), $content );
 	}
 
 	if ( stripos( $content, '{quiz_type}' ) !== false ) {
@@ -2844,7 +2849,7 @@ function forminator_replace_quiz_form_data( $content, Forminator_Quiz_Model $qui
 		} elseif ( 'nowrong' === $quiz->quiz_type ) {
 			$quiz_type = 'Personality';
 		}
-		$content = str_ireplace( '{quiz_type}', $quiz_type, $content );
+		$content = str_ireplace( '{quiz_type}', esc_html( $quiz_type ), $content );
 	}
 	$answers = isset( Forminator_CForm_Front_Action::$prepared_data['answers'] )
 			? Forminator_CForm_Front_Action::$prepared_data['answers']
@@ -2961,8 +2966,11 @@ function forminator_replace_quiz_form_data( $content, Forminator_Quiz_Model $qui
 				}
 			}
 		}
-		$content = str_ireplace( '{quiz_result}', $result_content, $content );
-		$content = do_shortcode( $content );
+		// Expand shortcodes only inside quiz result content. Running do_shortcode() on the
+		// full template would execute attacker-controlled merge tags such as {user_agent}
+		// and {refer_url} that were already substituted into $content.
+		$result_content = do_shortcode( $result_content );
+		$content        = str_ireplace( '{quiz_result}', $result_content, $content );
 	}
 
 	return apply_filters( 'forminator_replace_quiz_form_data', $content, $quiz, Forminator_CForm_Front_Action::$prepared_data, $entry );
@@ -3485,17 +3493,27 @@ function forminator_lead_submitted_data( $lead_entry ) {
  * Check how many instances of a field type exists in a given post ID
  *
  * @param string $field_type Field type.
+ * @param int    $post_id    Optional. Post ID.
  *
  * @return int
  */
-function forminator_count_field_type_in_page( $field_type ) {
+function forminator_count_field_type_in_page( $field_type, $post_id = 0 ) {
 	global $post;
 
-	if ( empty( $post->ID ) ) {
+	$post_id = absint( $post_id );
+	if ( empty( $post_id ) && ! empty( $post->ID ) ) {
+		$post_id = absint( $post->ID );
+	}
+
+	if ( empty( $post_id ) ) {
 		return 0;
 	}
 
-	$page        = get_post( $post->ID );
+	$page = get_post( $post_id );
+	if ( ! $page instanceof WP_Post ) {
+		return 0;
+	}
+
 	$content     = $page->post_content;
 	$field_count = 0;
 	$form        = Forminator_Form_Model::model();
@@ -3510,8 +3528,17 @@ function forminator_count_field_type_in_page( $field_type ) {
 
 	// Increase count for every $field_type found.
 	foreach ( $matches as $shortcode ) {
-		preg_match_all( '!\d+!', $shortcode[0], $form_ids );
-		$form        = $form->load( $form_ids[0][0] );
+		$shortcode_attr_text = isset( $shortcode[3] ) ? $shortcode[3] : '';
+		$shortcode_attr      = shortcode_parse_atts( $shortcode_attr_text );
+		if ( empty( $shortcode_attr['id'] ) ) {
+			continue;
+		}
+
+		$form = $form->load( absint( $shortcode_attr['id'] ) );
+		if ( ! is_object( $form ) ) {
+			continue;
+		}
+
 		$form_fields = $form->get_fields();
 
 		foreach ( $form_fields as $field ) {

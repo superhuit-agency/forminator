@@ -151,6 +151,9 @@ class Forminator_Core {
 			Forminator_Reports::get_instance();
 		}
 
+		// Webhooks management.
+		Forminator_Handle_Webhooks::get_instance();
+
 		// Post meta box.
 		add_action( 'init', array( &$this, 'post_field_meta_box' ) );
 
@@ -169,6 +172,12 @@ class Forminator_Core {
 
 		// Validate XML-RPC calls for Forminator forms.
 		add_action( 'xmlrpc_call', array( $this, 'validate_xmlrpc' ), 10, 3 );
+		// Recheck form meta on write, so no XML-RPC custom field entry skips validation.
+		if ( defined( 'XMLRPC_REQUEST' ) && XMLRPC_REQUEST ) {
+			add_filter( 'add_post_metadata', array( $this, 'validate_xmlrpc_form_meta' ), 10, 4 );
+			add_filter( 'update_post_metadata', array( $this, 'validate_xmlrpc_form_meta' ), 10, 4 );
+			add_filter( 'update_post_metadata_by_mid', array( $this, 'validate_xmlrpc_form_meta_by_mid' ), 10, 4 );
+		}
 	}
 
 	/**
@@ -222,12 +231,57 @@ class Forminator_Core {
 
 			// Validate with the new custom fields from the post data.
 			if ( ! empty( $post_data['custom_fields'] ) ) {
-				$result = $this->allow_xmlrpc_for_registration_forms( $post_data['custom_fields'] );
+				// XML-RPC escapes the request arguments, validate them as they will be stored.
+				$result = $this->allow_xmlrpc_for_registration_forms( wp_unslash( $post_data['custom_fields'] ) );
 				if ( is_wp_error( $result ) ) {
 					$server->error( 401, $result->get_error_message() );
 				}
 			}
 		}
+	}
+
+	/**
+	 * Block XML-RPC form meta writes the current user is not allowed to make.
+	 *
+	 * @param null|bool|int $check      Short-circuit value.
+	 * @param int           $object_id  Post ID.
+	 * @param string        $meta_key   Meta key.
+	 * @param mixed         $meta_value Meta value.
+	 * @return null|bool|int
+	 */
+	public function validate_xmlrpc_form_meta( $check, $object_id, $meta_key, $meta_value ) {
+		if ( 'forminator_form_meta' !== $meta_key || 'forminator_forms' !== get_post_type( $object_id ) ) {
+			return $check;
+		}
+		$result = $this->allow_xmlrpc_for_registration_forms(
+			array(
+				array(
+					'key'   => $meta_key,
+					'value' => $meta_value,
+				),
+			)
+		);
+
+		return is_wp_error( $result ) ? false : $check;
+	}
+
+	/**
+	 * Block XML-RPC form meta updates by meta ID the current user is not allowed to make.
+	 *
+	 * @param null|bool    $check      Short-circuit value.
+	 * @param int          $meta_id    Meta ID.
+	 * @param mixed        $meta_value Meta value.
+	 * @param string|false $meta_key   New meta key, if provided.
+	 * @return null|bool
+	 */
+	public function validate_xmlrpc_form_meta_by_mid( $check, $meta_id, $meta_value, $meta_key ) {
+		$meta = get_metadata_by_mid( 'post', $meta_id );
+		if ( ! $meta ) {
+			return $check;
+		}
+		$meta_key = false === $meta_key ? $meta->meta_key : $meta_key;
+
+		return $this->validate_xmlrpc_form_meta( $check, $meta->post_id, $meta_key, $meta_value );
 	}
 
 	/**
@@ -238,17 +292,24 @@ class Forminator_Core {
 	 */
 	private function allow_xmlrpc_for_registration_forms( $form_meta ) {
 		if ( ! empty( $form_meta ) ) {
+			// Check every entry, as XML-RPC applies all of them.
 			foreach ( $form_meta as $meta ) {
 				if ( ! empty( $meta['key'] ) && 'forminator_form_meta' === $meta['key']
 					&& ! empty( $meta['value'] ) ) {
-					$value = maybe_unserialize( $meta['value'] );
+					$value = forminator_safe_maybe_unserialize( $meta['value'] );
+					// Reject object payloads and other non-array values so they are not stored and later deserialized.
 					if ( ! is_array( $value ) ) {
-						// XML-RPC escapes the request arguments before this hook runs.
-						$value = maybe_unserialize( wp_unslash( $meta['value'] ) );
+						return new WP_Error(
+							'invalid_form_meta',
+							esc_html__( 'Invalid form meta data.', 'forminator' )
+						);
 					}
 					$form_settings = $value['settings'] ?? array();
 					// Check if the current user has the required permissions to create or edit Forminator registration forms.
-					return forminator_check_registration_form_permissions( $form_settings );
+					$result = forminator_check_registration_form_permissions( $form_settings );
+					if ( is_wp_error( $result ) ) {
+						return $result;
+					}
 				}
 			}
 		}
@@ -357,7 +418,12 @@ class Forminator_Core {
 	 * @return void
 	 */
 	public static function init_mixpanel( bool $force = false ) {
-		if ( ! forminator_usage_tracking_disabled() && ( ( ! self::is_tracking_active() && ! $force ) || ! is_admin() ) ) {
+		// Usage tracking is disabled via filter, never initialize the tracker.
+		if ( forminator_usage_tracking_disabled() ) {
+			return;
+		}
+
+		if ( ( ! self::is_tracking_active() && ! $force ) || ! is_admin() ) {
 			return;
 		}
 
@@ -378,9 +444,16 @@ class Forminator_Core {
 	/**
 	 * Check if usage tracking is active.
 	 *
+	 * Returns false when usage tracking is disabled via filter, regardless of
+	 * the stored opt-in, so every caller sees a single source of truth.
+	 *
 	 * @return bool
 	 */
 	public static function is_tracking_active() {
+		if ( forminator_usage_tracking_disabled() ) {
+			return false;
+		}
+
 		return get_option( 'forminator_usage_tracking' );
 	}
 
@@ -425,6 +498,7 @@ class Forminator_Core {
 		include_once forminator_plugin_dir() . 'library/class-geo.php';
 		/* @noinspection PhpIncludeInspection */
 		include_once forminator_plugin_dir() . 'library/class-protection.php';
+		include_once forminator_plugin_dir() . 'library/class-upload-access.php';
 		/* @noinspection PhpIncludeInspection */
 		include_once forminator_plugin_dir() . 'library/class-shortcode-generator.php';
 		/* @noinspection PhpIncludeInspection */
@@ -447,6 +521,10 @@ class Forminator_Core {
 		if ( file_exists( forminator_plugin_dir() . 'library/gateways/class-stripe.php' ) ) {
 			/* @noinspection PhpIncludeInspection */
 			include_once forminator_plugin_dir() . 'library/gateways/class-stripe.php';
+
+			/* @noinspection PhpIncludeInspection */
+			include_once forminator_plugin_dir() . 'library/gateways/class-stripe-script-loader.php';
+			Forminator_Stripe_Script_Loader::init();
 
 			$stripe_connect = forminator_plugin_dir() . 'library/gateways/class-stripe-connect.php';
 
@@ -551,6 +629,8 @@ class Forminator_Core {
 			/* @noinspection PhpIncludeInspection */
 			include_once forminator_plugin_dir() . 'library/class-page-cache.php';
 		}
+
+		include_once forminator_plugin_dir() . 'library/class-handle-webhooks.php';
 	}
 
 	/**
@@ -687,8 +767,22 @@ class Forminator_Core {
 	 * @return array|string
 	 */
 	public static function sanitize_array( $data, $current_key = '', $force = false ) {
+		// Unslash once; per-level unslashing lets encoded payloads bypass wp_kses. See FOR-6607.
 		$data = wp_unslash( $data );
 
+		return self::sanitize_array_recursive( $data, $current_key, $force );
+	}
+
+	/**
+	 * Recursively sanitize data that the caller has already unslashed.
+	 *
+	 * @param array  $data Data (already unslashed).
+	 * @param string $current_key Current key.
+	 * @param bool   $force Force sanitization.
+	 *
+	 * @return array|string
+	 */
+	private static function sanitize_array_recursive( $data, $current_key = '', $force = false ) {
 		if ( ! is_array( $data ) ) {
 			$data = forminator_remove_zero_width_chars( $data );
 		}
@@ -780,7 +874,7 @@ class Forminator_Core {
 		} else {
 			foreach ( $data as $key => $value ) {
 				$child_key    = $is_choice_field ? $current_key : $key;
-				$data[ $key ] = self::sanitize_array( $value, $child_key, $force );
+				$data[ $key ] = self::sanitize_array_recursive( $value, $child_key, $force );
 			}
 
 			return $data;

@@ -243,40 +243,14 @@ class Forminator_Radio extends Forminator_Field {
 				'<span class="forminator-radio-label">%s</span>',
 				wp_kses(
 					$option['label'],
-					array(
-						'a'      => array(
-							'href'  => array(),
-							'title' => array(),
-						),
-						'span'   => array(
-							'class' => array(),
-						),
-						'b'      => array(),
-						'i'      => array(),
-						'br'     => array(),
-						'em'     => array(),
-						'strong' => array(),
-					)
+					self::get_choice_label_allowed_html()
 				)
 			);
 			$aria_label        = sprintf(
 				'<span class="forminator-screen-reader-only">%s</span>',
 				wp_kses(
 					$option['label'],
-					array(
-						'a'      => array(
-							'href'  => array(),
-							'title' => array(),
-						),
-						'span'   => array(
-							'class' => array(),
-						),
-						'b'      => array(),
-						'i'      => array(),
-						'br'     => array(),
-						'em'     => array(),
-						'strong' => array(),
-					)
+					self::get_choice_label_allowed_html()
 				)
 			);
 
@@ -463,7 +437,8 @@ class Forminator_Radio extends Forminator_Field {
 	public function validate( $field, $data ) {
 		$id            = self::get_property( 'element_id', $field );
 		$option_values = array_map( 'forminator_normalize_choice_option_value', array_column( $field['options'], 'value' ) );
-		if ( ! empty( $data ) && false === array_search( forminator_normalize_choice_option_value( $data ), $option_values, true ) ) {
+		// '0' is a value too, so it must be one of the options.
+		if ( ( ! empty( $data ) || '0' === $data ) && false === array_search( forminator_normalize_choice_option_value( $data ), $option_values, true ) ) {
 			$this->validation_message[ $id ] = apply_filters(
 				'forminator_radio_field_nonexistent_validation_message',
 				esc_html__( 'Selected value does not exist.', 'forminator' ),

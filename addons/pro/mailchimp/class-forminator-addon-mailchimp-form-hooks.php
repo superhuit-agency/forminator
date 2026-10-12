@@ -17,13 +17,11 @@ defined( 'ABSPATH' ) || exit;
 class Forminator_Mailchimp_Form_Hooks extends Forminator_Integration_Form_Hooks {
 
 	/**
-	 * Flag of gpdr field checked on submit
+	 * Input name of the GDPR field
 	 *
-	 * @since 1.0 Mailchimp Integration
-	 *
-	 * @var bool
+	 * @since 1.58.0
 	 */
-	private $gdpr_is_checked = true;
+	const GDPR_FIELD_NAME = 'forminator-addon-mailchimp-gdpr';
 
 	/**
 	 * Render extra fields after all forms fields rendered
@@ -31,14 +29,9 @@ class Forminator_Mailchimp_Form_Hooks extends Forminator_Integration_Form_Hooks 
 	 * @since 1.0 Mailchimp Integration
 	 */
 	public function on_after_render_form_fields() {
-		// Render GDPR field if enabled.
-		if ( Forminator_Mailchimp::is_enable_gdpr() ) {
-			$addon_setting_values = $this->settings_instance->get_settings_values();
-			if ( isset( $addon_setting_values['enable_gdpr'] ) && $addon_setting_values['enable_gdpr'] ) {
-				if ( isset( $addon_setting_values['gdpr_text'] ) && ! empty( $addon_setting_values['gdpr_text'] ) ) {
-					$this->render_gdpr_field( $addon_setting_values );
-				}
-			}
+		$addon_setting_values = $this->settings_instance->get_settings_values();
+		if ( self::is_gdpr_field_enabled( $addon_setting_values ) ) {
+			$this->render_gdpr_field( $addon_setting_values );
 		}
 
 		$form_id                = $this->module_id;
@@ -67,117 +60,103 @@ class Forminator_Mailchimp_Form_Hooks extends Forminator_Integration_Form_Hooks 
 	 * @param array $addon_setting_values Addon settings values.
 	 */
 	private function render_gdpr_field( $addon_setting_values ) {
+		$input_id = esc_attr( self::GDPR_FIELD_NAME . '-' . uniqid() );
 
-		$uniq_id    = uniqid();
-		$input_name = 'forminator-addon-mailchimp-gdpr';
-		$input_id   = $input_name . '-' . $uniq_id;
-		$html       = '<div class="forminator-row"><div id="field-' . $input_id . '" class="forminator-col forminator-col-12"><div class="forminator-field">';
-		$html      .= '<div class="forminator-field--label"><label class="forminator-label" id="forminator-label-' . $input_id . '">' . esc_html_e( 'Mailchimp GDPR', 'forminator' )
-					. '</label></div>';
-		// matching checkbox with design.
-		$form_settings = $this->settings_instance->get_form_settings();
-		$design_class  = self::get_form_setting_value_as( $form_settings, 'form-style', 'default', 'string' );
-		if ( 'none' === $design_class ) {
+		// Same markup as the Consent field, so that current form designs style it.
+		$html  = sprintf(
+			'<div class="forminator-row"><div id="field-%s" class="forminator-col forminator-col-12"><div class="forminator-field">',
+			$input_id
+		);
+		$html .= sprintf(
+			'<label for="%1$s" id="%1$s-label" class="forminator-label">%2$s</label>',
+			$input_id,
+			esc_html__( 'Mailchimp GDPR', 'forminator' )
+		);
+		$html .= '<div class="forminator-checkbox__wrapper">';
+		$html .= sprintf( '<label id="%s__label" class="forminator-checkbox">', $input_id );
+		$html .= sprintf(
+			'<input type="checkbox" name="%1$s" id="%2$s" value="1" aria-labelledby="%2$s-label" aria-describedby="%2$s__description" />',
+			esc_attr( self::GDPR_FIELD_NAME ),
+			$input_id
+		);
+		$html .= '<span class="forminator-checkbox-box" aria-hidden="true"></span>';
+		$html .= '</label>';
+		$html .= sprintf(
+			'<div id="%s__description" class="forminator-checkbox__label">%s</div>',
+			$input_id,
+			wp_kses_post( $addon_setting_values['gdpr_text'] )
+		);
+		$html .= '</div></div></div></div>';
 
-			$html .= '<label class="forminator-checkbox">';
-			$html .= sprintf(
-				'<input id="%s" type="checkbox" name="%s" value="1"> %s',
-				$input_id,
-				$input_name,
-				$addon_setting_values['gdpr_text']
-			);
-			$html .= '</label>';
-
-		} else {
-
-			$html .= '<div class="forminator-checkbox">';
-			$html .= sprintf(
-				'<input id="%s" type="checkbox" name="%s" value="1" class="forminator-checkbox--input">',
-				$input_id,
-				$input_name
-			);
-			$html .= sprintf(
-				'<label for="%s" class="forminator-checkbox--design wpdui-icon wpdui-icon-check" aria-hidden="true"></label>',
-				$input_id
-			);
-			$html .= sprintf(
-				'<label for="%s" class="forminator-checkbox--label">%s</label>',
-				$input_id,
-				$addon_setting_values['gdpr_text']
-			);
-			$html .= '</div>';
-
-		}
-		$html .= '</div></div></div>';
-
-		echo wp_kses_post( $html );
+		// `wp_kses_post()` is not used here because it strips `<input>` tags.
+		echo wp_kses( $html, self::gdpr_field_allowed_html() );
 	}
 
 	/**
-	 * Helper Get form setting value with fixed var type
+	 * Allowed HTML tags of the GDPR field markup
 	 *
-	 * @since 1.0 Mailchimp Integration
+	 * @since 1.58.0
 	 *
-	 * @param array  $form_settings Form settings.
-	 * @param string $key Key.
-	 * @param mixed  $default_value Default value.
-	 * @param string $type Data type.
-	 *
-	 * @return int|mixed
+	 * @return array
 	 */
-	private static function get_form_setting_value_as( $form_settings, $key, $default_value, $type = 'string' ) {
-		if ( ! isset( $form_settings[ $key ] ) ) {
-			return self::convert_value_to( $default_value, $type );
-		}
+	private static function gdpr_field_allowed_html() {
+		$allowed_html = wp_kses_allowed_html( 'post' );
 
-		return self::convert_value_to( $form_settings[ $key ], $type );
+		$allowed_html['input'] = array(
+			'id'               => array(),
+			'type'             => array(),
+			'name'             => array(),
+			'value'            => array(),
+			'aria-labelledby'  => array(),
+			'aria-describedby' => array(),
+		);
+
+		return $allowed_html;
 	}
 
 	/**
-	 * Helper to convert value to expected var type
+	 * Check whether the GDPR field is enabled for this form
 	 *
-	 * @since 1.0 Mailchimp Integration
+	 * @since 1.58.0
 	 *
-	 * @param mixed  $value Value.
-	 * @param string $type Datatype.
+	 * @param array $addon_setting_values Addon settings values.
 	 *
-	 * @return array|false|int|mixed|string
+	 * @return bool
 	 */
-	private static function convert_value_to( $value, $type ) {
-		switch ( $type ) {
-			case 'array':
-				if ( ! is_array( $value ) ) {
-					if ( is_scalar( $value ) ) {
-						return array( $value );
-					} else {
-						return (array) $value;
-					}
-				}
-
-				return $value;
-			case 'string':
-				if ( ! is_scalar( $value ) ) {
-					return wp_json_encode( $value );
-				}
-
-				return (string) trim( $value );
-			case 'boolean':
-				return filter_var( trim( $value ), FILTER_VALIDATE_BOOLEAN );
-			case 'int':
-				if ( ! is_scalar( $value ) ) {
-					return 1;
-				}
-
-				return (int) trim( $value );
-			default:
-				return $value;
-		}
+	private static function is_gdpr_field_enabled( $addon_setting_values ) {
+		return Forminator_Mailchimp::is_enable_gdpr()
+			&& ! empty( $addon_setting_values['enable_gdpr'] )
+			&& ! empty( $addon_setting_values['gdpr_text'] );
 	}
 
 	/**
-	 * Check GDPR field - Experimental
+	 * Check whether the GDPR field was checked on submit
 	 *
-	 * @since 1.0 Mailchimp Integration
+	 * The submitted data is read here instead of being remembered from `on_module_submit()`,
+	 * because each submission phase runs on its own hooks instance.
+	 *
+	 * @see forminator_get_addons_instance_connected_with_module() Returns a clone of the integration on every call.
+	 *
+	 * @since 1.58.0
+	 *
+	 * @param array $submitted_data Submitted data.
+	 *
+	 * @return bool
+	 */
+	private static function is_gdpr_checked( $submitted_data ) {
+		return isset( $submitted_data[ self::GDPR_FIELD_NAME ] )
+			&& '1' === (string) $submitted_data[ self::GDPR_FIELD_NAME ];
+	}
+
+	/**
+	 * Check whether the GDPR field was checked on submit
+	 *
+	 * The submitted data is read here instead of being remembered from `on_module_submit()`,
+	 * because each submission phase runs on its own hooks instance.
+	 *
+	 * @see forminator_get_addons_instance_connected_with_module() Returns a clone of the integration on every call.
+	 *
+	 * @since 1.58.0
 	 *
 	 * @param array $submitted_data Submitted data.
 	 *
@@ -241,10 +220,12 @@ class Forminator_Mailchimp_Form_Hooks extends Forminator_Integration_Form_Hooks 
 			return true;
 		}
 
-		// Only flag check for gdpr.
-		if ( ! isset( $submitted_data['forminator-addon-mailchimp-gdpr'] ) || '1' !== $submitted_data['forminator-addon-mailchimp-gdpr'] ) {
-			$this->gdpr_is_checked = false;
-		}
+		// Add field data to the entry metadata so it can be used in the `custom_entry_fields()` method.
+		// This data needs to be saved in the database to support the `post_submission_process()` when a webhook is received.
+		Forminator_CForm_Front_Action::$info['field_data_array'][] = array(
+			'name'  => self::GDPR_FIELD_NAME,
+			'value' => $submitted_data[ self::GDPR_FIELD_NAME ] ? '1' : '0',
+		);
 
 		return true;
 	}
@@ -258,6 +239,7 @@ class Forminator_Mailchimp_Form_Hooks extends Forminator_Integration_Form_Hooks 
 	 * @throws Forminator_Integration_Exception Integration Exception.
 	 */
 	protected function custom_entry_fields( $submitted_data, $current_entry_fields ): array {
+		$entry                  = func_get_args()[2];
 		$form_id                = $this->module_id;
 		$form_settings_instance = $this->settings_instance;
 		$gdpr                   = false;
@@ -302,22 +284,14 @@ class Forminator_Mailchimp_Form_Hooks extends Forminator_Integration_Form_Hooks 
 		try {
 			$mailchimp_api = $this->addon->get_api();
 
-			if ( Forminator_Mailchimp::is_enable_gdpr() ) {
-				// GDPR.
-				if ( isset( $addon_setting_values['enable_gdpr'] ) && $addon_setting_values['enable_gdpr'] ) {
-					if ( isset( $addon_setting_values['gdpr_text'] ) && ! empty( $addon_setting_values['gdpr_text'] ) ) {
-						if ( ! $this->gdpr_is_checked ) {
-							// GDPR not checked, add error.
-							throw new Forminator_Integration_Exception(
-								esc_html__(
-									'Forminator Mailchimp integration did not send subscriber to Mailchimp as GDPR field was not checked on input',
-									'forminator'
-								)
-							);
-
-						}
-					}
-				}
+			// Don't send the subscriber when the GDPR field is enabled but was not checked.
+			if ( self::is_gdpr_field_enabled( $addon_setting_values ) && ! self::is_gdpr_checked( $submitted_data ) ) {
+				throw new Forminator_Integration_Exception(
+					esc_html__(
+						'Forminator Mailchimp integration did not send subscriber to Mailchimp as GDPR field was not checked on input',
+						'forminator'
+					)
+				);
 			}
 
 			// EMAIL : super required**.

@@ -11,7 +11,7 @@
  */
 
 if ( ! defined( 'FORMINATOR_VERSION' ) ) {
-	define( 'FORMINATOR_VERSION', '1.57.2' );
+	define( 'FORMINATOR_VERSION', '1.58.1' );
 }
 
 if ( ! defined( 'FORMINATOR_SUI_VERSION' ) ) {
@@ -44,4 +44,8 @@ if ( ! defined( 'FORMINATOR_PRO_URL' ) ) {
 
 if ( ! defined( 'FORMINATOR_MIN_PHP_VERSION' ) ) {
 	define( 'FORMINATOR_MIN_PHP_VERSION', '7.4' );
+}
+
+if ( ! defined( 'FORMINATOR_MIN_STRIPE_ADDON_VERSION' ) ) {
+	define( 'FORMINATOR_MIN_STRIPE_ADDON_VERSION', '1.6.0' );
 }

@@ -185,7 +185,16 @@ class Forminator_Googlesheet_Form_Hooks extends Forminator_Integration_Form_Hook
 				if ( substr( $form_value, 0, 1 ) !== '0' && is_numeric( $form_value ) ) {
 					$value->setNumberValue( $form_value );
 				} else {
+					// TEXT format avoids Google Sheets adding a leading apostrophe on date/number-like strings.
+					$cell_format = new ForminatorGoogleAddon\Google\Service\Sheets\CellFormat(
+						array(
+							'numberFormat' => array(
+								'type' => 'TEXT',
+							),
+						)
+					);
 					$value->setStringValue( $form_value );
+					$cell_data->setUserEnteredFormat( $cell_format );
 				}
 				$cell_data->setUserEnteredValue( $value );
 				$values[] = $cell_data;
@@ -199,7 +208,7 @@ class Forminator_Googlesheet_Form_Hooks extends Forminator_Integration_Form_Hook
 			$append_request = new ForminatorGoogleAddon\Google\Service\Sheets\AppendCellsRequest();
 			$append_request->setSheetId( $worksheet_id );
 			$append_request->setRows( $row_data );
-			$append_request->setFields( 'userEnteredValue' );
+			$append_request->setFields( 'userEnteredValue,userEnteredFormat.numberFormat' );
 
 			// Set the request.
 			$request = new ForminatorGoogleAddon\Google\Service\Sheets\Request();

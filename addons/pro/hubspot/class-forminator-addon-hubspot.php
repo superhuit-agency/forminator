@@ -84,6 +84,16 @@ final class Forminator_Hubspot extends Forminator_Integration {
 	protected $_position = 4;
 
 	/**
+	 * HubSpot redirects back to a pre registered URL that cannot carry a per request
+	 * nonce, so the section nonce is not required here. CSRF protection for this
+	 * flow needs the nonce moved into the OAuth state parameter instead.
+	 *
+	 * @since 1.58
+	 * @var bool
+	 */
+	public $section_requires_nonce = false;
+
+	/**
 	 * Forminator_Hubspot constructor.
 	 *
 	 * @since 1.0 HubSpot Integration

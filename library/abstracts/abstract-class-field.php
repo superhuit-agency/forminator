@@ -298,13 +298,23 @@ abstract class Forminator_Field {
 	}
 
 	/**
-	 * Get options for radio and selectbox fields
+	 * Get options for radio, checkbox and selectbox fields
 	 *
 	 * @param array $field Field settings.
 	 * @return array
 	 */
 	public static function get_options( $field ) {
 		$options = self::get_property( 'options', $field, array() );
+
+		// Submitting an empty-value option always fails validation, so never render one.
+		$options = array_values(
+			array_filter(
+				$options,
+				static function ( $option ) {
+					return isset( $option['value'] ) && '' !== trim( (string) $option['value'] );
+				}
+			)
+		);
 
 		if ( ! empty( $field['options_order'] ) && 'random' === $field['options_order'] ) {
 			shuffle( $options );
@@ -321,6 +331,28 @@ abstract class Forminator_Field {
 		}
 
 		return $options;
+	}
+
+	/**
+	 * Get allowed HTML for choice option labels.
+	 *
+	 * @return array
+	 */
+	protected static function get_choice_label_allowed_html() {
+		return array(
+			'a'      => array(
+				'href'  => array(),
+				'title' => array(),
+			),
+			'span'   => array(
+				'class' => array(),
+			),
+			'b'      => array(),
+			'i'      => array(),
+			'br'     => array(),
+			'em'     => array(),
+			'strong' => array(),
+		);
 	}
 
 	/**
@@ -701,10 +733,10 @@ abstract class Forminator_Field {
 
 		// Apply markdown replacements.
 		$patterns = array(
-			'/(?<=^|\s)`(\S(?:.*?\S)?)`(?=\s|$)/u'   => '<span class="forminator-monospace" style="font-family: monospace;">$1</span>',
-			'/(?<=^|\s)~(\S(?:.*?\S)?)~(?=\s|$)/u'   => '<del>$1</del>',
-			'/(?<=^|\s)_(\S(?:.*?\S)?)_(?=\s|$)/u'   => '<em>$1</em>',
-			'/(?<=^|\s)\*(\S(?:.*?\S)?)\*(?=\s|$)/u' => '<strong>$1</strong>',
+			'/(?<=^|>|\s)`(\S(?:.*?\S)?)`(?=\s|<|$)/u'   => '<span class="forminator-monospace" style="font-family: monospace;">$1</span>',
+			'/(?<=^|>|\s)~(\S(?:.*?\S)?)~(?=\s|<|$)/u'   => '<del>$1</del>',
+			'/(?<=^|>|\s)_(\S(?:.*?\S)?)_(?=\s|<|$)/u'   => '<em>$1</em>',
+			'/(?<=^|>|\s)\*(\S(?:.*?\S)?)\*(?=\s|<|$)/u' => '<strong>$1</strong>',
 		);
 		foreach ( $patterns as $pattern => $replacement ) {
 			$string = preg_replace( $pattern, $replacement, $string );
@@ -784,47 +816,6 @@ abstract class Forminator_Field {
 		}
 
 		return apply_filters( 'forminator_field_create_select', $html, $attr, $label, $options, $value, $description );
-	}
-
-	/**
-	 * Return new simple select field
-	 *
-	 * @since 1.0
-	 *
-	 * @param array  $attr Field Attribute.
-	 * @param array  $options Field Options.
-	 * @param string $value Field Value.
-	 * @param string $description Field Description.
-	 *
-	 * @return mixed
-	 */
-	public static function create_simple_select( $attr = array(), $options = array(), $value = '', $description = '' ) {
-
-		_deprecated_function( 'create_simple_select', '1.6.1', 'create_select' );
-
-		$html = '';
-
-		$get_id = uniqid( 'forminator-select-' );
-
-		! empty( $description ) ? $attr['aria-describedby'] = $get_id . '-description' : '';
-
-		$markup = self::implode_attr( $attr );
-
-		if ( self::get_post_data( $attr['name'], false ) ) {
-			$value = self::get_post_data( $attr['name'] );
-		}
-
-		$html .= sprintf( '<select %s>', $markup );
-
-			$html .= self::populate_options_for_select( $options, $value );
-
-		$html .= '</select>';
-
-		if ( ! empty( $description ) ) {
-			$html .= self::get_description( $description, $get_id );
-		}
-
-		return apply_filters( 'forminator_field_create_simple_select', $html, $attr, $options, $value, $description );
 	}
 
 	/**
@@ -2074,6 +2065,9 @@ abstract class Forminator_Field {
 		$field_type            = isset( $field_settings['type'] ) ? $field_settings['type'] : '';
 		if ( in_array( $field_type, $precision_field_types, true ) ) {
 			$precision = self::get_calculable_precision( $field_settings );
+			// Guard against non-scalar input (e.g. an injected array); floatval()
+			// would coerce it to 1 and manufacture a bogus amount.
+			$value = is_scalar( $value ) ? $value : 0;
 			return number_format( floatval( $value ), $precision, '.', '' );
 		}
 
@@ -2285,6 +2279,12 @@ abstract class Forminator_Field {
 		$precision  = self::get_calculable_precision( $field );
 		$separator  = self::get_property( 'separators', $field, 'blank' );
 		$separators = self::forminator_separators( $separator, $field );
+
+		// If the number already contains the separator, we assume it is already formatted and return it as-is. - For backward compatibility.
+		if ( ! empty( $separators['separator'] ) && false !== strpos( $number, $separators['separator'] ) ) {
+			return $number;
+		}
+
 		// All unformatted numbers use either a comma or a dot as the decimal point. We need to convert commas to dots.
 		$data_value = (float) str_replace( ',', '.', $number );
 		$formatted  = number_format( $data_value, $precision, $separators['point'], $separators['separator'] );
@@ -2310,6 +2310,11 @@ abstract class Forminator_Field {
 	 * @return string
 	 */
 	public static function forminator_replace_number( $field, $number ) {
+		// Treat non-scalar input as 0 so it never reaches payment or condition code.
+		if ( ! is_scalar( $number ) ) {
+			return 0;
+		}
+
 		$separator  = self::get_property( 'separators', $field, 'blank' );
 		$separators = self::forminator_separators( $separator, $field );
 

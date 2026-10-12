@@ -136,7 +136,7 @@ class Forminator_Integration_Admin_Ajax {
 			array(
 				'notification' => array(
 					'type' => 'success',
-					'text' => '<strong>' . $addon->get_title() . '</strong> ' . esc_html__( 'has been disconnected successfully.', 'forminator' ),
+					'text' => '<strong>' . esc_html( $addon->get_title() ) . '</strong> ' . esc_html__( 'has been disconnected successfully.', 'forminator' ),
 				),
 			)
 		);
@@ -209,7 +209,7 @@ class Forminator_Integration_Admin_Ajax {
 			unset( $sanitized_post_data['module_id'] );
 			unset( $sanitized_post_data['module_type'] );
 
-			$addon_title = $addon->get_title();
+			$addon_title = esc_html( $addon->get_title() );
 
 			// handling multi_id.
 			if ( isset( $sanitized_post_data['multi_id'] ) ) {
@@ -225,7 +225,7 @@ class Forminator_Integration_Admin_Ajax {
 				}
 
 				if ( ! empty( $multi_id_label ) ) {
-					$addon_title .= ' [' . $multi_id_label . '] ';
+					$addon_title .= ' [' . esc_html( $multi_id_label ) . '] ';
 				}
 			}
 
@@ -233,7 +233,7 @@ class Forminator_Integration_Admin_Ajax {
 
 			$this->send_json_success(
 			/* translators: integration title */
-				sprintf( esc_html__( 'Successfully disconnected %s from this module', 'forminator' ), $addon->get_title() ),
+				sprintf( esc_html__( 'Successfully disconnected %s from this module', 'forminator' ), esc_html( $addon->get_title() ) ),
 				array(
 					'notification' => array(
 						'type' => 'success',
@@ -244,12 +244,12 @@ class Forminator_Integration_Admin_Ajax {
 		} else {
 			$this->send_json_errors(
 			/* translators: integration title */
-				sprintf( esc_html__( 'Failed to disconnect %s from this module', 'forminator' ), $addon->get_title() ),
+				sprintf( esc_html__( 'Failed to disconnect %s from this module', 'forminator' ), esc_html( $addon->get_title() ) ),
 				array(),
 				array(
 					'notification' => array(
 						'type' => 'error',
-						'text' => '<strong>' . $addon->get_title() . '</strong> ' . esc_html__( 'Failed to disconnected from this module', 'forminator' ),
+						'text' => '<strong>' . esc_html( $addon->get_title() ) . '</strong> ' . esc_html__( 'Failed to disconnected from this module', 'forminator' ),
 					),
 				)
 			);
@@ -406,7 +406,7 @@ class Forminator_Integration_Admin_Ajax {
 				array(
 					'notification' => array(
 						'type' => 'error',
-						'text' => '<strong>' . $slug . '</strong> ' . esc_html__( 'Integration Not Found', 'forminator' ),
+						'text' => '<strong>' . esc_html( $slug ) . '</strong> ' . esc_html__( 'Integration Not Found', 'forminator' ),
 					),
 				)
 			);

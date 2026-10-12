@@ -140,17 +140,6 @@ abstract class Forminator_Integration_Hooks {
 
 		forminator_addon_maybe_log( __METHOD__, $submitted_data );
 
-		do_action_deprecated( 'forminator_addon_' . $addon_slug . '_before_contact_sync', array( $module_id, $submitted_data, $settings_instance ), '1.33', 'forminator_addon_' . $addon_slug . '_' . static::$slug . '_submitted_data', );
-		do_action_deprecated( 'forminator_addon_' . $addon_slug . '_before_add_subscriber', array( $module_id, $submitted_data, $settings_instance ), '1.33', 'forminator_addon_' . $addon_slug . '_' . static::$slug . '_submitted_data', );
-		do_action_deprecated( 'forminator_addon_' . $addon_slug . '_before_send_message', array( $module_id, $submitted_data, $settings_instance ), '1.33', 'forminator_addon_' . $addon_slug . '_' . static::$slug . '_submitted_data', );
-		do_action_deprecated( 'forminator_addon_' . $addon_slug . '_' . static::$slug . '_before_send_message', array( $module_id, $submitted_data, $settings_instance ), '1.33', 'forminator_addon_' . $addon_slug . '_' . static::$slug . '_submitted_data', );
-		do_action_deprecated( 'forminator_addon_' . $addon_slug . '_before_create_row', array( $module_id, $submitted_data, $settings_instance ), '1.33', 'forminator_addon_' . $addon_slug . '_' . static::$slug . '_submitted_data', );
-		do_action_deprecated( 'forminator_addon_' . $addon_slug . '_' . static::$slug . '_before_create_row', array( $module_id, $submitted_data, $settings_instance ), '1.33', 'forminator_addon_' . $addon_slug . '_' . static::$slug . '_submitted_data', );
-		do_action_deprecated( 'forminator_addon_' . $addon_slug . '_before_post_to_webhook', array( $module_id, $submitted_data, $settings_instance ), '1.33', 'forminator_addon_' . $addon_slug . '_' . static::$slug . '_submitted_data', );
-		do_action_deprecated( 'forminator_addon_' . $addon_slug . '_' . static::$slug . '_before_post_to_webhook', array( $module_id, $submitted_data, $settings_instance ), '1.33', 'forminator_addon_' . $addon_slug . '_' . static::$slug . '_submitted_data', );
-		do_action_deprecated( 'forminator_addon_' . $addon_slug . '_before_create_card', array( $module_id, $submitted_data, $settings_instance ), '1.33', 'forminator_addon_' . $addon_slug . '_' . static::$slug . '_submitted_data', );
-		do_action_deprecated( 'forminator_addon_' . $addon_slug . '_' . static::$slug . '_before_create_card', array( $module_id, $submitted_data, $settings_instance ), '1.33', 'forminator_addon_' . $addon_slug . '_' . static::$slug . '_submitted_data', );
-
 		$entry_fields = $this->custom_entry_fields( $submitted_data, $current_entry_fields, $entry );
 
 		/**
@@ -172,19 +161,6 @@ abstract class Forminator_Integration_Hooks {
 			$submitted_data,
 			$settings_instance,
 			$current_entry_fields
-		);
-
-		$entry_fields = apply_filters_deprecated(
-			'forminator_addon_' . $addon_slug . '_entry_fields',
-			array(
-				$entry_fields,
-				$module_id,
-				$submitted_data,
-				$settings_instance,
-				$current_entry_fields,
-			),
-			'1.33',
-			'forminator_addon_' . static::$slug . '_' . $addon_slug . '_entry_fields'
 		);
 
 		return $entry_fields;
@@ -553,7 +529,7 @@ abstract class Forminator_Integration_Hooks {
 				$sub_entries[] = array(
 					/* translators: Integration name */
 					'label' => sprintf( esc_html__( 'Data sent to %s', 'forminator' ), $this->addon->get_title() ),
-					'value' => '<pre class="sui-code-snippet">' . wp_json_encode( $status['data_sent'], JSON_PRETTY_PRINT ) . '</pre>',
+					'value' => '<pre class="sui-code-snippet">' . esc_html( wp_json_encode( $status['data_sent'], JSON_PRETTY_PRINT ) ) . '</pre>',
 				);
 			}
 
@@ -561,7 +537,7 @@ abstract class Forminator_Integration_Hooks {
 				$sub_entries[] = array(
 					/* translators: Integration name */
 					'label' => sprintf( esc_html__( 'Data received from %s', 'forminator' ), $this->addon->get_title() ),
-					'value' => '<pre class="sui-code-snippet">' . wp_json_encode( $status['data_received'], JSON_PRETTY_PRINT ) . '</pre>',
+					'value' => '<pre class="sui-code-snippet">' . esc_html( wp_json_encode( $status['data_received'], JSON_PRETTY_PRINT ) ) . '</pre>',
 				);
 			}
 		}

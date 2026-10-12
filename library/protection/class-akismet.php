@@ -130,11 +130,26 @@ class Forminator_Akismet extends Forminator_Spam_Protection {
 				$post_data['permalink'] = $permalink;
 			}
 
-			$ignore = array( 'HTTP_COOKIE', 'HTTP_COOKIE2', 'PHP_AUTH_PW' );
+			// Allowlist only: $_SERVER can hold credentials, cookies and server secrets.
+			$server_keys = array(
+				'HTTP_ACCEPT',
+				'HTTP_ACCEPT_CHARSET',
+				'HTTP_ACCEPT_ENCODING',
+				'HTTP_ACCEPT_LANGUAGE',
+				'HTTP_CONNECTION',
+				'HTTP_HOST',
+				'HTTP_REFERER',
+				'HTTP_USER_AGENT',
+				'REMOTE_ADDR',
+				'REQUEST_METHOD',
+				'REQUEST_URI',
+				'SERVER_NAME',
+				'SERVER_PROTOCOL',
+			);
 
-			foreach ( $_SERVER as $key => $value ) {
-				if ( ! in_array( $key, (array) $ignore, true ) ) {
-					$post_data[ "$key" ] = $value;
+			foreach ( $server_keys as $key ) {
+				if ( isset( $_SERVER[ $key ] ) ) {
+					$post_data[ $key ] = sanitize_text_field( wp_unslash( $_SERVER[ $key ] ) );
 				}
 			}
 

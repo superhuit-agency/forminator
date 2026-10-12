@@ -61,6 +61,13 @@ class Forminator_Export_Result {
 	public $file_path = '';
 
 	/**
+	 * File name used for the mail attachment
+	 *
+	 * @var string
+	 */
+	public $file_name = '';
+
+	/**
 	 * Form type
 	 *
 	 * @var string

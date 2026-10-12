@@ -85,8 +85,9 @@ class Forminator_Templates_Page extends Forminator_Admin_Page {
 		$permissions = get_option( 'forminator_permissions', array() );
 
 		$data['mainSettings']     = array(
-			'permissions' => $permissions,
-			'modal'       => array(),
+			'permissions'  => $permissions,
+			'capabilities' => forminator_get_capability_definitions(),
+			'modal'        => array(),
 		);
 		$data['permission_nonce'] = wp_create_nonce( 'forminator_permission_nonce' );
 

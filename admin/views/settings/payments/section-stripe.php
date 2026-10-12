@@ -23,6 +23,11 @@ $stripe_oauth_nonce     = $stripe_oauth_available ? wp_create_nonce( 'forminator
 $stripe_live_configured = $stripe_oauth_available && Forminator_Gateway_Stripe::is_mode_configured( 'live' );
 $stripe_test_configured = $stripe_oauth_available && Forminator_Gateway_Stripe::is_mode_configured( 'test' );
 
+$webhook_live_status = $stripe_live_configured && Forminator_Gateway_Stripe::is_webhook_active( 'live' );
+$webhook_test_status = $stripe_test_configured && Forminator_Gateway_Stripe::is_webhook_active( 'test' );
+
+$show_webhook_url_error = Forminator_Gateway_Stripe::has_any_valid_webhook() && ! Forminator_Gateway_Stripe::is_webhook_reachable();
+
 // OAuth UI uses stored credentials only; constants must not switch to the connected table.
 $stripe_oauth_is_configured = $stripe_live_configured || $stripe_test_configured;
 
@@ -87,32 +92,109 @@ if ( $stripe_loaded ) {
 			<?php
 			$stripe_oauth_modes = array(
 				'test' => array(
-					'label'        => esc_html__( 'Test', 'forminator' ),
-					'configured'   => $stripe_test_configured,
-					'via_oauth'    => $stripe_test_via_oauth,
-					'connect_text' => esc_html__( 'Connect Test', 'forminator' ),
-					'disabled'     => false,
+					'label'          => esc_html__( 'Test', 'forminator' ),
+					'configured'     => $stripe_test_configured,
+					'via_oauth'      => $stripe_test_via_oauth,
+					'connect_text'   => esc_html__( 'Connect Test', 'forminator' ),
+					'disabled'       => false,
+					'webhook_status' => $webhook_test_status,
+					'create_webhook' => Forminator_Gateway_Stripe::allow_webhook_creation( 'test' ),
 				),
 				'live' => array(
-					'label'        => esc_html__( 'Live', 'forminator' ),
-					'configured'   => $stripe_live_configured,
-					'via_oauth'    => $stripe_live_via_oauth,
-					'connect_text' => esc_html__( 'Connect Live', 'forminator' ),
-					'disabled'     => ! $stripe_site_has_ssl,
+					'label'          => esc_html__( 'Live', 'forminator' ),
+					'configured'     => $stripe_live_configured,
+					'via_oauth'      => $stripe_live_via_oauth,
+					'connect_text'   => esc_html__( 'Connect Live', 'forminator' ),
+					'disabled'       => ! $stripe_site_has_ssl,
+					'webhook_status' => $webhook_live_status,
+					'create_webhook' => Forminator_Gateway_Stripe::allow_webhook_creation( 'live' ),
 				),
 			);
 			?>
 
 			<?php if ( $stripe_oauth_is_configured ) : ?>
 
-				<table class="sui-table" style="margin-top: 10px;">
+				<div class="fui-stripe-oauth-table">
+
+				<table class="sui-table">
 
 					<thead>
 						<tr>
-							<th><?php esc_html_e( 'Mode', 'forminator' ); ?></th>
-							<th><?php esc_html_e( 'Status', 'forminator' ); ?></th>
-							<th><?php esc_html_e( 'Account', 'forminator' ); ?></th>
-							<th><?php esc_html_e( 'Action', 'forminator' ); ?></th>
+							<th>
+								<?php esc_html_e( 'Mode', 'forminator' ); ?>
+								<?php
+								$mode_tooltip = esc_html__( 'Test and Live modes can be configured and used independently.', 'forminator' );
+								?>
+								<button
+									type="button"
+									class="sui-button-icon sui-tooltip sui-tooltip-constrained"
+									data-tooltip="<?php echo esc_attr( $mode_tooltip ); ?>"
+									aria-label="<?php echo esc_attr( $mode_tooltip ); ?>"
+									style="--tooltip-width: 140px;"
+								>
+									<span class="sui-icon-info" aria-hidden="true"></span>
+								</button>
+							</th>
+							<th>
+								<?php esc_html_e( 'Status', 'forminator' ); ?>
+								<?php
+								$status_tooltip = esc_html__( 'Indicates whether the corresponding mode is connected or not.', 'forminator' );
+								?>
+								<button
+									type="button"
+									class="sui-button-icon sui-tooltip sui-tooltip-constrained"
+									data-tooltip="<?php echo esc_attr( $status_tooltip ); ?>"
+									aria-label="<?php echo esc_attr( $status_tooltip ); ?>"
+									style="--tooltip-width: 200px;"
+								>
+									<span class="sui-icon-info" aria-hidden="true"></span>
+								</button>
+							</th>
+							<th>
+								<?php esc_html_e( 'Webhook Status', 'forminator' ); ?>
+								<?php
+								$webhook_status_tooltip = esc_html__( 'Some payment methods can take hours or days to process payments (e.g. - bank transfers, SEPA, ACH Direct Debit). Stripe notifies Forminator via webhook to update the submission status when a payment is finalized.', 'forminator' );
+								?>
+								<button
+									type="button"
+									class="sui-button-icon sui-tooltip sui-tooltip-constrained"
+									data-tooltip="<?php echo esc_attr( $webhook_status_tooltip ); ?>"
+									aria-label="<?php echo esc_attr( $webhook_status_tooltip ); ?>"
+									style="--tooltip-width: 260px;"
+								>
+									<span class="sui-icon-info" aria-hidden="true"></span>
+								</button>
+							</th>
+							<th>
+								<?php esc_html_e( 'Account', 'forminator' ); ?>
+								<?php
+								$account_tooltip = esc_html__( 'The name of the account used for the corresponding mode.', 'forminator' );
+								?>
+								<button
+									type="button"
+									class="sui-button-icon sui-tooltip sui-tooltip-constrained"
+									data-tooltip="<?php echo esc_attr( $account_tooltip ); ?>"
+									aria-label="<?php echo esc_attr( $account_tooltip ); ?>"
+									style="--tooltip-width: 200px;"
+								>
+									<span class="sui-icon-info" aria-hidden="true"></span>
+								</button>
+							</th>
+							<th>
+								<?php esc_html_e( 'Action', 'forminator' ); ?>
+								<?php
+								$action_tooltip = esc_html__( 'Connect or disconnect the corresponding mode.', 'forminator' );
+								?>
+								<button
+									type="button"
+									class="sui-button-icon sui-tooltip sui-tooltip-constrained"
+									data-tooltip="<?php echo esc_attr( $action_tooltip ); ?>"
+									aria-label="<?php echo esc_attr( $action_tooltip ); ?>"
+									style="--tooltip-width: 200px;"
+								>
+									<span class="sui-icon-info" aria-hidden="true"></span>
+								</button>
+							</th>
 						</tr>
 					</thead>
 
@@ -127,6 +209,24 @@ if ( $stripe_loaded ) {
 										<span class="sui-tag sui-tag-green"><?php esc_html_e( 'Connected', 'forminator' ); ?></span>
 									<?php else : ?>
 										<span class="sui-tag"><?php esc_html_e( 'Disconnected', 'forminator' ); ?></span>
+									<?php endif; ?>
+								</td>
+								<td>
+									<?php if ( $stripe_mode_data['webhook_status'] ) : ?>
+										<span class="sui-tag sui-tag-green"><?php esc_html_e( 'Active', 'forminator' ); ?></span>
+									<?php else : ?>
+										<span class="sui-tag"><?php esc_html_e( 'Inactive', 'forminator' ); ?></span>
+										<?php if ( $stripe_mode_data['create_webhook'] ) : ?>
+											<button
+												class="sui-button sui-button-ghost forminator-stripe-webhook-connect"
+												type="button"
+												data-mode="<?php echo esc_attr( $stripe_mode ); ?>"
+												data-nonce="<?php echo esc_attr( wp_create_nonce( 'forminator_stripe_webhook' ) ); ?>"
+											>
+												<span class="sui-loading-text"><?php esc_html_e( 'Configure', 'forminator' ); ?></span>
+												<i class="sui-icon-loader sui-loading" aria-hidden="true"></i>
+											</button>
+										<?php endif; ?>
 									<?php endif; ?>
 								</td>
 								<td>
@@ -179,6 +279,8 @@ if ( $stripe_loaded ) {
 
 				</table>
 
+				</div>
+
 			<?php else : ?>
 
 				<div class="sui-form-field">
@@ -196,6 +298,34 @@ if ( $stripe_loaded ) {
 							<i class="sui-icon-loader sui-loading" aria-hidden="true"></i>
 						</button>
 					<?php endforeach; ?>
+				</div>
+
+			<?php endif; ?>
+			<?php if ( $show_webhook_url_error ) : ?>
+				<div
+					role="alert"
+					class="sui-notice sui-notice-yellow sui-active"
+					style="display: block; text-align: left; margin-top: 10px;"
+					aria-live="assertive"
+				>
+					<div class="sui-notice-content">
+						<div class="sui-notice-message">
+							<span class="sui-notice-icon sui-icon-info" aria-hidden="true"></span>
+							<p>
+								<b><?php esc_html_e( 'Stripe webhooks are being blocked', 'forminator' ); ?></b>
+							</p>
+							<p>
+								<?php esc_html_e( 'Webhook test failed. Incoming requests from Stripe are blocked by a firewall or security layer.', 'forminator' ); ?>
+							</p>
+							<p>
+								<button type="button"
+									class="sui-button sui-button-blue forminator-retry-stripe-webhook-url"
+									data-nonce="<?php echo esc_attr( wp_create_nonce( 'forminator_retry_stripe_webhook_url' ) ); ?>">
+									<?php esc_html_e( 'Check again', 'forminator' ); ?>
+								</button>
+							</p>
+						</div>
+					</div>
 				</div>
 
 			<?php endif; ?>
