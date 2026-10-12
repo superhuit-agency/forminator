@@ -23,6 +23,7 @@ This fork includes an automation pipeline that imports the latest **WordPress.or
 - **Patch files**: `patches/*.patch`
 - **Sync script**: `tools/sync-wporg-svn.sh`
 - **CI workflow**: `.github/workflows/sync-upstream-forminator.yml`
+- **PR status workflow**: `.github/workflows/sync-upstream-pr-status.yml` (re-checks patches with `tools/check-patches.sh` on every push to a sync PR)
 
 ### CI (recommended)
 
@@ -51,4 +52,4 @@ Upstream can occasionally refactor the relevant code and one or more patches may
 
 1. Update the affected code manually to restore the fork behavior described above.
 2. Update `patches/*.patch` to match the new upstream context run `git format-patch -2 HEAD -o patches` where `-2` is the number of commits to generate a patch file from.
-3. Re-run the sync to confirm the workflow verification passes.
+3. Push both to the sync PR branch. The PR status workflow re-checks the patches and, once all of them are applied, updates the PR title and description and marks it ready for review. You can run the same check locally with `bash tools/check-patches.sh`.

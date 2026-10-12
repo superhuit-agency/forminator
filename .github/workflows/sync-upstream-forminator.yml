@@ -75,21 +75,23 @@ jobs:
             echo "Repo already at upstream tag ${tag}; skipping PR creation." >&2
           fi
 
+      - name: Render PR body
+        if: steps.sync.outputs.sync_skipped != '1'
+        shell: bash
+        env:
+          TAG: ${{ steps.sync.outputs.tag }}
+          APPLIED: ${{ steps.sync.outputs.patch_applied }}
+          NOTE: ${{ steps.sync.outputs.patch_note }}
+        # Written outside the workspace so it is not committed with the sync.
+        run: bash tools/render-sync-pr-body.sh "${TAG}" "${APPLIED}" "${NOTE}" > "${RUNNER_TEMP}/pr-body.md"
+
       - name: Create Pull Request
         if: steps.sync.outputs.sync_skipped != '1'
         uses: peter-evans/create-pull-request@v8
         with:
           commit-message: "chore(upstream): sync Forminator ${{ steps.sync.outputs.tag }}"
           title: "${{ steps.sync.outputs.patch_applied == '1' && format('chore(upstream): sync Forminator {0}', steps.sync.outputs.tag) || format('WIP: chore(upstream): sync Forminator {0} (patches NOT applied)', steps.sync.outputs.tag) }}"
-          body: |
-            Automated upstream sync from WordPress.org SVN tags.
-
-            - Upstream tag: `${{ steps.sync.outputs.tag }}`
-            - Local patches re-applied from: `patches/*.patch`
-            - All patches applied: `${{ steps.sync.outputs.patch_applied }}`
-            - Patch status: `${{ steps.sync.outputs.patch_note }}`
-
-            If `All patches applied` is `0`, this PR is intentionally created as WIP/draft and must be fixed manually before merging.
+          body-path: ${{ runner.temp }}/pr-body.md
           branch: "chore/sync-upstream-${{ steps.sync.outputs.tag }}"
           delete-branch: true
           draft: ${{ steps.sync.outputs.patch_applied != '1' }}
