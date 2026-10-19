@@ -933,7 +933,7 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 
 		if ( isset( self::$module_settings['form-type'] ) && 'registration' === self::$module_settings['form-type'] ) {
 			$activation_method = forminator_get_property( self::$module_settings, 'activation-method' );
-			if ( 'manual' !== $activation_method && ! forminator_is_user_registration_enabled() ) {
+			if ( 'manual' !== $activation_method && ! forminator_can_register_user( self::$module_settings ) ) {
 				return; // Validation is not required if registration is disabled and activation is not manual.
 			}
 
@@ -983,7 +983,7 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 		if ( isset( self::$module_settings['form-type'] ) && 'registration' === self::$module_settings['form-type'] ) {
 			$activation_method = forminator_get_property( self::$module_settings, 'activation-method' );
 			// Do not register new users if registration is disabled and activation is not manual.
-			if ( 'manual' !== $activation_method && ! forminator_is_user_registration_enabled() ) {
+			if ( 'manual' !== $activation_method && ! forminator_can_register_user( self::$module_settings ) ) {
 				return;
 			}
 			// Check who can register new users.

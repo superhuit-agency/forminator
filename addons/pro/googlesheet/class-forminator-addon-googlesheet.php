@@ -73,16 +73,6 @@ final class Forminator_Googlesheet extends Forminator_Integration {
 	protected $_sensitive_keys = array( 'client_secret' );
 
 	/**
-	 * Google redirects back to a pre registered URL that cannot carry a per request
-	 * nonce, so the section nonce is not required here. CSRF protection for this
-	 * flow needs the nonce moved into the OAuth state parameter instead.
-	 *
-	 * @since 1.58
-	 * @var bool
-	 */
-	public $section_requires_nonce = false;
-
-	/**
 	 * Forminator_Googlesheet constructor.
 	 *
 	 * @since 1.0 Google Sheets Integration
@@ -502,6 +492,25 @@ final class Forminator_Googlesheet extends Forminator_Integration {
 		return array(
 			'authorize' => array( $this, 'authorize_page_callback' ),
 		);
+	}
+
+	/**
+	 * Google's redirect URL is pre-registered and cannot carry the page nonce.
+	 *
+	 * Require the single-use OAuth state instead, without consuming it.
+	 * The authorize callback consumes the state before saving credentials.
+	 *
+	 * @since 1.58.2
+	 *
+	 * @param array $query_args Request arguments.
+	 *
+	 * @return bool
+	 */
+	public function validate_section_request( $query_args ) {
+		$global_id   = isset( $query_args['global_id'] ) ? (string) $query_args['global_id'] : '';
+		$oauth_state = isset( $query_args['state'] ) ? $query_args['state'] : '';
+
+		return false !== forminator_integration_validate_oauth_state( $this, $oauth_state, $global_id, '', false );
 	}
 
 

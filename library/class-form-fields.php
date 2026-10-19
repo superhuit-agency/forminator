@@ -211,6 +211,7 @@ class Forminator_Fields {
 			$this->add_security_files();
 		}
 		$this->delete_old_temp_dir();
+		Forminator_Export::cleanup_leftover_public_export_files();
 	}
 
 	/**

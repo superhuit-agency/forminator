@@ -2496,13 +2496,29 @@ function forminator_is_site_registration_enabled() {
 	// Allow site registration only if on the main site and site registration is enabled.
 	if ( forminator_is_main_site() ) {
 		$registration_option = get_site_option( 'registration' );
-		// Site registration is enabled only if the option is set to 'all'.
-		// For the 'blog' option, only logged-in users can register new sites, so we don't support that here.
-		if ( 'all' === $registration_option ) {
+		// Both 'all' and 'blog' let new sites be registered on the network.
+		if ( in_array( $registration_option, array( 'all', 'blog' ), true ) ) {
 			return true;
 		}
 	}
 	return false;
+}
+
+/**
+ * Check if a registration form is allowed to register new users.
+ *
+ * @param array $settings Form settings.
+ *
+ * @return bool
+ */
+function forminator_can_register_user( $settings = array() ) {
+	if ( forminator_is_user_registration_enabled() ) {
+		return true;
+	}
+
+	// Registering a site creates its owner too, so site-only networks still allow the user.
+	return 'enable' === forminator_get_property( $settings, 'site-registration' )
+		&& forminator_is_site_registration_enabled();
 }
 
 /**

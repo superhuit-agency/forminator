@@ -859,6 +859,28 @@
 					$(this).css('-webkit-transform-origin', '0 0');
 				}
 			});
+
+			// Cloudflare Turnstile Flexible/Normal require min 300px; Compact requires 150px.
+			// Scale the host element when the form column is narrower so the widget is not clipped.
+			$( form_selector ).find( '.forminator-turnstile' ).each( function () {
+				if ( ! $( this ).is( ':visible' ) ) {
+					return;
+				}
+
+				var width    = $( this ).parent().width(),
+					size     = $( this ).data( 'size' ),
+					minWidth = ( 'compact' === size ) ? 150 : 300,
+					scale    = 1;
+
+				if ( width < minWidth ) {
+					scale = width / minWidth;
+				}
+
+				$( this ).css( 'transform', 'scale(' + scale + ')' );
+				$( this ).css( '-webkit-transform', 'scale(' + scale + ')' );
+				$( this ).css( 'transform-origin', '0 0' );
+				$( this ).css( '-webkit-transform-origin', '0 0' );
+			} );
 		},
 
 		init_pagination: function ( form_selector ) {
@@ -2014,6 +2036,12 @@ var forminator_render_turnstile_captcha = function ( captcha_field ) {
 		var widgetId = turnstile.render( captcha_field, data );
 		// mark as rendered
 		$captcha_field.data( 'forminator-turnstile-widget', widgetId );
+
+		var $form           = $captcha_field.closest( 'form' ),
+			forminatorFront = $form.data( 'forminatorFront' );
+		if ( forminatorFront && typeof forminatorFront.responsive_captcha === 'function' ) {
+			forminatorFront.responsive_captcha( $form );
+		}
 	}
 };
 

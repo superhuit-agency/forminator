@@ -3,7 +3,7 @@ Contributors: WPMUDEV
 Tags: contact form, custom form, forms, payment form, WordPress form plugin
 Requires at least: 6.4
 Tested up to: 7.1
-Stable tag: 1.58.0
+Stable tag: 1.58.1
 Requires PHP: 7.4
 License: GPL v3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
@@ -230,6 +230,16 @@ We take plugin security incredibly seriously; if you have a bug or vulnerability
 6. Publish Polls with Real-time Stats
 
 == Changelog ==
+
+= 1.58.2 ( 2026-10-12 ) =
+
+- Fix: Quiz lead forms now submit correctly inside Elementor popups
+- Fix: Site Name and Site Title mappings on User Registration now only allow compatible field types
+- Fix: Multiple forms on the same page with PayPal fields and different currencies now each use their own currency
+- Fix: Cloudflare Turnstile now scales when the form column is narrower than the widget minimum
+- Fix: User Registration with Email Activation on Multisite site-only networks no longer sends an account-ready email before activation
+- Fix: Security hardening
+
 
 = 1.58.1 ( 2026-10-06 ) =
 

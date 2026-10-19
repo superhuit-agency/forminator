@@ -51,7 +51,6 @@
 			this.paypalData = this.settings.paymentEl;
 
 			this.render_paypal_button( this.element );
-			this.replaceScriptCurrency();
 		},
 
 		is_data_valid: function() {
@@ -112,17 +111,24 @@
 			if( paypalData.layout !== 'vertical' ) {
 				style_data.tagline =  paypalData.tagline;
 			}
+			// Every SDK configuration (currency, mode, locale) is loaded under its own namespace.
+			// Cached pages may have no namespace.
+			var namespace = this.getPayPalData( 'sdk_namespace' ) || 'paypal';
+
 			// Handle the case when PayPal is loaded in an iframe (e.g., in the theme editor).
-			if ( window.parent !== window && window.parent.paypal ) {
-				window.paypal = window.parent.paypal;
+			if ( window.parent !== window && window.parent[ namespace ] ) {
+				window[ namespace ] = window.parent[ namespace ];
 			}
 
+			// window.paypal may be another plugin's SDK.
+			var paypalSdk = window[ namespace ];
+
 			// Skip the button when the shared SDK failed to load, instead of throwing.
-			if ( 'undefined' === typeof paypal ) {
+			if ( ! paypalSdk ) {
 				return;
 			}
 
-			this.paypalButton = paypal.Buttons({
+			this.paypalButton = paypalSdk.Buttons({
 				onInit: function(data, actions) {
 					actions.disable();
 
@@ -610,44 +616,6 @@
 
 		field_is_select: function ( $element ) {
 			return $element.is('select');
-		},
-
-		/*
-		 * Replaces the currency in the paypal script url params
-		 * so it will match the currency of another form with paypal checkout
-		 */
-		replaceScriptCurrency: function () {
-			var self = this,
-				formCurrency = this.paypalData.currency;
-
-			if ( ! formCurrency ) {
-				return;
-			}
-
-			self.$el.on( 'click', function( e ) {
-				// The SDK sits in the top document when the form is rendered in an iframe.
-				var sdkDocument = document;
-				try {
-					if ( window.parent !== window && window.parent.document ) {
-						sdkDocument = window.parent.document;
-					}
-				} catch ( error ) {}
-
-				var paypalScript = $( sdkDocument ).find( "script[src^='https://www.paypal.com/sdk/js']" ).first(),
-					paypalScriptSrc = paypalScript.attr( 'src' ),
-					currencyMatch = paypalScriptSrc ? /currency=([^&]+)/.exec( paypalScriptSrc ) : null;
-
-				// Nothing to swap, PayPal falls back to the account default currency.
-				if ( ! currencyMatch || formCurrency === currencyMatch[1] ) {
-					return;
-				}
-
-				paypalScript.attr( 'src', paypalScriptSrc.replace( 'currency='+ currencyMatch[1], 'currency='+ formCurrency ) );
-
-				if ( self.paypalButton ) {
-					self.paypalButton.updateProps();
-				}
-			});
 		},
 
 	});

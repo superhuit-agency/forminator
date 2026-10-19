@@ -34,6 +34,15 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 	private static $paypal_forms = array();
 
 	/**
+	 * PayPal SDK namespaces, keyed by script handle.
+	 *
+	 * @since 1.58.2
+	 *
+	 * @var array
+	 */
+	private static $paypal_sdk_namespaces = array();
+
+	/**
 	 * Inline rules
 	 *
 	 * @var string
@@ -603,25 +612,29 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 
 		// Load Paypal scripts.
 		if ( $this->has_paypal() ) {
-			$paypal_src = $this->paypal_script_argument( 'https://www.paypal.com/sdk/js?enable-funding=venmo' );
+			$paypal_sdk = $this->get_paypal_sdk();
 
 			// If there is more than 1 paypal field in a page, even if it's ajax loaded, enqueue script as usual to prevent paypal button errors.
 			if ( ! $is_ajax_load || forminator_count_field_type_in_page( 'paypal', $this->get_post_id() ) > 1 ) {
 				wp_enqueue_script(
-					'forminator-paypal-' . $this->model->id,
-					$paypal_src,
+					$paypal_sdk['handle'],
+					$paypal_sdk['src'],
 					array( 'jquery' ),
 					FORMINATOR_VERSION,
 					true
 				);
+
+				self::$paypal_sdk_namespaces[ $paypal_sdk['handle'] ] = $paypal_sdk['namespace'];
+				add_filter( 'script_loader_tag', array( __CLASS__, 'add_paypal_sdk_namespace' ), 10, 2 );
 			} else {
-				// Load later via ajax to avoid cache. The SDK exposes itself as window.paypal,
+				// Load later via ajax to avoid cache. The SDK exposes itself as window[ namespace ],
 				// which is what the loader checks before injecting another copy.
-				$this->scripts[ 'forminator-paypal-' . $this->model->id ] = array(
-					'src'  => $paypal_src,
-					'on'   => 'window',
-					'id'   => $this->model->id,
-					'load' => 'paypal',
+				$this->scripts[ $paypal_sdk['handle'] ] = array(
+					'src'       => $paypal_sdk['src'],
+					'on'        => 'window',
+					'id'        => $this->model->id,
+					'load'      => $paypal_sdk['namespace'],
+					'namespace' => $paypal_sdk['namespace'],
 				);
 			}
 
@@ -863,6 +876,58 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 		}
 
 		return $script;
+	}
+
+	/**
+	 * Get the PayPal SDK of the form.
+	 *
+	 * The SDK only works with the currency, client ID and locale of its URL, so each URL
+	 * gets its own namespace and handle, shared by the forms using it.
+	 *
+	 * @since 1.58.2
+	 *
+	 * @return array SDK src, handle and namespace.
+	 */
+	public function get_paypal_sdk() {
+		$src  = $this->paypal_script_argument( 'https://www.paypal.com/sdk/js?enable-funding=venmo' );
+		$hash = substr( md5( $src ), 0, 12 );
+
+		return array(
+			'src'       => $src,
+			'handle'    => 'forminator-paypal-' . $hash,
+			'namespace' => 'forminatorPayPal_' . $hash,
+		);
+	}
+
+	/**
+	 * Add the namespace to the PayPal SDK tag.
+	 *
+	 * The data-uid is required too, the one the SDK generates can collide between namespaces.
+	 *
+	 * @since 1.58.2
+	 *
+	 * @param string $tag    Script tag.
+	 * @param string $handle Script handle.
+	 *
+	 * @return string
+	 */
+	public static function add_paypal_sdk_namespace( $tag, $handle ) {
+		if ( empty( self::$paypal_sdk_namespaces[ $handle ] ) ) {
+			return $tag;
+		}
+
+		$processor = new WP_HTML_Tag_Processor( $tag );
+
+		while ( $processor->next_tag( 'script' ) ) {
+			if ( $handle . '-js' === $processor->get_attribute( 'id' ) ) {
+				$processor->set_attribute( 'data-namespace', self::$paypal_sdk_namespaces[ $handle ] );
+				$processor->set_attribute( 'data-uid', self::$paypal_sdk_namespaces[ $handle ] );
+
+				return $processor->get_updated_html();
+			}
+		}
+
+		return $tag;
 	}
 
 	/**
@@ -2717,33 +2782,8 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 						window.Forminator_Cform_Paginations[<?php echo esc_attr( $form_properties['id'] ); ?>] =
 								<?php echo wp_json_encode( $pagination_config ); ?>;
 
-						var runForminatorFront = function ( isElementorCall ) {
-							var $form = jQuery('#forminator-module-<?php echo esc_attr( $form_properties['id'] ); ?>[data-forminator-render="<?php echo esc_attr( $form_properties['render_id'] ); ?>"]');
-
-							// Skip direct init for forms inside Elementor popups — they defer to element_ready/global.
-							if ( !isElementorCall && $form.length && $form.closest('[data-elementor-type="popup"]').length > 0 ) {
-								return;
-							}
-
-							// Prevent duplicate initialization
-							if ( $form.length && !$form.hasClass('forminator-initialized') ) {
-								$form.addClass('forminator-initialized');
-								$form.forminatorFront(<?php echo wp_json_encode( $options ); ?>);
-							}
-						}
-
-						if (window.elementorFrontend && typeof elementorFrontend.hooks !== "undefined") {
-							elementorFrontend.hooks.addAction('frontend/element_ready/global', function ( $scope ) {
-								if ( $scope.find('#forminator-module-<?php echo esc_attr( $form_properties['id'] ); ?>').length > 0 ) {
-									// Add small delay to ensure DOM is ready
-									setTimeout(function () { runForminatorFront(true); }, 100);
-								}
-							});
-						}
-
-						runForminatorFront(false);
-
 						<?php
+						$this->print_front_init_script( $form_properties['id'], $form_properties['render_id'], $options );
 					}
 				}
 				?>
@@ -3307,6 +3347,11 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 		if ( isset( $submit_field['custom-class'] ) ) {
 			$submit_custom_data = $submit_field['custom-class'];
 		}
+		$paypal_payment = $this->get_paypal_properties();
+		if ( $this->has_paypal() ) {
+			$paypal_sdk                      = $this->get_paypal_sdk();
+			$paypal_payment['sdk_namespace'] = $paypal_sdk['namespace'];
+		}
 		$this->forms_properties[] = array(
 			'id'                  => $this->model->id,
 			'render_id'           => $render_id,
@@ -3316,7 +3361,7 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 			'validation_messages' => $this->inline_messages,
 			'settings'            => $this->get_form_settings(),
 			'pagination'          => $this->get_pagination_properties(),
-			'paypal_payment'      => $this->get_paypal_properties(),
+			'paypal_payment'      => $paypal_payment,
 			'fonts_settings'      => $this->get_google_fonts(),
 			'submit_button_class' => esc_attr( $submit_custom_data ),
 		);
