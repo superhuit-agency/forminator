@@ -1066,7 +1066,8 @@
 				leads_id = 'undefined' !== typeof self.settings.leads_id ? self.settings.leads_id : 0,
 				quiz_id = 'undefined' !== typeof self.settings.quiz_id ? self.settings.quiz_id : 0;
 
-			$( 'body' ).on( 'submit.frontSubmit', this.settings.forminator_selector, function( e ) {
+			$( 'body' ).off( 'submit.frontSubmit', this.settings.forminator_selector )
+				.on( 'submit.frontSubmit', this.settings.forminator_selector, function( e ) {
 				if ( 0 !== self.$el.find( 'input[type="hidden"][value="forminator_submit_preview_form_quizzes"]' ).length ) {
 					return false;
 				}
@@ -1323,7 +1324,8 @@
 				);
 			}
 
-			$( 'body' ).on( 'submit.frontSubmit', this.settings.forminator_selector, function (e) {
+			$( 'body' ).off( 'submit.frontSubmit', this.settings.forminator_selector )
+				.on( 'submit.frontSubmit', this.settings.forminator_selector, function (e) {
 				if ( 0 !== self.$el.find( 'input[type="hidden"][value="forminator_submit_preview_form_poll"]' ).length ) {
 					return false;
 				}

@@ -84,16 +84,6 @@ final class Forminator_Hubspot extends Forminator_Integration {
 	protected $_position = 4;
 
 	/**
-	 * HubSpot redirects back to a pre registered URL that cannot carry a per request
-	 * nonce, so the section nonce is not required here. CSRF protection for this
-	 * flow needs the nonce moved into the OAuth state parameter instead.
-	 *
-	 * @since 1.58
-	 * @var bool
-	 */
-	public $section_requires_nonce = false;
-
-	/**
 	 * Forminator_Hubspot constructor.
 	 *
 	 * @since 1.0 HubSpot Integration
@@ -307,6 +297,21 @@ final class Forminator_Hubspot extends Forminator_Integration {
 		return array(
 			'authorize' => array( $this, 'authorize_page_callback' ),
 		);
+	}
+
+	/**
+	 * HubSpot returns through a pre-registered URL that cannot carry the page nonce.
+	 *
+	 * Require the same callback proof the authorize handler already checks.
+	 *
+	 * @since 1.58.2
+	 *
+	 * @param array $query_args Request arguments.
+	 *
+	 * @return bool
+	 */
+	public function validate_section_request( $query_args ) {
+		return self::validate_callback_request( 'hubspot' );
 	}
 
 	/**

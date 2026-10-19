@@ -317,9 +317,12 @@
 					script.src = scripts[script_id].src;
 					script.async = scripts[ script_id ].async ?? true;
 
-					// PayPal is shared between all forms on the page, only one of them loads it.
+					// PayPal is shared between the forms with the same SDK, only one of them loads it.
 					if ( self.is_paypal_sdk( script.src ) ) {
-						if ( self.reserve_paypal_sdk( script_id ) ) {
+						// Cached pages may have no namespace.
+						script.namespace = scripts[ script_id ].namespace || 'paypal';
+
+						if ( self.reserve_paypal_sdk( script_id, script.namespace ) ) {
 							scripts_to_load.push(script);
 						}
 
@@ -375,28 +378,32 @@
 		},
 
 		/**
-		 * Get the shared state of the single PayPal SDK load.
+		 * Get the shared state of the PayPal SDK loaded under a namespace.
+		 *
+		 * @param {string} namespace SDK namespace.
 		 *
 		 * @return {Object}
 		 */
-		paypal_registry: function () {
+		paypal_registry: function (namespace) {
 			var host = this.paypal_host();
 
-			if ( ! host.forminatorPayPalSdk ) {
-				host.forminatorPayPalSdk = { state: 'idle', callbacks: [] };
+			host.forminatorPayPalSdks = host.forminatorPayPalSdks || {};
+
+			if ( ! host.forminatorPayPalSdks[ namespace ] ) {
+				host.forminatorPayPalSdks[ namespace ] = { state: 'idle', callbacks: [] };
 			}
 
-			var registry = host.forminatorPayPalSdk;
+			var registry = host.forminatorPayPalSdks[ namespace ];
 
 			// Adopt an SDK enqueued by PHP or injected before this loader ran.
 			if ( 'idle' === registry.state ) {
-				var existing = $( host.document ).find( 'script[src^="' + PAYPAL_SDK_URL + '"]' );
+				var existing = this.find_paypal_script( namespace );
 
-				if ( host.paypal ) {
+				if ( host[ namespace ] ) {
 					registry.state = 'loaded';
 				} else if ( existing.length ) {
 					registry.state = 'loading';
-					this.watch_paypal_script( existing.get( 0 ) );
+					this.watch_paypal_script( existing.get( 0 ), namespace );
 				}
 			}
 
@@ -404,29 +411,48 @@
 		},
 
 		/**
+		 * Find the SDK tag of a namespace. Copies held back by optimisers have no src and are skipped.
+		 *
+		 * @param {string} namespace SDK namespace.
+		 *
+		 * @return {jQuery}
+		 */
+		find_paypal_script: function (namespace) {
+			var selector = 'script[data-namespace="' + namespace + '"][src^="' + PAYPAL_SDK_URL + '"]';
+
+			// Un-namespaced tags load as window.paypal.
+			if ( 'paypal' === namespace ) {
+				selector += ', script:not([data-namespace])[src^="' + PAYPAL_SDK_URL + '"]';
+			}
+
+			return $( this.paypal_host().document ).find( selector );
+		},
+
+		/**
 		 * Reserve the shared PayPal SDK for this form.
 		 *
-		 * The SDK can only be evaluated once per document, a second evaluation makes zoid
+		 * A namespace can only be evaluated once per document, a second evaluation makes zoid
 		 * destroy the buttons already rendered by the first one. Forms that do not get the
 		 * reservation wait for the single load instead of injecting their own copy.
 		 *
 		 * @param {string} script_id Script handle.
+		 * @param {string} namespace SDK namespace.
 		 *
 		 * @return {boolean} True when this form has to load the SDK itself.
 		 */
-		reserve_paypal_sdk: function (script_id) {
+		reserve_paypal_sdk: function (script_id, namespace) {
 			var self     = this,
-			    registry = self.paypal_registry();
+			    registry = self.paypal_registry( namespace );
 
 			if ( 'loaded' === registry.state ) {
-				self.adopt_paypal();
+				self.adopt_paypal( namespace );
 
 				return false;
 			}
 
 			self.scriptsQue.push(script_id);
 			registry.callbacks.push( function () {
-				self.adopt_paypal();
+				self.adopt_paypal( namespace );
 				self.script_on_load();
 			} );
 
@@ -443,9 +469,10 @@
 		/**
 		 * Release the forms waiting on the shared SDK once it settles.
 		 *
-		 * @param {Element} element SDK script tag.
+		 * @param {Element} element   SDK script tag.
+		 * @param {string}  namespace SDK namespace.
 		 */
-		watch_paypal_script: function (element) {
+		watch_paypal_script: function (element, namespace) {
 			var self = this;
 
 			if ( ! element || element.forminatorPayPalWatched ) {
@@ -454,7 +481,7 @@
 			element.forminatorPayPalWatched = true;
 
 			var done = function ( event ) {
-				var registry  = self.paypal_registry(),
+				var registry  = self.paypal_registry( namespace ),
 				    callbacks = registry.callbacks,
 				    failed    = !! event && 'error' === event.type;
 
@@ -477,7 +504,7 @@
 			};
 
 			// It may have finished loading before we got a chance to watch it.
-			if ( self.paypal_host().paypal ) {
+			if ( self.paypal_host()[ namespace ] ) {
 				done();
 
 				return;
@@ -490,27 +517,30 @@
 
 		/**
 		 * Expose the shared SDK to the current window when it was loaded in the parent.
+		 *
+		 * @param {string} namespace SDK namespace.
 		 */
-		adopt_paypal: function () {
+		adopt_paypal: function (namespace) {
 			var host = this.paypal_host();
 
-			if ( host !== window && host.paypal && ! window.paypal ) {
-				window.paypal = host.paypal;
+			if ( host !== window && host[ namespace ] && ! window[ namespace ] ) {
+				window[ namespace ] = host[ namespace ];
 			}
 		},
 
 		load_script: function (script_props) {
 			var self      = this;
-			var is_paypal = self.is_paypal_sdk( script_props.src );
+			// Only the PayPal SDK carries a namespace.
+			var namespace = script_props.namespace;
 			// PayPal goes into the document holding the shared SDK, the top one when the form
 			// is rendered inside an iframe such as the block editor canvas.
-			var doc       = is_paypal ? self.paypal_host().document : document;
-			var loaded    = $( doc ).find( 'script[src="' + script_props.src + '"]' );
+			var doc       = namespace ? self.paypal_host().document : document;
+			var loaded    = namespace ? self.find_paypal_script( namespace ) : $( doc ).find( 'script[src="' + script_props.src + '"]' );
 
 			// Check if script is already loaded or not.
 			if ( loaded.length ) {
-				if ( is_paypal ) {
-					self.watch_paypal_script( loaded.get( 0 ) );
+				if ( namespace ) {
+					self.watch_paypal_script( loaded.get( 0 ), namespace );
 				} else {
 					self.script_on_load();
 				}
@@ -526,9 +556,13 @@
 			script.async = script_props.async;
 			script.defer = true;
 
-			if ( is_paypal ) {
+			if ( namespace ) {
+				// The SDK reads both from its own tag as it runs. An explicit uid keeps the namespaces apart.
+				script.setAttribute( 'data-namespace', namespace );
+				script.setAttribute( 'data-uid', namespace );
+
 				// Every waiting form is released at once when the shared SDK settles.
-				self.watch_paypal_script( script );
+				self.watch_paypal_script( script, namespace );
 			} else {
 				script.onload = function () {
 					self.script_on_load();

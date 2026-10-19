@@ -498,6 +498,10 @@ final class Forminator_Trello extends Forminator_Integration {
 
 		if ( isset( $query_args['token'] ) ) {
 			try {
+				if ( ! $this->verify_addon_page_nonce() ) {
+					throw new Forminator_Integration_Exception( esc_html__( 'Invalid authorization request.', 'forminator' ) );
+				}
+
 				// Unslash to match the identifier bound to the OAuth state.
 				$identifier = ! empty( $query_args['identifier'] ) ? (string) wp_unslash( $query_args['identifier'] ) : '';
 				$global_id  = ! empty( $query_args['global_id'] ) ? (string) $query_args['global_id'] : '';

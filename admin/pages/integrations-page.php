@@ -186,10 +186,9 @@ class Forminator_Integrations_Page extends Forminator_Admin_Page {
 	 * @return bool
 	 */
 	public function validate_addon_page() {
-		$nonce = Forminator_Core::sanitize_text_field( 'nonce' );
-		if ( $nonce && ! wp_verify_nonce( $nonce, self::$addon_nonce_page_action ) ) {
-			return false;
-		}
+		$nonce       = Forminator_Core::sanitize_text_field( 'nonce' );
+		$nonce_valid = (bool) wp_verify_nonce( $nonce, self::$addon_nonce_page_action );
+
 		$query_args = $_GET;
 		// main component.
 		/**
@@ -211,10 +210,11 @@ class Forminator_Integrations_Page extends Forminator_Admin_Page {
 		}
 
 		/**
-		 * A missing nonce must not skip CSRF validation. Integrations whose provider
-		 * redirects back to a pre registered URL cannot carry one, so they opt out.
+		 * Missing and invalid nonces fail closed. OAuth providers that redirect to a
+		 * pre-registered URL cannot carry this nonce, so those integrations must
+		 * prove the request with their own CSRF check before the callback runs.
 		 */
-		if ( ! $nonce && $addon->section_requires_nonce ) {
+		if ( ! $nonce_valid && ! $addon->validate_section_request( $query_args ) ) {
 			return false;
 		}
 

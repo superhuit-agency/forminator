@@ -322,6 +322,10 @@ class Forminator_Core {
 	 * Workaround for Gutenberg not parsing shortcodes inside Synced Patterns
 	 * (formerly Reusable Blocks) when used in Block Editor Page Templates.
 	 *
+	 * Limited to allowed block types (Synced Patterns / `core/block` by default)
+	 * and expands only Forminator shortcodes so attacker-controlled block output
+	 * (search titles, comments, etc.) cannot arm do_shortcode() for unrelated tags.
+	 *
 	 * @since 1.54.0
 	 *
 	 * @param string $block_content The rendered block content.
@@ -333,9 +337,29 @@ class Forminator_Core {
 			return $block_content;
 		}
 
-		// Raw/classic blocks are already handled by the_content.
-		// Processing them here can wrap Divi background spans in <p> and break direct-child selectors.
-		if ( ! isset( $block['blockName'] ) || 'core/freeform' === $block['blockName'] ) {
+		$block_name = isset( $block['blockName'] ) ? $block['blockName'] : '';
+
+		/**
+		 * Filter which block types may expand Forminator shortcodes on render_block.
+		 *
+		 * Defaults to Synced Patterns only — the original reason for this filter.
+		 * Raw/classic blocks stay excluded (handled by the_content; processing them
+		 * here can wrap Divi background spans in <p>).
+		 *
+		 * @since 1.58.2
+		 *
+		 * @param string[] $allowed_blocks Block names that may be processed.
+		 * @param string   $block_content  The rendered block content.
+		 * @param array    $block          The parsed block data including blockName.
+		 */
+		$allowed_blocks = apply_filters(
+			'forminator_render_block_shortcode_blocks',
+			array( 'core/block' ),
+			$block_content,
+			$block
+		);
+
+		if ( ! in_array( $block_name, (array) $allowed_blocks, true ) ) {
 			return $block_content;
 		}
 
@@ -343,13 +367,24 @@ class Forminator_Core {
 			return $block_content;
 		}
 
-		// Only process if block content contains a Forminator shortcode.
-		if ( has_shortcode( $block_content, 'forminator_form' )
-			|| has_shortcode( $block_content, 'forminator_poll' )
-			|| has_shortcode( $block_content, 'forminator_quiz' )
-		) {
-			$block_content = do_shortcode( $block_content );
+		$forminator_tags = array( 'forminator_form', 'forminator_poll', 'forminator_quiz' );
+		$has_forminator  = false;
+		foreach ( $forminator_tags as $tag ) {
+			if ( has_shortcode( $block_content, $tag ) ) {
+				$has_forminator = true;
+				break;
+			}
 		}
+
+		if ( ! $has_forminator ) {
+			return $block_content;
+		}
+
+		// Expand only Forminator shortcodes. Running do_shortcode() on the whole
+		// buffer would execute unrelated shortcodes once an attacker-typed
+		// [forminator_…] token arms the previous has_shortcode() gate.
+		$pattern       = get_shortcode_regex( $forminator_tags );
+		$block_content = preg_replace_callback( "/$pattern/", 'do_shortcode_tag', $block_content );
 
 		return $block_content;
 	}

@@ -2,9 +2,9 @@
 # This file is distributed under the same license as the Forminator package.
 msgid ""
 msgstr ""
-"Project-Id-Version: Forminator 1.58.1\n"
+"Project-Id-Version: Forminator 1.58.2\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/build\n"
-"POT-Creation-Date: 2026-10-06 09:27:15+00:00\n"
+"POT-Creation-Date: 2026-10-09 14:55:32+00:00\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -109,7 +109,7 @@ msgstr ""
 #: addons/pro/campaignmonitor/class-forminator-addon-campaignmonitor-settings-trait.php:208
 #: addons/pro/campaignmonitor/class-forminator-addon-campaignmonitor-settings-trait.php:349
 #: addons/pro/googlesheet/class-forminator-addon-googlesheet-settings-trait.php:117
-#: addons/pro/googlesheet/class-forminator-addon-googlesheet.php:202
+#: addons/pro/googlesheet/class-forminator-addon-googlesheet.php:192
 #: addons/pro/mailchimp/class-forminator-addon-mailchimp-settings-trait.php:231
 #: addons/pro/mailchimp/class-forminator-addon-mailchimp-settings-trait.php:375
 #: addons/pro/mailchimp/class-forminator-addon-mailchimp-settings-trait.php:450
@@ -119,13 +119,13 @@ msgstr ""
 #: addons/pro/slack/class-forminator-addon-slack-settings-trait.php:127
 #: addons/pro/slack/class-forminator-addon-slack-settings-trait.php:206
 #: addons/pro/slack/class-forminator-addon-slack-settings-trait.php:355
-#: addons/pro/slack/class-forminator-addon-slack.php:212
+#: addons/pro/slack/class-forminator-addon-slack.php:202
 #: addons/pro/trello/class-forminator-addon-trello-settings-trait.php:102
 #: addons/pro/trello/class-forminator-addon-trello-settings-trait.php:207
 #: addons/pro/trello/class-forminator-addon-trello-settings-trait.php:333
 #: addons/pro/trello/class-forminator-addon-trello.php:303 admin/locale.php:798
 #: library/helpers/helper-core.php:493
-#: library/modules/custom-forms/front/front-render.php:1372
+#: library/modules/custom-forms/front/front-render.php:1437
 msgid "Next"
 msgstr ""
 
@@ -248,11 +248,11 @@ msgstr ""
 #: addons/pro/activecampaign/class-forminator-addon-activecampaign.php:96
 #: addons/pro/aweber/class-forminator-addon-aweber.php:89
 #: addons/pro/campaignmonitor/class-forminator-addon-campaignmonitor.php:82
-#: addons/pro/googlesheet/class-forminator-addon-googlesheet.php:92
-#: addons/pro/hubspot/class-forminator-addon-hubspot.php:103
+#: addons/pro/googlesheet/class-forminator-addon-googlesheet.php:82
+#: addons/pro/hubspot/class-forminator-addon-hubspot.php:93
 #: addons/pro/mailerlite/class-forminator-addon-mailerlite.php:77
 #: addons/pro/mailjet/class-forminator-addon-mailjet.php:89
-#: addons/pro/slack/class-forminator-addon-slack.php:117
+#: addons/pro/slack/class-forminator-addon-slack.php:107
 #: addons/pro/trello/class-forminator-addon-trello.php:124
 #: addons/pro/webhook/class-forminator-addon-webhook.php:78
 msgid "Get awesome by your form."
@@ -275,7 +275,7 @@ msgstr ""
 #: addons/pro/mailchimp/class-forminator-addon-mailchimp.php:449
 #: addons/pro/mailerlite/class-forminator-addon-mailerlite.php:264
 #: addons/pro/mailjet/class-forminator-addon-mailjet.php:374
-#: addons/pro/slack/class-forminator-addon-slack.php:205
+#: addons/pro/slack/class-forminator-addon-slack.php:195
 #: addons/pro/trello/class-forminator-addon-trello.php:296
 #: addons/pro/webhook/class-forminator-addon-webhook.php:166
 #: admin/classes/class-admin-l10n.php:159
@@ -641,12 +641,21 @@ msgstr ""
 msgid "Deactivate this Campaign Monitor Integration from this module."
 msgstr ""
 
-#: addons/pro/aweber/class-forminator-addon-aweber.php:254
+#: addons/pro/aweber/class-forminator-addon-aweber.php:247
+#: addons/pro/aweber/class-forminator-addon-aweber.php:256
+#: addons/pro/googlesheet/class-forminator-addon-googlesheet.php:544
+#: addons/pro/slack/class-forminator-addon-slack.php:614
+#: addons/pro/trello/class-forminator-addon-trello.php:502
+#: addons/pro/trello/class-forminator-addon-trello.php:514
+msgid "Invalid authorization request."
+msgstr ""
+
+#: addons/pro/aweber/class-forminator-addon-aweber.php:264
 msgid "Invalid Authorization Code"
 msgstr ""
 
-#: addons/pro/aweber/class-forminator-addon-aweber.php:438
-#: addons/pro/aweber/class-forminator-addon-aweber.php:443
+#: addons/pro/aweber/class-forminator-addon-aweber.php:453
+#: addons/pro/aweber/class-forminator-addon-aweber.php:458
 msgid "Failed to get AWeber account information"
 msgstr ""
 
@@ -1091,54 +1100,48 @@ msgstr ""
 msgid "Create"
 msgstr ""
 
-#: addons/pro/googlesheet/class-forminator-addon-googlesheet.php:111
+#: addons/pro/googlesheet/class-forminator-addon-googlesheet.php:101
 msgid "Google Sheets is not active"
 msgstr ""
 
-#: addons/pro/googlesheet/class-forminator-addon-googlesheet.php:195
-#: addons/pro/googlesheet/class-forminator-addon-googlesheet.php:319
-#: addons/pro/hubspot/class-forminator-addon-hubspot.php:178
-#: addons/pro/slack/class-forminator-addon-slack.php:326
+#: addons/pro/googlesheet/class-forminator-addon-googlesheet.php:185
+#: addons/pro/googlesheet/class-forminator-addon-googlesheet.php:309
+#: addons/pro/hubspot/class-forminator-addon-hubspot.php:168
+#: addons/pro/slack/class-forminator-addon-slack.php:316
 #: addons/pro/trello/class-forminator-addon-trello.php:382
 msgid "DISCONNECT"
 msgstr ""
 
-#: addons/pro/googlesheet/class-forminator-addon-googlesheet.php:198
-#: addons/pro/slack/class-forminator-addon-slack.php:208
+#: addons/pro/googlesheet/class-forminator-addon-googlesheet.php:188
+#: addons/pro/slack/class-forminator-addon-slack.php:198
 #: addons/pro/trello/class-forminator-addon-trello.php:299
 msgid "RE-AUTHORIZE"
 msgstr ""
 
-#: addons/pro/googlesheet/class-forminator-addon-googlesheet.php:249
-#: addons/pro/slack/class-forminator-addon-slack.php:257
+#: addons/pro/googlesheet/class-forminator-addon-googlesheet.php:239
+#: addons/pro/slack/class-forminator-addon-slack.php:247
 msgid "Please input valid Client ID"
 msgstr ""
 
-#: addons/pro/googlesheet/class-forminator-addon-googlesheet.php:254
-#: addons/pro/slack/class-forminator-addon-slack.php:262
+#: addons/pro/googlesheet/class-forminator-addon-googlesheet.php:244
+#: addons/pro/slack/class-forminator-addon-slack.php:252
 msgid "Please input valid Client Secret"
 msgstr ""
 
-#: addons/pro/googlesheet/class-forminator-addon-googlesheet.php:535
-#: addons/pro/slack/class-forminator-addon-slack.php:606
-#: addons/pro/trello/class-forminator-addon-trello.php:510
-msgid "Invalid authorization request."
-msgstr ""
-
-#: addons/pro/googlesheet/class-forminator-addon-googlesheet.php:542
-#: addons/pro/hubspot/class-forminator-addon-hubspot.php:433
-#: addons/pro/slack/class-forminator-addon-slack.php:622
+#: addons/pro/googlesheet/class-forminator-addon-googlesheet.php:551
+#: addons/pro/hubspot/class-forminator-addon-hubspot.php:438
+#: addons/pro/slack/class-forminator-addon-slack.php:630
 msgid "Failed to get token"
 msgstr ""
 
-#: addons/pro/googlesheet/class-forminator-addon-googlesheet.php:580
+#: addons/pro/googlesheet/class-forminator-addon-googlesheet.php:589
 msgid ""
 "Refresh token doesn't exist. Please reauthorize the Google Sheets "
 "integration."
 msgstr ""
 
-#: addons/pro/googlesheet/class-forminator-addon-googlesheet.php:603
-#: addons/pro/trello/class-forminator-addon-trello.php:579
+#: addons/pro/googlesheet/class-forminator-addon-googlesheet.php:612
+#: addons/pro/trello/class-forminator-addon-trello.php:583
 #: admin/classes/class-admin.php:203
 #: admin/views/dashboard/widgets/widget-upgrade.php:15
 #: pro/forminator-pro.php:98
@@ -1511,12 +1514,12 @@ msgstr ""
 msgid "Update"
 msgstr ""
 
-#: addons/pro/hubspot/class-forminator-addon-hubspot.php:456
-#: addons/pro/slack/class-forminator-addon-slack.php:641
+#: addons/pro/hubspot/class-forminator-addon-hubspot.php:461
+#: addons/pro/slack/class-forminator-addon-slack.php:649
 msgid "Failed to get authorization code."
 msgstr ""
 
-#: addons/pro/hubspot/class-forminator-addon-hubspot.php:518
+#: addons/pro/hubspot/class-forminator-addon-hubspot.php:523
 msgid "Pipeline can not be empty."
 msgstr ""
 
@@ -2500,12 +2503,12 @@ msgstr ""
 msgid "Please input valid API Key"
 msgstr ""
 
-#: addons/pro/trello/class-forminator-addon-trello.php:515
+#: addons/pro/trello/class-forminator-addon-trello.php:519
 #: addons/pro/trello/lib/class-forminator-addon-trello-wp-api.php:71
 msgid "Missing required APP Key"
 msgstr ""
 
-#: addons/pro/trello/class-forminator-addon-trello.php:619
+#: addons/pro/trello/class-forminator-addon-trello.php:623
 msgid "Failed to acquire user ID."
 msgstr ""
 
@@ -3211,8 +3214,8 @@ msgstr ""
 #: admin/views/custom-form/popup/import-cf7.php:505
 #: admin/views/templates/preset/popup.php:24
 #: admin/views/templates/preset/popup.php:36
-#: library/addon/class-integration.php:1274
-#: library/addon/class-integration.php:2914
+#: library/addon/class-integration.php:1300
+#: library/addon/class-integration.php:2940
 msgid "Close"
 msgstr ""
 
@@ -5473,37 +5476,37 @@ msgid "The selected preset has been successfully deleted."
 msgstr ""
 
 #: admin/classes/class-admin-l10n.php:589
-#: library/modules/custom-forms/front/front-render.php:2657
+#: library/modules/custom-forms/front/front-render.php:2722
 msgid "Su"
 msgstr ""
 
 #: admin/classes/class-admin-l10n.php:590
-#: library/modules/custom-forms/front/front-render.php:2658
+#: library/modules/custom-forms/front/front-render.php:2723
 msgid "Mo"
 msgstr ""
 
 #: admin/classes/class-admin-l10n.php:591
-#: library/modules/custom-forms/front/front-render.php:2659
+#: library/modules/custom-forms/front/front-render.php:2724
 msgid "Tu"
 msgstr ""
 
 #: admin/classes/class-admin-l10n.php:592
-#: library/modules/custom-forms/front/front-render.php:2660
+#: library/modules/custom-forms/front/front-render.php:2725
 msgid "We"
 msgstr ""
 
 #: admin/classes/class-admin-l10n.php:593
-#: library/modules/custom-forms/front/front-render.php:2661
+#: library/modules/custom-forms/front/front-render.php:2726
 msgid "Th"
 msgstr ""
 
 #: admin/classes/class-admin-l10n.php:594
-#: library/modules/custom-forms/front/front-render.php:2662
+#: library/modules/custom-forms/front/front-render.php:2727
 msgid "Fr"
 msgstr ""
 
 #: admin/classes/class-admin-l10n.php:595
-#: library/modules/custom-forms/front/front-render.php:2663
+#: library/modules/custom-forms/front/front-render.php:2728
 msgid "Sa"
 msgstr ""
 
@@ -5524,7 +5527,7 @@ msgid "April"
 msgstr ""
 
 #: admin/classes/class-admin-l10n.php:611
-#: library/modules/custom-forms/front/front-render.php:2670
+#: library/modules/custom-forms/front/front-render.php:2735
 msgid "May"
 msgstr ""
 
@@ -5814,7 +5817,7 @@ msgstr ""
 
 #: admin/classes/thirdparty-importers/class-importer-cf7.php:108
 #: library/modules/custom-forms/admin/admin-loader.php:410
-#: library/modules/custom-forms/front/front-render.php:3174
+#: library/modules/custom-forms/front/front-render.php:3214
 msgid "Submitting..."
 msgstr ""
 
@@ -7102,7 +7105,7 @@ msgid "Link text"
 msgstr ""
 
 #: admin/locale.php:544
-#: library/modules/custom-forms/front/front-render.php:3547
+#: library/modules/custom-forms/front/front-render.php:3592
 msgid "Skip and continue"
 msgstr ""
 
@@ -8112,8 +8115,8 @@ msgstr ""
 
 #: admin/locale.php:796 admin/views/common/reports/integration-report.php:58
 #: library/helpers/helper-core.php:492
-#: library/modules/custom-forms/front/front-render.php:1346
-#: library/modules/custom-forms/front/front-render.php:1371
+#: library/modules/custom-forms/front/front-render.php:1411
+#: library/modules/custom-forms/front/front-render.php:1436
 msgid "Previous"
 msgstr ""
 
@@ -10589,28 +10592,32 @@ msgid "Site Name"
 msgstr ""
 
 #: admin/locale.php:1382
-msgid "Site Title"
+msgid "Select a field"
 msgstr ""
 
 #: admin/locale.php:1383
-msgid "Site Role"
+msgid "Site Title"
 msgstr ""
 
 #: admin/locale.php:1384
-msgid "User Meta Mapping"
+msgid "Site Role"
 msgstr ""
 
 #: admin/locale.php:1385
+msgid "User Meta Mapping"
+msgstr ""
+
+#: admin/locale.php:1386
 msgid ""
 "Assign your form fields to the user meta keys to use the data collected "
 "from the visitor to create a user profile."
 msgstr ""
 
-#: admin/locale.php:1386
+#: admin/locale.php:1387
 msgid "Default Meta Keys"
 msgstr ""
 
-#: admin/locale.php:1387
+#: admin/locale.php:1388
 msgid ""
 "Assign form fields to the default WordPress user meta keys (used in "
 "Profiles) below. You can assign a form field to multiple meta keys. If you "
@@ -10618,13 +10625,9 @@ msgid ""
 "will automatically become required in your form."
 msgstr ""
 
-#: admin/locale.php:1388 library/field-autofill-providers/class-wp-user.php:87
+#: admin/locale.php:1389 library/field-autofill-providers/class-wp-user.php:87
 #: library/modules/custom-forms/form-templates/template-registration.php:53
 msgid "Username"
-msgstr ""
-
-#: admin/locale.php:1389
-msgid "Select a field"
 msgstr ""
 
 #: admin/locale.php:1390 library/fields/website.php:76
@@ -11287,8 +11290,8 @@ msgid ""
 msgstr ""
 
 #: admin/locale.php:1540
-#: library/modules/custom-forms/front/front-render.php:1291
-#: library/modules/custom-forms/front/front-render.php:1345
+#: library/modules/custom-forms/front/front-render.php:1356
+#: library/modules/custom-forms/front/front-render.php:1410
 #: library/modules/polls/admin/admin-loader.php:211
 #: library/modules/quizzes/admin/admin-loader.php:608
 msgid "Finish"
@@ -18401,71 +18404,71 @@ msgstr ""
 msgid "Integration Fields"
 msgstr ""
 
-#: library/addon/class-integration.php:835
+#: library/addon/class-integration.php:861
 #. translators: integration title
 msgid "Sorry but we failed to activate %s Integration, don't hesitate to contact us"
 msgstr ""
 
-#: library/addon/class-integration.php:850
+#: library/addon/class-integration.php:876
 #. translators: integration title
 msgid "Sorry but we failed to deactivate %s Integration, please try again"
 msgstr ""
 
-#: library/addon/class-integration.php:864
+#: library/addon/class-integration.php:890
 msgid "Sorry, we failed to update settings, please check your form and try again"
 msgstr ""
 
-#: library/addon/class-integration.php:935
-#: library/addon/class-integration.php:940
-#: library/addon/class-integration.php:1197
-#: library/addon/class-integration.php:1204
+#: library/addon/class-integration.php:961
+#: library/addon/class-integration.php:966
+#: library/addon/class-integration.php:1223
+#: library/addon/class-integration.php:1230
 #. translators: integration title
 msgid "No Settings available for %1$s"
 msgstr ""
 
-#: library/addon/class-integration.php:1025
-#: library/addon/class-integration.php:1030
+#: library/addon/class-integration.php:1051
+#: library/addon/class-integration.php:1056
 #. translators: integration title
 msgid "No Form Settings available for %1$s"
 msgstr ""
 
-#: library/addon/class-integration.php:1729
+#: library/addon/class-integration.php:1755
 msgid " Integration is not connected"
 msgstr ""
 
-#: library/addon/class-integration.php:1734
+#: library/addon/class-integration.php:1760
 msgid "Invalid Module Integration Settings"
 msgstr ""
 
-#: library/addon/class-integration.php:1742
+#: library/addon/class-integration.php:1768
 msgid "No active Integration connection found in this module"
 msgstr ""
 
-#: library/addon/class-integration.php:2280
-#: library/addon/class-integration.php:2285
+#: library/addon/class-integration.php:2306
+#: library/addon/class-integration.php:2311
 #. translators: integration title
 msgid "No Poll Settings available for %1$s"
 msgstr ""
 
-#: library/addon/class-integration.php:2607
-#: library/addon/class-integration.php:2612
+#: library/addon/class-integration.php:2633
+#: library/addon/class-integration.php:2638
 #. translators: integration title
 msgid "No Quiz Settings available for %1$s"
 msgstr ""
 
-#: library/addon/class-integration.php:2882
+#: library/addon/class-integration.php:2908
 #. translators: integration title
 msgid ""
 "We couldn't connect to your %s account. Please resolve the errors below and "
 "try again."
 msgstr ""
 
-#: library/addon/class-integration.php:2897
+#: library/addon/class-integration.php:2923
 #. translators: 1: Add-on name
 msgid "%1$s Connected"
 msgstr ""
 
-#: library/addon/class-integration.php:2906
+#: library/addon/class-integration.php:2932
 #. translators: 1: Title
 msgid ""
 "Awesome! You are connected to %1$s. You can now go to your forms and "
@@ -18651,7 +18654,7 @@ msgstr ""
 msgid "Invalid form meta data."
 msgstr ""
 
-#: library/class-core.php:684
+#: library/class-core.php:719
 msgid "Post Custom Data"
 msgstr ""
 
@@ -20221,29 +20224,29 @@ msgstr ""
 msgid "Please map all required user fields before saving this registration form."
 msgstr ""
 
-#: library/helpers/helper-core.php:2601
+#: library/helpers/helper-core.php:2617
 msgid "Stripe - Failed Email Notification"
 msgstr ""
 
-#: library/helpers/helper-core.php:2605
+#: library/helpers/helper-core.php:2621
 msgid "Payment Failed for {form_name} (submission #{submission_id})"
 msgstr ""
 
-#: library/helpers/helper-core.php:2608
+#: library/helpers/helper-core.php:2624
 msgid ""
 "A payment attempt for {form_name} could not be completed. The submission "
 "details have been saved, but payment processing failed."
 msgstr ""
 
-#: library/helpers/helper-core.php:2609
+#: library/helpers/helper-core.php:2625
 msgid "Details:"
 msgstr ""
 
-#: library/helpers/helper-core.php:2610
+#: library/helpers/helper-core.php:2626
 msgid "Submission ID: #{submission_id}"
 msgstr ""
 
-#: library/helpers/helper-core.php:2611
+#: library/helpers/helper-core.php:2627
 msgid "Amount: {payment_amount} {payment_currency}"
 msgstr ""
 
@@ -24786,7 +24789,7 @@ msgid ""
 msgstr ""
 
 #: library/modules/custom-forms/front/front-action.php:1703
-#: library/modules/custom-forms/front/front-render.php:3065
+#: library/modules/custom-forms/front/front-render.php:3105
 msgid "SSL required to submit this form, please check your URL."
 msgstr ""
 
@@ -24892,224 +24895,228 @@ msgstr ""
 msgid "Note: Attachments were not included due to size limits."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:342
+#: library/modules/custom-forms/front/front-render.php:351
 msgid "https://wordpress.org/"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:343
+#: library/modules/custom-forms/front/front-render.php:352
 msgid "Powered by WordPress"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:359
+#: library/modules/custom-forms/front/front-render.php:368
 msgid "Authenticate to login"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:361
+#: library/modules/custom-forms/front/front-render.php:370
 msgid "The passcode was incorrect."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:382
+#: library/modules/custom-forms/front/front-render.php:391
 msgid "Having problems? Try another way to log in"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:1295
-#: library/modules/custom-forms/front/front-render.php:1542
+#: library/modules/custom-forms/front/front-render.php:1360
+#: library/modules/custom-forms/front/front-render.php:1607
 #. translators: %d: Page number.
 msgid "Page %d"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:1351
+#: library/modules/custom-forms/front/front-render.php:1416
 #: library/modules/quizzes/front/front-render.php:314
 #. Translators: 1. Current page number, 2. Total number of pages.
 #. translators: 1. Step, 2. Total steps.
 msgid "Page %1$s of %2$s"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:1538
+#: library/modules/custom-forms/front/front-render.php:1603
 msgid "Page "
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:2543
+#: library/modules/custom-forms/front/front-render.php:2608
 msgid "Please do not fill in this field."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:2666
+#: library/modules/custom-forms/front/front-render.php:2731
 msgid "Jan"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:2667
+#: library/modules/custom-forms/front/front-render.php:2732
 msgid "Feb"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:2668
+#: library/modules/custom-forms/front/front-render.php:2733
 msgid "Mar"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:2669
+#: library/modules/custom-forms/front/front-render.php:2734
 msgid "Apr"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:2671
+#: library/modules/custom-forms/front/front-render.php:2736
 msgid "Jun"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:2672
+#: library/modules/custom-forms/front/front-render.php:2737
 msgid "Jul"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:2673
+#: library/modules/custom-forms/front/front-render.php:2738
 msgid "Aug"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:2674
+#: library/modules/custom-forms/front/front-render.php:2739
 msgid "Sep"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:2675
+#: library/modules/custom-forms/front/front-render.php:2740
 msgid "Oct"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:2676
+#: library/modules/custom-forms/front/front-render.php:2741
 msgid "Nov"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:2677
+#: library/modules/custom-forms/front/front-render.php:2742
 msgid "Dec"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:3067
+#: library/modules/custom-forms/front/front-render.php:3107
 msgid "PayPal amount must be greater than 0."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:3068
+#: library/modules/custom-forms/front/front-render.php:3108
 msgid "Please correct the errors before submission."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:3251
+#: library/modules/custom-forms/front/front-render.php:3291
 msgid "User is logged in."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:3624
+#: library/modules/custom-forms/front/front-render.php:3669
 msgid "Fill in form fields before saving it as a draft"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-user-registration.php:265
+#: library/modules/custom-forms/front/front-user-registration.php:275
 msgid ""
 "Couldn&#8217;t register you&hellip; please contact us if you continue to "
 "have problems."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-user-registration.php:357
+#: library/modules/custom-forms/front/front-user-registration.php:367
 msgid "That username is currently reserved but may be available in a couple of days"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-user-registration.php:373
+#: library/modules/custom-forms/front/front-user-registration.php:383
 msgid ""
 "That email address has already been used. Please check your inbox for an "
 "activation email. It will become available in a couple of days if you do "
 "nothing."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-user-registration.php:378
+#: library/modules/custom-forms/front/front-user-registration.php:388
 msgid "That username is currently reserved."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-user-registration.php:380
+#: library/modules/custom-forms/front/front-user-registration.php:390
 msgid "That email address is currently reserved."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-user-registration.php:409
+#: library/modules/custom-forms/front/front-user-registration.php:419
 msgid "User password may not be longer than 255 characters."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-user-registration.php:432
+#: library/modules/custom-forms/front/front-user-registration.php:442
 msgid "User website URL may not be longer than 100 characters."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-user-registration.php:527
+#: library/modules/custom-forms/front/front-user-registration.php:537
 msgid "This email address is not valid."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-user-registration.php:535
+#: library/modules/custom-forms/front/front-user-registration.php:545
 msgid "This email address is already registered."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-user-registration.php:543
+#: library/modules/custom-forms/front/front-user-registration.php:553
 msgid "User email may not be longer than 100 characters."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-user-registration.php:549
+#: library/modules/custom-forms/front/front-user-registration.php:559
 msgid "The email address can not be empty."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-user-registration.php:573
+#: library/modules/custom-forms/front/front-user-registration.php:583
 msgid ""
 "This username is invalid because it uses illegal characters. Please enter a "
 "valid username."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-user-registration.php:581
+#: library/modules/custom-forms/front/front-user-registration.php:591
 msgid "This username is already registered."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-user-registration.php:589
+#: library/modules/custom-forms/front/front-user-registration.php:599
 msgid "Username may not be longer than 60 characters."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-user-registration.php:595
+#: library/modules/custom-forms/front/front-user-registration.php:605
 msgid "The username can not be empty."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-user-registration.php:835
-#: library/modules/custom-forms/front/front-user-registration.php:1133
+#: library/modules/custom-forms/front/front-user-registration.php:657
+msgid "Please enter a site name."
+msgstr ""
+
+#: library/modules/custom-forms/front/front-user-registration.php:838
+#: library/modules/custom-forms/front/front-user-registration.php:1138
 msgid ""
 "This password was generated automatically, and it is recommended that you "
 "set a new password once you log in to your account."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-user-registration.php:839
+#: library/modules/custom-forms/front/front-user-registration.php:842
 msgid ""
 "Use the password that you submitted when registering your account, or set a "
 "new password at the link below."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-user-registration.php:1117
+#: library/modules/custom-forms/front/front-user-registration.php:1122
 #. translators: 1. User name.
 msgid "Dear %s,"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-user-registration.php:1119
+#: library/modules/custom-forms/front/front-user-registration.php:1124
 #. translators: 1. Blog name.
 msgid "Your account on %s has been activated! Please find your login details below."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-user-registration.php:1121
+#: library/modules/custom-forms/front/front-user-registration.php:1126
 #. translators: 1. Login URL.
 msgid "Login page: %s"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-user-registration.php:1123
+#: library/modules/custom-forms/front/front-user-registration.php:1128
 #. translators: 1. User name.
 msgid "Username: %s"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-user-registration.php:1127
+#: library/modules/custom-forms/front/front-user-registration.php:1132
 msgid ""
 "Password: Use the password that you submitted when registering your "
 "account, or set a new password at the link below."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-user-registration.php:1132
+#: library/modules/custom-forms/front/front-user-registration.php:1137
 #. translators: 1. Password.
 msgid "Password: %s"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-user-registration.php:1137
+#: library/modules/custom-forms/front/front-user-registration.php:1142
 #. translators: 1. Home URL.
 msgid "This message was sent from %s"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-user-registration.php:1140
+#: library/modules/custom-forms/front/front-user-registration.php:1145
 #. translators: 1. Blog name.
 msgid "[%s] Account Activated"
 msgstr ""
@@ -26686,21 +26693,21 @@ msgstr ""
 msgid "Module ID not found!"
 msgstr ""
 
-#: library/render/class-render-form.php:2081
+#: library/render/class-render-form.php:2142
 msgid ""
 "Can't find the draft associated with the draft ID in the URL. This draft "
 "was either submitted or has expired."
 msgstr ""
 
-#: library/render/class-render-form.php:2154
+#: library/render/class-render-form.php:2215
 msgid "Edit quiz"
 msgstr ""
 
-#: library/render/class-render-form.php:2158
+#: library/render/class-render-form.php:2219
 msgid "Edit poll"
 msgstr ""
 
-#: library/render/class-render-form.php:2162
+#: library/render/class-render-form.php:2223
 msgid "Edit form"
 msgstr ""
 
@@ -26818,7 +26825,7 @@ msgctxt "Admin menu name"
 msgid "Scheduled Actions"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:396
+#: library/modules/custom-forms/front/front-render.php:405
 #. translators: 1. Blog title.
 msgctxt "back link"
 msgid "&larr; Back to %s"

@@ -97,6 +97,19 @@ class Forminator_CForm_Front_User_Registration extends Forminator_User {
 	}
 
 	/**
+	 * Check if a site should be created for the form
+	 *
+	 * @param array $settings Form settings.
+	 *
+	 * @return bool
+	 */
+	private function should_create_site( $settings ) {
+		// The network must allow new sites, whatever the activation method.
+		return 'enable' === forminator_get_property( $settings, 'site-registration' )
+			&& forminator_is_site_registration_enabled();
+	}
+
+	/**
 	 * Show submit_errors
 	 *
 	 * @param string $submit_errors Error message.
@@ -192,13 +205,10 @@ class Forminator_CForm_Front_User_Registration extends Forminator_User {
 			'user_data'     => $prepare_user_data,
 		);
 
-		$option_create_site = forminator_get_property( $settings, 'site-registration' );
-		$site_data          = is_multisite() ? $this->get_site_data( $settings, 0, $user_data ) : array();
-		$create_site        = is_multisite()
-			&& isset( $option_create_site )
-			&& 'enable' === $option_create_site
-			&& $site_data
-			&& forminator_is_site_registration_enabled();
+		$site_data   = is_multisite() && $this->should_create_site( $settings )
+			? $this->get_site_data( $settings, 0, $user_data )
+			: array();
+		$create_site = ! empty( $site_data );
 
 		// The signup stores the address as submitted and never re-checks it, so validate it first.
 		if ( $create_site ) {
@@ -629,14 +639,8 @@ class Forminator_CForm_Front_User_Registration extends Forminator_User {
 		);
 		$setting = $custom_form->settings;
 
-		// No site is created when the network doesn't allow it, whatever the activation method.
-		if ( ! forminator_is_site_registration_enabled() ) {
-			return $data;
-		}
-
-		// Make sure option 'Site registration' is set.
-		$option_create_site = forminator_get_property( $setting, 'site-registration' );
-		if ( $is_approve || ! $option_create_site || ( isset( $option_create_site ) && 'enable' !== $option_create_site ) ) {
+		// Site fields are only validated when the submission actually creates a site.
+		if ( $is_approve || ! $this->should_create_site( $setting ) ) {
 
 			return $data;
 		}
@@ -647,6 +651,12 @@ class Forminator_CForm_Front_User_Registration extends Forminator_User {
 
 		// No address means no site is created, so there is nothing to validate.
 		if ( empty( $blog_address ) ) {
+			// The address is required when the new site is the only reason registration is allowed.
+			if ( ! forminator_is_user_registration_enabled() ) {
+				$data['result']  = false;
+				$data['message'] = esc_html__( 'Please enter a site name.', 'forminator' );
+			}
+
 			return $data;
 		}
 
@@ -768,14 +778,7 @@ class Forminator_CForm_Front_User_Registration extends Forminator_User {
 
 		$setting = $custom_form->settings;
 
-		// Is option 'Site registration' enabled?
-		$option_create_site = forminator_get_property( $setting, 'site-registration' );
-
-		// Whatever the activation method, do not create a site the network doesn't allow.
-		if ( ! forminator_is_site_registration_enabled() ) {
-			$option_create_site = false;
-		}
-		if ( ! $option_create_site || ( isset( $option_create_site ) && 'enable' !== $option_create_site ) ) {
+		if ( ! $this->should_create_site( $setting ) ) {
 			$this->maybe_remove_user_from_main_site( $setting, $user_id );
 			return false;
 		}
@@ -928,9 +931,10 @@ class Forminator_CForm_Front_User_Registration extends Forminator_User {
 			$submitted_data = Forminator_CForm_Front_Action::$prepared_data;
 		}
 
+		// Arrays can't build a site name or title.
 		$blog_address = '';
 		$address      = forminator_get_property( $setting, 'site-registration-name-field' );
-		if ( isset( $submitted_data[ $address ] ) && ! empty( $submitted_data[ $address ] ) ) {
+		if ( isset( $submitted_data[ $address ] ) && ! empty( $submitted_data[ $address ] ) && is_scalar( $submitted_data[ $address ] ) ) {
 			$blog_address = strtolower( $submitted_data[ $address ] );
 
 			/*
@@ -942,9 +946,10 @@ class Forminator_CForm_Front_User_Registration extends Forminator_User {
 			}
 		}
 
-		$blog_title = forminator_get_property( $setting, 'site-registration-title-field' );
-		if ( isset( $submitted_data[ $blog_title ] ) && ! empty( $submitted_data[ $blog_title ] ) ) {
-			$blog_title = $submitted_data[ $blog_title ];
+		$blog_title = '';
+		$title      = forminator_get_property( $setting, 'site-registration-title-field' );
+		if ( isset( $submitted_data[ $title ] ) && ! empty( $submitted_data[ $title ] ) && is_scalar( $submitted_data[ $title ] ) ) {
+			$blog_title = $submitted_data[ $title ];
 		}
 
 		return array(

@@ -243,9 +243,19 @@ final class Forminator_Aweber extends Forminator_Integration {
 
 		if ( isset( $query_args['authorization_code'] ) && ! empty( $query_args['authorization_code'] ) ) {
 			try {
-				$authorization_code = $query_args['authorization_code'];
+				if ( ! $this->verify_addon_page_nonce() ) {
+					throw new Forminator_Integration_Exception( esc_html__( 'Invalid authorization request.', 'forminator' ) );
+				}
 
+				$authorization_code = $query_args['authorization_code'];
+				// Identifier is typed in the browser after the OAuth state is issued.
 				$identifier  = ! empty( $query_args['identifier'] ) ? $query_args['identifier'] : '';
+				$global_id   = ! empty( $query_args['global_id'] ) ? (string) $query_args['global_id'] : '';
+				$oauth_state = isset( $query_args['state'] ) ? $query_args['state'] : '';
+				if ( false === forminator_integration_validate_oauth_state( $this, $oauth_state, $global_id, '' ) ) {
+					throw new Forminator_Integration_Exception( esc_html__( 'Invalid authorization request.', 'forminator' ) );
+				}
+
 				$split_codes = explode( '|', $authorization_code );
 
 				// https://labs.aweber.com/docs/authentication#distributed-app
@@ -260,8 +270,8 @@ final class Forminator_Aweber extends Forminator_Integration {
 				$token_secret       = $split_codes[3];
 				$oauth_verifier     = $split_codes[4];
 
-				if ( ! empty( $query_args['global_id'] ) ) {
-					$this->multi_global_id = $query_args['global_id'];
+				if ( ! empty( $global_id ) ) {
+					$this->multi_global_id = $global_id;
 				}
 
 				$api = $this->validate_access_token( $application_key, $application_secret, $request_token, $token_secret, $oauth_verifier );
@@ -308,7 +318,12 @@ final class Forminator_Aweber extends Forminator_Integration {
 		$authorize_url = 'https://auth.aweber.com/1.0/oauth/authorize_app/' . trim( $app_id );
 
 		if ( ! $return_url ) {
-			$return_url = forminator_addon_integration_section_admin_url( $this, 'authorize', true );
+			$global_id   = $this->is_multi_global ? (string) $this->multi_global_id : '';
+			$oauth_state = forminator_integration_create_oauth_state( $this, $global_id );
+			$return_url  = forminator_addon_integration_section_admin_url( $this, 'authorize', true );
+			if ( ! empty( $oauth_state ) ) {
+				$return_url = add_query_arg( 'state', $oauth_state, $return_url );
+			}
 		}
 		$return_url = rawurlencode( $return_url );
 

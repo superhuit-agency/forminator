@@ -1947,4 +1947,58 @@ class Forminator_Export {
 	private function forminator_get_csv_export_delimiter() {
 		return apply_filters( 'forminator_csv_export_delimiter', ',' );
 	}
+
+	/**
+	 * Delete leftover scheduled-export CSVs from wp-content/uploads/forminator/.
+	 *
+	 * Older versions always wrote exports as `{form-slug}-{ymdHis}.csv` under
+	 * `{uploads}/forminator/`, not the custom upload root from settings, and could fail
+	 * to remove every file. Scheduled exports now use private temp files; this removes
+	 * any files still left in that fixed directory.
+	 *
+	 * @since 1.58.2
+	 *
+	 * @return int Number of files deleted.
+	 */
+	public static function cleanup_leftover_public_export_files() {
+		$upload_dirs = wp_upload_dir();
+		if ( ! empty( $upload_dirs['error'] ) || empty( $upload_dirs['basedir'] ) ) {
+			return 0;
+		}
+
+		// Match the hard-coded path older versions used; ignore custom upload settings.
+		$upload_root = trailingslashit( $upload_dirs['basedir'] ) . 'forminator/';
+		if ( ! is_dir( $upload_root ) ) {
+			return 0;
+		}
+		$handle = opendir( $upload_root );
+		if ( ! $handle ) {
+			return 0;
+		}
+
+		$deleted = 0;
+		while ( false !== ( $file = readdir( $handle ) ) ) { // phpcs:ignore Generic.CodeAnalysis.AssignmentInCondition.FoundInWhileCondition -- false positive
+			if ( '.' === $file || '..' === $file ) {
+				continue;
+			}
+
+			// Only remove root-level files matching the former scheduled-export name pattern.
+			if ( ! preg_match( '/^.+-\d{12}\.csv$/', $file ) ) {
+				continue;
+			}
+
+			$file_path = $upload_root . $file;
+			if ( ! is_file( $file_path ) ) {
+				continue;
+			}
+
+			wp_delete_file( $file_path );
+			if ( ! file_exists( $file_path ) ) {
+				++$deleted;
+			}
+		}
+		closedir( $handle );
+
+		return $deleted;
+	}
 }

@@ -11,7 +11,7 @@
  */
 
 if ( ! defined( 'FORMINATOR_VERSION' ) ) {
-	define( 'FORMINATOR_VERSION', '1.58.1' );
+	define( 'FORMINATOR_VERSION', '1.58.2' );
 }
 
 if ( ! defined( 'FORMINATOR_SUI_VERSION' ) ) {

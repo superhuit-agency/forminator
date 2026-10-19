@@ -233,7 +233,7 @@ abstract class Forminator_Admin_Module_Edit_Page extends Forminator_Admin_Page {
 				return true;
 			}
 			// Manual activation still creates the account on approval, so disabled registration is not an error then.
-			return ! forminator_is_user_registration_enabled()
+			return ! forminator_can_register_user( $settings )
 				&& 'manual' !== forminator_get_property( $settings, 'activation-method' );
 		}
 		return false;

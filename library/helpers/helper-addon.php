@@ -1518,10 +1518,11 @@ function forminator_integration_create_oauth_state( $addon, $global_id = '', $id
  * @param string                 $state      OAuth state from the callback request.
  * @param string                 $global_id  Multi-global integration ID.
  * @param string                 $identifier Multi-global integration identifier.
+ * @param bool                   $consume    Whether to delete the state after reading it.
  *
  * @return array|false Bound context on success, false on failure.
  */
-function forminator_integration_validate_oauth_state( $addon, $state, $global_id = '', $identifier = '' ) {
+function forminator_integration_validate_oauth_state( $addon, $state, $global_id = '', $identifier = '', $consume = true ) {
 	if ( ! current_user_can( forminator_get_permission( 'forminator-integrations' ) ) ) {
 		return false;
 	}
@@ -1537,7 +1538,9 @@ function forminator_integration_validate_oauth_state( $addon, $state, $global_id
 		return false;
 	}
 
-	delete_transient( $key );
+	if ( $consume ) {
+		delete_transient( $key );
+	}
 
 	$user_id = get_current_user_id();
 	if ( empty( $user_id ) || (int) $payload['user_id'] !== (int) $user_id ) {

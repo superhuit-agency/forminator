@@ -196,15 +196,41 @@ abstract class Forminator_Integration implements Forminator_Integration_Interfac
 	public $is_multi_global = false;
 
 	/**
-	 * Require a nonce before an integration section callback is invoked
+	 * Verify the integrations page nonce.
 	 *
-	 * Integrations whose provider redirects back to a pre registered URL cannot
-	 * carry a per request nonce and must set this to false.
+	 * A missing or invalid nonce fails closed. Callers that cannot carry this
+	 * nonce must prove the request another way.
 	 *
-	 * @since 1.58
-	 * @var bool
+	 * @since 1.58.2
+	 *
+	 * @return bool
 	 */
-	public $section_requires_nonce = true;
+	public function verify_addon_page_nonce() {
+		if ( ! class_exists( 'Forminator_Integrations_Page' ) ) {
+			return false;
+		}
+
+		$nonce = Forminator_Core::sanitize_text_field( 'nonce' );
+
+		return (bool) wp_verify_nonce( $nonce, Forminator_Integrations_Page::$addon_nonce_page_action );
+	}
+
+	/**
+	 * Prove a section request that cannot carry the integrations page nonce.
+	 *
+	 * Pre-registered OAuth redirects cannot include a per-request nonce.
+	 * Override this and require that integration's own CSRF proof.
+	 * The default fails closed.
+	 *
+	 * @since 1.58.2
+	 *
+	 * @param array $query_args Request arguments.
+	 *
+	 * @return bool
+	 */
+	public function validate_section_request( $query_args ) {
+		return false;
+	}
 
 	/**
 	 * Wizard steps
