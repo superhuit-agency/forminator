@@ -247,7 +247,7 @@ class Forminator_Email extends Forminator_Field {
 	public function get_validation_rules() {
 		$field       = $this->field;
 		$id          = self::get_property( 'element_id', $field );
-		$rules       = '"' . $this->get_id( $field ) . '": {' . "\n";
+		$rules       = wp_json_encode( $this->get_id( $field ) ) . ': {' . "\n";
 		$is_validate = self::get_property( 'validation', $field, false );
 		$is_confirm  = self::get_property( 'confirm-email', $field, '', 'bool' );
 		$filter_type = self::get_property( 'filter_type', $field );
@@ -261,15 +261,19 @@ class Forminator_Email extends Forminator_Field {
 		} else {
 			$rules .= '"email": false,';
 		}
+		$email_list = self::get_email_filter_list( $email_list );
 		if ( $email_list && in_array( $filter_type, array( 'allow', 'deny' ), true ) ) {
-			$email_list = str_replace( ',', '|', $email_list );
+			$email_filter = array(
+				'filter_type' => $filter_type,
+				'email_list'  => implode( '|', $email_list ),
+			);
 
-			$rules .= '"emailFilter": {"filter_type":"' . $filter_type . '","email_list":"' . $email_list . '"},';
+			$rules .= '"emailFilter": ' . wp_json_encode( $email_filter ) . ',';
 		}
 
 		$rules .= '},' . "\n";
 		if ( $is_confirm ) {
-			$rules .= '"confirm_' . $this->get_id( $field ) . '": {' . "\n";
+			$rules .= wp_json_encode( 'confirm_' . $this->get_id( $field ) ) . ': {' . "\n";
 			if ( $this->is_required( $field ) ) {
 				$rules .= '"required": true,';
 			}
@@ -299,7 +303,7 @@ class Forminator_Email extends Forminator_Field {
 
 		$validation_message = htmlentities( $validation_message );
 
-		$messages = '"' . $id . '": {' . "\n";
+		$messages = wp_json_encode( $id ) . ': {' . "\n";
 
 		if ( $this->is_required( $field ) ) {
 			$default_required_error_message =
@@ -326,7 +330,7 @@ class Forminator_Email extends Forminator_Field {
 		if ( $is_confirm ) {
 			$required_confirm_message = self::get_property( 'required_confirm_message', $field );
 
-			$messages .= '"confirm_' . $id . '": {' . "\n";
+			$messages .= wp_json_encode( 'confirm_' . $id ) . ': {' . "\n";
 			if ( $is_required ) {
 				$required_error = apply_filters(
 					'forminator_confirm_email_field_required_validation_message',
@@ -461,10 +465,8 @@ class Forminator_Email extends Forminator_Field {
 		if ( empty( $email_list ) ) {
 			return null;
 		}
-		$email_list = explode( ',', $email_list );
-		foreach ( $email_list as $item ) {
-			// Remove spaces in email addresses.
-			$item = str_replace( array( ' ', "\n", "\r", "\t" ), '', $item );
+		// A list without valid entries matches nothing, so an allowlist still blocks.
+		foreach ( self::get_email_filter_list( $email_list ) as $item ) {
 			// Escape special characters.
 			$item = preg_quote( $item, '/' );
 			// Support * as wildcard.
@@ -477,6 +479,36 @@ class Forminator_Email extends Forminator_Field {
 		}
 
 		return false;
+	}
+
+	/**
+	 * Get the valid entries of an allowlist or denylist.
+	 *
+	 * An entry is an email address or a part of one, with * as a wildcard,
+	 * e.g. user@example.com, @example.com, *.com, admin@*, hr@*.com. Other entries are dropped.
+	 *
+	 * @since 1.58.3
+	 *
+	 * @param mixed $email_list Comma separated list.
+	 *
+	 * @return array
+	 */
+	public static function get_email_filter_list( $email_list ): array {
+		if ( ! is_string( $email_list ) ) {
+			return array();
+		}
+
+		$entries = array();
+		foreach ( explode( ',', $email_list ) as $item ) {
+			// Remove spaces in email addresses.
+			$item = str_replace( array( ' ', "\n", "\r", "\t" ), '', $item );
+			// Email address characters with an optional single @ and a domain.
+			if ( '' !== $item && preg_match( '/^[\p{L}\p{N}.!#$%&\'*+\/=?^_`{}~-]*(?:@[\p{L}\p{N}.*-]*)?$/u', $item ) ) {
+				$entries[] = $item;
+			}
+		}
+
+		return $entries;
 	}
 
 	/**

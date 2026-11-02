@@ -115,6 +115,10 @@
 						$entry_status = __( 'Failed', 'forminator' );
 						break;
 
+					case 'spam':
+						$entry_status = __( 'Spam', 'forminator' );
+						break;
+
 					default:
 						$entry_status = __( 'All', 'forminator' );
 						break;

@@ -210,7 +210,7 @@
 					return false;
 				}
 
-				if ( ( self.$el.data( 'forminatorFrontPayment' ) || self.$el.data('forminatorFrontStripe') ) && ! $saveDraft ) {
+				if ( ( self.$el.data( 'forminatorFrontPayment' ) || self.$el.data('forminatorFrontStripe') ) && ! $saveDraft && 'forminator:submit:stripe:return' !== submitter ) {
 					// Disable submit button right away to prevent multiple submissions
 					$this.find( '.forminator-button-submit' ).attr( 'disabled', true );
 					if ( false === self.processCaptcha( self, e, $target_message, submitter ) ) {
@@ -688,11 +688,19 @@
 					.closest('.forminator-row, .forminator-col').hasClass('forminator-hidden') ||
 					paymentElement.closest('.forminator-pagination').hasClass('forminator-page-hidden');
 				if ( ( self.$el.data('forminatorFrontPayment') || self.$el.data('forminatorFrontStripe') ) && ! paymentIsHidden && ! $saveDraft ) {
-					setTimeout( function() {
+					var triggerPaymentSubmit = function() {
 						self.$el.trigger('payment.before.submit.forminator', [formData, function () {
 							submitCallback.apply(thisForm);
 						}]);
-					}, 200 );
+					};
+					var stripeFront = self.$el.data('forminatorFrontStripe');
+
+					// Apple Pay can only open its payment sheet in this tap.
+					if ( stripeFront && typeof stripeFront.requiresImmediateCheckoutConfirm === 'function' && stripeFront.requiresImmediateCheckoutConfirm() ) {
+						triggerPaymentSubmit();
+					} else {
+						setTimeout( triggerPaymentSubmit, 200 );
+					}
 				} else {
 					submitCallback.apply(thisForm);
 				}

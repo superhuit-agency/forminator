@@ -185,7 +185,8 @@ class Forminator_Poll_Model extends Forminator_Base_Form_Model {
 				}
 				$cookie_value  = date_i18n( 'Y-m-d H:i:s', strtotime( sanitize_text_field( wp_unslash( $_COOKIE[ $poll_cookie ] ) ) ) );
 				$cookie_expire = $cookie_value . ' +' . $duration . ' ' . $interval;
-				if ( time() < strtotime( $cookie_expire ) ) {
+				$current_date  = date_i18n( 'Y-m-d H:i:s' );
+				if ( strtotime( $current_date ) < strtotime( $cookie_expire ) ) {
 					return false;
 				} else {
 					return true;

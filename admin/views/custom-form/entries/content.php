@@ -182,6 +182,8 @@ if ( $this->total_entries() > 0 ) :
 									echo '<span class="sui-tag sui-tag-blue status-tag">' . esc_html__( 'Pending', 'forminator' ) . '</span>';
 								} elseif ( 'failed' === $entries['status'] ) {
 									echo '<span class="sui-tag sui-tag-red status-tag">' . esc_html__( 'Failed', 'forminator' ) . '</span>';
+								} elseif ( 'spam' === $entries['status'] ) {
+									echo '<span class="sui-tag sui-tag-red status-tag">' . esc_html__( 'Spam', 'forminator' ) . '</span>';
 								}
 
 								if ( $pending_approval ) {

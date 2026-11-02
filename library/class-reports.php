@@ -55,16 +55,44 @@ class Forminator_Reports {
 	public function __construct() {
 
 		add_action( 'init', array( &$this, 'schedule_reports' ) );
+		add_action( 'forminator_after_notification_update', array( &$this, 'reschedule_reports' ) );
+		add_action( 'forminator_after_notification_status_update', array( &$this, 'reschedule_reports' ) );
+		add_action( 'forminator_after_notification_delete', array( &$this, 'reschedule_reports' ) );
 		add_action( 'forminator_process_report', array( &$this, 'process_report' ) );
+	}
+
+	/**
+	 * Re-evaluate the report schedule after settings change.
+	 *
+	 * @since 1.58.3
+	 */
+	public function reschedule_reports() {
+		delete_transient( 'forminator_process_report_cleared' );
+		delete_transient( 'forminator_process_report' );
+		$this->schedule_reports();
 	}
 
 	/**
 	 * Set up the schedule
 	 *
+	 * Only schedule when at least one report is active. Otherwise unschedule so unused
+	 * sites do not run forminator_process_report every minute.
+	 *
 	 * @since 1.0
+	 * @since 1.58.3 Only schedule when a report is active
 	 */
 	public function schedule_reports() {
-		forminator_set_recurring_action( 'forminator_process_report', MINUTE_IN_SECONDS );
+		// Skip work while the unscheduled state is cached.
+		if ( get_transient( 'forminator_process_report_cleared' ) ) {
+			return;
+		}
+
+		if ( Forminator_Form_Reports_Model::get_instance()->has_active_reports() ) {
+			forminator_set_recurring_action( 'forminator_process_report', MINUTE_IN_SECONDS );
+			return;
+		}
+
+		forminator_unschedule_action( 'forminator_process_report' );
 	}
 
 	/**
@@ -74,7 +102,13 @@ class Forminator_Reports {
 	 */
 	public function process_report() {
 		$report_model = Forminator_Form_Reports_Model::get_instance();
-		$report_data  = $report_model->fetch_all_report();
+
+		if ( ! $report_model->has_active_reports() ) {
+			forminator_unschedule_action( 'forminator_process_report' );
+			return;
+		}
+
+		$report_data = $report_model->fetch_all_report();
 
 		if ( empty( $report_data ) ) {
 			return;

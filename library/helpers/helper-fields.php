@@ -250,6 +250,23 @@ function forminator_normalize_choice_option_value( $value ) {
 }
 
 /**
+ * Escape a submitted value for HTML output, keeping only scalar values.
+ *
+ * @since 1.58.3
+ *
+ * @param mixed $value Submitted value, a scalar or a list of scalars.
+ *
+ * @return string|array
+ */
+function forminator_esc_html_submitted_value( $value ) {
+	if ( is_array( $value ) ) {
+		return array_map( 'esc_html', array_map( 'strval', array_filter( $value, 'is_scalar' ) ) );
+	}
+
+	return is_scalar( $value ) ? esc_html( (string) $value ) : '';
+}
+
+/**
  * Sort fields so that grouped fields appear immediately after their parent group.
  *
  * @since 1.51.0
@@ -794,6 +811,10 @@ function forminator_replace_form_data( $content, ?Forminator_Form_Model $custom_
 				 */
 				$value = apply_filters( 'forminator_empty_field_placeholder', $value, $element_id );
 			}
+			// HTML fields are admin templates and may still need merge tags resolved later.
+			if ( is_string( $value ) && 0 !== strpos( $element_id, 'html' ) ) {
+				$value = forminator_neutralize_merge_tags( $value );
+			}
 			if ( ! $urlencode ) {
 				$content = forminator_replace_placeholder_in_urls( $content, $match, $value );
 			}
@@ -1014,21 +1035,26 @@ function forminator_replace_field_data( $custom_form, $element_id, $data, $is_pd
 				);
 			}
 		}
+
+		// Check if we're in email context using parent class static property.
+		$is_email = false;
+		if ( class_exists( 'Forminator_Mail' ) && method_exists( 'Forminator_Mail', 'is_email_context' ) ) {
+			$is_email = Forminator_Mail::is_email_context();
+		}
+		// Email and PDF bodies are HTML that is not escaped later, other callers expect plain text.
+		$escape_html = $is_email || $is_pdf;
+
 		if ( is_array( $field_value ) && isset( $field_value['value'] ) ) {
-			$value = $field_value['value'];
+			$value = $escape_html ? forminator_esc_html_submitted_value( $field_value['value'] ) : $field_value['value'];
 		} elseif ( ! empty( $field_options ) ) {
 			$selected_values = is_array( $field_value ) ? $field_value : array( $field_value );
-			$selected_values = array_map( 'htmlspecialchars_decode', $selected_values );
+			// A choice is a scalar, drop any crafted nested arrays.
+			$selected_values = array_filter( $selected_values, 'is_scalar' );
+			$selected_values = array_map( 'htmlspecialchars_decode', array_map( 'strval', $selected_values ) );
 			$field           = $custom_form->get_field( $element_id, true );
 
 			// Check if we should display images for radio/checkbox fields.
 			$enable_images = ! $is_pdf && Forminator_Field::get_property( 'enable_images', $field, false, 'bool' );
-
-			// Check if we're in email context using parent class static property.
-			$is_email = false;
-			if ( class_exists( 'Forminator_Mail' ) && method_exists( 'Forminator_Mail', 'is_email_context' ) ) {
-				$is_email = Forminator_Mail::is_email_context();
-			}
 
 			$display_items              = array();
 			$email_image_display_option = $custom_form->settings['email_image_display_option'] ?? 'preview';
@@ -1038,14 +1064,17 @@ function forminator_replace_field_data( $custom_form, $element_id, $data, $is_pd
 				if ( isset( $field_options[ $selected_value ] ) ) {
 					$option_data  = $field_options[ $selected_value ];
 					$display_text = $print_value ? $selected_value : $option_data['label'];
+					if ( $print_value && $escape_html ) {
+						$display_text = esc_html( $display_text );
+					}
 
 					// Handle custom option text enhancement.
 					if ( 'custom_option' === $selected_value ) {
 						$enable_custom_option = Forminator_Field::get_property( 'enable_custom_option', $field, false );
 						$custom_value         = $data[ 'custom-' . $element_id ] ?? '';
 						// Append the custom input value for the "Other" option.
-						if ( $enable_custom_option && '' !== $custom_value ) {
-							$display_text .= ': ' . $custom_value;
+						if ( $enable_custom_option && is_scalar( $custom_value ) && '' !== (string) $custom_value ) {
+							$display_text .= ': ' . ( $escape_html ? esc_html( $custom_value ) : $custom_value );
 						}
 					}
 
@@ -1056,14 +1085,14 @@ function forminator_replace_field_data( $custom_form, $element_id, $data, $is_pd
 						$display_items[] = $display_text;
 					}
 				} else {
-					$display_items[] = $is_email ? esc_html( $selected_value ) : $selected_value;
+					$display_items[] = $escape_html ? esc_html( $selected_value ) : $selected_value;
 				}
 			}
 
 			// Display images on new lines in emails.
 			$value = ( $enable_images && $is_email ) ? implode( '<br/>', $display_items ) : implode( ', ', $display_items );
 		} else {
-			$value = $field_value;
+			$value = $escape_html ? forminator_esc_html_submitted_value( $field_value ) : $field_value;
 		}
 	}
 
@@ -1083,15 +1112,18 @@ function forminator_replace_field_data( $custom_form, $element_id, $data, $is_pd
  * @return mixed
  */
 function forminator_replace_custom_form_data( $content, Forminator_Form_Model $custom_form, Forminator_Form_Entry_Model $entry, $excluded = array() ) {
+	// Expand scalar tags before {all_fields} / {all_non_empty_fields}. Otherwise a submitted
+	// value that contains e.g. {account_approval_link} or {submission_url} is copied into the
+	// body by {all_fields} and then resolved by a later pass (second-order merge tag injection).
 	$custom_form_datas = array(
-		'{all_fields}'            => 'forminator_get_formatted_form_entry',
-		'{all_non_empty_fields}'  => 'forminator_get_formatted_form_non_empty_entry',
+		'{account_approval_link}' => 'forminator_get_account_approval_link',
 		'{form_name}'             => 'forminator_get_formatted_form_name',
 		'{submission_id}'         => 'forminator_get_submission_id',
 		'{submission_url}'        => 'forminator_get_submission_url',
-		'{account_approval_link}' => 'forminator_get_account_approval_link',
 		'{username}'              => 'forminator_get_formatted_username',
 		'{line_break}'            => 'forminator_get_formatted_line_break',
+		'{all_fields}'            => 'forminator_get_formatted_form_entry',
+		'{all_non_empty_fields}'  => 'forminator_get_formatted_form_non_empty_entry',
 	);
 
 	foreach ( $custom_form_datas as $custom_form_data => $function ) {
@@ -1108,6 +1140,26 @@ function forminator_replace_custom_form_data( $content, Forminator_Form_Model $c
 	}
 
 	return apply_filters( 'forminator_replace_custom_form_data', $content, $custom_form, Forminator_CForm_Front_Action::$prepared_data, $entry, $excluded, $custom_form_datas );
+}
+
+/**
+ * Neutralize merge-tag braces in user-supplied values.
+ *
+ * Submitted field values must not be interpreted as Forminator merge tags when they
+ * are inserted into email bodies or other templates (second-order merge tag injection).
+ *
+ * @since 1.58.4
+ *
+ * @param string $text Text that may contain curly braces.
+ *
+ * @return string
+ */
+function forminator_neutralize_merge_tags( $text ) {
+	if ( ! is_string( $text ) || false === strpos( $text, '{' ) ) {
+		return $text;
+	}
+
+	return str_replace( array( '{', '}' ), array( '&#123;', '&#125;' ), $text );
 }
 
 /**
@@ -1335,6 +1387,10 @@ function forminator_prepare_formatted_form_entry(
 							// Escape first so line-break conversion cannot revive markup.
 							$value = forminator_replace_linebreaks( esc_html( $value ) );
 						}
+					}
+					// Submitted values must not reintroduce merge tags into the email body.
+					if ( is_string( $value ) ) {
+						$value = forminator_neutralize_merge_tags( $value );
 					}
 					$html .= $value . '<br/>';
 				}
@@ -1813,7 +1869,7 @@ function render_entry( $item, $column_name, $field = null, $type = '', $remove_e
 	}
 
 	if ( $is_calculation && $data ) {
-		return Forminator_Form_Entry_Model::meta_value_to_string( 'calculation', $data, true, PHP_INT_MAX, $field );
+		return esc_html( Forminator_Form_Entry_Model::meta_value_to_string( 'calculation', $data, true, PHP_INT_MAX, $field ) );
 	}
 
 	// Treat a field that stores a value while holding no input, e.g. an empty address, as empty.
@@ -1870,7 +1926,7 @@ function render_entry( $item, $column_name, $field = null, $type = '', $remove_e
 									$output .= forminator_get_email_image_markup( $file_url, $file_name, '', 'upload' );
 								} else {
 									// Default link display.
-									$file_name = "<a href='" . esc_url( $file_url ) . "' target='_blank' rel='noreferrer' title='" . esc_html__( 'View File', 'forminator' ) . "'>$file_name</a>";
+									$file_name = "<a href='" . esc_url( $file_url ) . "' target='_blank' rel='noreferrer' title='" . esc_attr__( 'View File', 'forminator' ) . "'>" . esc_html( $file_name ) . '</a>';
 									$output   .= $file_name;
 								}
 
@@ -1894,7 +1950,7 @@ function render_entry( $item, $column_name, $field = null, $type = '', $remove_e
 								$title_label = $field['post_title_label'] ?? esc_html__( 'Title', 'forminator' );
 								$output     .= '<li>';
 								$output     .= '<b>' . Forminator_Field::convert_markdown( esc_html( $title_label ) ) . ':</b> ';
-								$output     .= '<a href="' . $url . '" target="_blank" rel="noopener noreferrer" title="' . esc_attr__( 'Edit Post', 'forminator' ) . '">' . $title . '</a>';
+								$output     .= '<a href="' . esc_url( $url ) . '" target="_blank" rel="noopener noreferrer" title="' . esc_attr__( 'Edit Post', 'forminator' ) . '">' . esc_html( $title ) . '</a>';
 								$output     .= '</li>';
 
 									// Content.
@@ -1935,7 +1991,7 @@ function render_entry( $item, $column_name, $field = null, $type = '', $remove_e
 
 										$output .= '<li>';
 										$output .= '<b>' . Forminator_Field::convert_markdown( esc_html( $label ) ) . ':</b> ';
-										$output .= implode( ',', $post_category );
+										$output .= esc_html( implode( ',', $post_category ) );
 										$output .= '</li>';
 									}
 								}
@@ -1958,7 +2014,7 @@ function render_entry( $item, $column_name, $field = null, $type = '', $remove_e
 
 										$output .= '<li>';
 										$output .= '<b>' . Forminator_Field::convert_markdown( esc_html( $label ) ) . ':</b> ';
-										$output .= implode( ',', $term_query->terms );
+										$output .= esc_html( implode( ',', $term_query->terms ) );
 										$output .= '</li>';
 									}
 								}
@@ -2032,7 +2088,7 @@ function render_entry( $item, $column_name, $field = null, $type = '', $remove_e
 													$output .= '<b>' . esc_html__( $single_label, 'forminator' ) . ':</b> '; // phpcs:ignore WordPress.WP.I18n.NonSingularStringLiteralText
 												}
 
-												$output .= $the_taxonomies;
+												$output .= esc_html( $the_taxonomies );
 												$output .= '</li>';
 											}
 										}
@@ -2135,7 +2191,7 @@ function render_entry( $item, $column_name, $field = null, $type = '', $remove_e
 			}
 			if ( $is_product ) {
 				/* Translators: 1. Opening <strong> tag, 2. closing <strong> tag 3. currency symbol with cost */
-				$output = sprintf( esc_html__( '%1$sTotal%2$s %3$s', 'forminator' ), '<strong>', '</strong>', $currency_symbol . '' . $product_cost );
+				$output = sprintf( esc_html__( '%1$sTotal%2$s %3$s', 'forminator' ), '<strong>', '</strong>', esc_html( $currency_symbol . '' . $product_cost ) );
 			} elseif ( ! empty( $output ) ) {
 				if (
 						isset( $column_name ) &&
@@ -2158,10 +2214,10 @@ function render_entry( $item, $column_name, $field = null, $type = '', $remove_e
 						'format' => $data['format'],
 					);
 
-					$output = Forminator_Form_Entry_Model::meta_value_to_string( 'date', $meta_value, true ) . $separator;
+					$output = esc_html( Forminator_Form_Entry_Model::meta_value_to_string( 'date', $meta_value, true ) ) . $separator;
 
 				} elseif ( false !== strpos( $column_name, 'time' ) ) {
-					$output = Forminator_Form_Entry_Model::meta_value_to_string( 'time', $data, true ) . $separator;
+					$output = esc_html( Forminator_Form_Entry_Model::meta_value_to_string( 'time', $data, true ) ) . $separator;
 
 				} else {
 					$output = substr( trim( $output ), 0, - 1 );
@@ -2169,7 +2225,7 @@ function render_entry( $item, $column_name, $field = null, $type = '', $remove_e
 				}
 				// If it is an array and not an upload field.
 			} elseif ( is_array( $data ) && stripos( $column_name, 'upload' ) === false ) {
-				$output = implode( ', ', $data );
+				$output = implode( ', ', forminator_esc_html_submitted_value( $data ) );
 			}
 
 			return $output;
@@ -2178,7 +2234,12 @@ function render_entry( $item, $column_name, $field = null, $type = '', $remove_e
 				$data = Forminator_Field::forminator_number_formatting( $field, $data );
 			}
 
-			return $data;
+			// Textarea values are escaped or sanitized as rich text by the caller.
+			if ( 0 === strpos( $column_name, 'textarea' ) ) {
+				return $data;
+			}
+
+			return esc_html( $data );
 		}
 	}
 
@@ -3741,12 +3802,32 @@ function forminator_list_custom_taxonomies( $meta_value ) {
 function recreate_prepared_data( Forminator_Base_Form_Model $custom_form_model, $entry ) {
 	$prepared_data = wp_list_pluck( $entry->meta_data, 'value' );
 	$fields        = $custom_form_model->get_real_fields();
+	$detected_rows = array();
 
 	// Raw choice values saved during submission.
 	$choice_values = isset( $prepared_data['_forminator_choice_values'] ) ? $prepared_data['_forminator_choice_values'] : array();
 	unset( $prepared_data['_forminator_choice_values'] );
 
 	foreach ( $prepared_data as $key => $value ) {
+		if ( preg_match( '/^([a-zA-Z_-]+-\d+)-(\d+)(?:-([a-zA-Z_-]+))?$/', $key, $matches ) ) {
+			$base_field_id = $matches[1]; // e.g. 'text-1'.
+			$row_index     = (int) $matches[2]; // e.g. 2, 3.
+
+			// Fetch the field settings from the form configuration to check its parent group.
+			$field_model = $custom_form_model->get_field( $base_field_id );
+
+			if ( $field_model && ! empty( $field_model['parent_group'] ) ) {
+				// Get the parent group ID assigned to this field element (e.g., 'group-1').
+				$parent_group = $field_model['parent_group'];
+
+				if ( ! isset( $detected_rows[ $parent_group ] ) ) {
+					$detected_rows[ $parent_group ] = array();
+				}
+				// Collect all existing row indices for this specific group.
+				$detected_rows[ $parent_group ][] = $row_index;
+			}
+		}
+
 		if ( isset( $value['result'] ) ) {
 			$prepared_data[ $key ] = $value['result'];
 		} elseif ( is_array( $value ) ) {
@@ -3780,6 +3861,21 @@ function recreate_prepared_data( Forminator_Base_Form_Model $custom_form_model, 
 					}
 					break;
 				}
+			}
+		}
+	}
+
+	if ( ! empty( $detected_rows ) ) {
+		foreach ( $detected_rows as $group_id => $indices ) {
+			$copies_key = $group_id . '-copies';
+
+			// Filter out duplicate indexes and sort numerically (e.g., [2, 3]).
+			$unique_rows = array_values( array_unique( $indices ) );
+			sort( $unique_rows );
+
+			// If the group-copies key isn't already filled, populate it with our verified index map.
+			if ( empty( $prepared_data[ $copies_key ] ) && ! empty( $unique_rows ) ) {
+				$prepared_data[ $copies_key ] = $unique_rows;
 			}
 		}
 	}

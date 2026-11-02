@@ -598,7 +598,13 @@ class Forminator_PayPal_Express extends Forminator_Payment_Gateway {
 	 * @return mixed
 	 */
 	public function capture_order( $id, $mode ) {
-		return $this->api_request( 'v2/checkout/orders/' . $id . '/capture', $mode, array(), 'POST' );
+		// Return the full capture, its status and amount are verified.
+		$args = array(
+			'headers' => array( 'Prefer' => 'return=representation' ),
+			'body'    => array(),
+		);
+
+		return $this->api_request( 'v2/checkout/orders/' . $id . '/capture', $mode, $args, 'POST' );
 	}
 
 	/**

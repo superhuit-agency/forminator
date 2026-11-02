@@ -309,6 +309,54 @@ class Forminator_Slack_Wp_Api {
 	}
 
 	/**
+	 * Cursor-paginate Slack list endpoints.
+	 *
+	 * Slack Web API uses `response_metadata.next_cursor` for pagination on list
+	 * endpoints. This helper keeps requesting pages until `next_cursor` is empty
+	 * and aggregates the returned array property into a single list.
+	 *
+	 * @since 1.58.3
+	 *
+	 * @param string $path       Endpoint path.
+	 * @param array  $args       Request args.
+	 * @param string $collection Response property name to aggregate (e.g. `channels`, `members`).
+	 *
+	 * @return array|mixed|object
+	 */
+	private function request_paginated_list( $path, $args, $collection ) {
+		$all_items = array();
+		$cursor    = '';
+		$response  = null;
+
+		do {
+			if ( ! empty( $cursor ) ) {
+				$args['cursor'] = $cursor;
+			} else {
+				unset( $args['cursor'] );
+			}
+
+			$response = $this->request( 'GET', $path, $args );
+
+			if ( ! is_object( $response ) ) {
+				return $response;
+			}
+
+			if ( isset( $response->$collection ) && is_array( $response->$collection ) ) {
+				$all_items = array_merge( $all_items, $response->$collection );
+			}
+
+			$cursor = '';
+			if ( ! empty( $response->response_metadata->next_cursor ) ) {
+				$cursor = $response->response_metadata->next_cursor;
+			}
+		} while ( ! empty( $cursor ) );
+
+		$response->$collection = $all_items;
+
+		return $response;
+	}
+
+	/**
 	 * Get Users / members List
 	 *
 	 * @since 1.0 Slack Integration
@@ -324,11 +372,7 @@ class Forminator_Slack_Wp_Api {
 
 		$args = array_merge( $default_args, $args );
 
-		return $this->request(
-			'GET',
-			'users.list',
-			$args
-		);
+		return $this->request_paginated_list( 'users.list', $args, 'members' );
 	}
 
 	/**
@@ -345,15 +389,12 @@ class Forminator_Slack_Wp_Api {
 			'exclude_archived' => true,
 			'exclude_members'  => true,
 			'limit'            => 100,
+			'types'            => 'public_channel',
 		);
 
 		$args = array_merge( $default_args, $args );
 
-		return $this->request(
-			'GET',
-			'conversations.list',
-			$args
-		);
+		return $this->request_paginated_list( 'conversations.list', $args, 'channels' );
 	}
 
 	/**
@@ -375,11 +416,7 @@ class Forminator_Slack_Wp_Api {
 
 		$args = array_merge( $default_args, $args );
 
-		return $this->request(
-			'GET',
-			'conversations.list',
-			$args
-		);
+		return $this->request_paginated_list( 'conversations.list', $args, 'channels' );
 	}
 
 	/**

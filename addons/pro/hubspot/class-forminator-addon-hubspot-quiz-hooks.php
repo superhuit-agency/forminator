@@ -176,12 +176,15 @@ class Forminator_Hubspot_Quiz_Hooks extends Forminator_Integration_Quiz_Hooks {
 			}
 			$from_object_id = null;
 			if ( '1' === $create_ticket ) {
+				// Older connections may contain '{{quiz_name}}'.
+				$quiz_name_tags               = array( '{{quiz_name}}', '{quiz_name}' );
+				$quiz_name                    = forminator_get_name_from_model( $this->module );
 				$ticket['pipeline_id']        = $connection_settings['pipeline_id'];
 				$ticket['status_id']          = $connection_settings['status_id'];
-				$ticket_name                  = str_ireplace( '{quiz_name}', forminator_get_name_from_model( $this->module ), $connection_settings['ticket_name'] );
+				$ticket_name                  = str_ireplace( $quiz_name_tags, $quiz_name, $connection_settings['ticket_name'] );
 				$ticket_name                  = forminator_addon_replace_custom_vars( $ticket_name, $submitted_data, $this->lead_model, $lead_entry_fields, false );
 				$ticket['ticket_name']        = $ticket_name;
-				$ticket_description           = str_ireplace( '{quiz_name}', forminator_get_name_from_model( $this->module ), $connection_settings['ticket_description'] );
+				$ticket_description           = str_ireplace( $quiz_name_tags, $quiz_name, $connection_settings['ticket_description'] );
 				$ticket_description           = forminator_addon_replace_custom_vars( $ticket_description, $submitted_data, $this->lead_model, $lead_entry_fields, false );
 				$ticket['ticket_description'] = $ticket_description;
 				$ticket['supported_file']     = isset( $submitted_data[ $connection_settings['supported_file'] ] ) ? $submitted_data[ $connection_settings['supported_file'] ] : '';

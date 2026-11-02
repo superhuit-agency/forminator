@@ -2517,7 +2517,7 @@ abstract class Forminator_Field {
 	}
 
 	/**
-	 * * Get formatted amount for Stripe and PayPal fields
+	 * Get formatted amount for Stripe and PayPal fields
 	 *
 	 * @param array        $field Field.
 	 * @param string|array $amount_data Amount Data.
@@ -2660,5 +2660,92 @@ abstract class Forminator_Field {
 			$script = '<script>' . $initialize . '</script>';
 		}
 		return $script;
+	}
+
+	/**
+	 * Get validated max selections
+	 *
+	 * Calculates the validated max selections value based on field settings and available options.
+	 *
+	 * @since 1.58.3
+	 *
+	 * @param array $field Field settings.
+	 * @return int Validated max selections value, or 0 if limit is not enabled.
+	 */
+	protected function get_validated_max_selections( $field ) {
+		$limit_selections = self::get_property( 'limit_selections', $field, false );
+		$max_selections   = self::get_property( 'max_selections', $field, '' );
+
+		if ( ! $limit_selections || empty( $max_selections ) || ! is_numeric( $max_selections ) ) {
+			return 0;
+		}
+
+		$options         = self::get_property( 'options', $field, array() );
+		$available_count = is_array( $options ) ? count( $options ) : 0;
+
+		// Include "Other" when enabled but not yet present in the options list.
+		$enable_custom_option = self::get_property( 'enable_custom_option', $field, false );
+		if ( $enable_custom_option && is_array( $options ) ) {
+			$has_custom_option = false;
+			foreach ( $options as $option ) {
+				if ( isset( $option['key'] ) && 'custom_option' === $option['key'] ) {
+					$has_custom_option = true;
+					break;
+				}
+			}
+			if ( ! $has_custom_option ) {
+				++$available_count;
+			}
+		}
+
+		if ( $available_count < 1 ) {
+			return 0;
+		}
+
+		return min( max( 1, intval( $max_selections ) ), $available_count );
+	}
+
+	/**
+	 * Get max selections error message
+	 *
+	 * Returns the error message for max selections validation.
+	 *
+	 * @since 1.58.3
+	 *
+	 * @param array  $field Field settings.
+	 * @param int    $validated_max Validated max selections value.
+	 * @param string $filter_name Filter name for the error message.
+	 * @return string Error message.
+	 */
+	protected function get_max_selections_error_message( $field, $validated_max, $filter_name = 'forminator_field_max_selections_validation_message' ) {
+		$id                = self::get_property( 'element_id', $field );
+		$max_error_message = self::get_property( 'max_selections_error_message', $field, '' );
+
+		if ( empty( $max_error_message ) ) {
+			/* translators: %d: maximum number of selections allowed */
+			$max_error_message = sprintf( esc_html__( 'You can only select up to %d options.', 'forminator' ), $validated_max );
+		} else {
+			$max_error_message = str_replace( '{max}', $validated_max, $max_error_message );
+		}
+
+		return apply_filters( $filter_name, $max_error_message, $id, $field );
+	}
+
+	/**
+	 * Get required validation message
+	 *
+	 * Returns the required field validation message with appropriate filter.
+	 *
+	 * @since 1.58.3
+	 *
+	 * @param array  $field Field settings.
+	 * @param string $filter_name Filter name for the error message.
+	 * @return string Required validation message.
+	 */
+	protected function get_required_validation_message( $field, $filter_name ) {
+		$id               = self::get_property( 'element_id', $field );
+		$required_message = self::get_property( 'required_message', $field, $this->get_required_error_message() );
+
+		return apply_filters( $filter_name, $required_message, $id, $field );
 	}
 }

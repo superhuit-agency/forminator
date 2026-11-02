@@ -108,6 +108,24 @@ class Forminator_Stripe extends Forminator_Field {
 	public const PAYMENT_INTENT_CLAIM_HELD_OPTION_PREFIX = 'forminator_stripe_payment_intent_claim_held_';
 
 	/**
+	 * Option key prefix marking a Checkout Session whose claim is held by a request.
+	 *
+	 * @since 1.58.3
+	 *
+	 * @var string
+	 */
+	public const CHECKOUT_SESSION_CLAIM_HELD_OPTION_PREFIX = 'forminator_stripe_checkout_session_claim_held_';
+
+	/**
+	 * Checkout Session metadata key holding the payment owner of the browser that created it.
+	 *
+	 * @since 1.58.3
+	 *
+	 * @var string
+	 */
+	public const PAYMENT_OWNER_METADATA_KEY = 'forminator_payment_owner';
+
+	/**
 	 * Cookie tying a Stripe payment to the browser that started it.
 	 *
 	 * @var string
@@ -1082,6 +1100,10 @@ class Forminator_Stripe extends Forminator_Field {
 			'locale'              => $language,
 			'return_url'          => self::get_return_url( true ),
 			'client_reference_id' => $form_id,
+			// Bind the creating browser on Stripe too, it outlives the local pending marker.
+			'metadata'            => array(
+				self::PAYMENT_OWNER_METADATA_KEY => self::get_payment_owner( true ),
+			),
 		);
 
 		if ( 'false' === $dynamic_methods ) {
@@ -1118,6 +1140,12 @@ class Forminator_Stripe extends Forminator_Field {
 
 		try {
 			$options = apply_filters( 'forminator_stripe_checkout_session_options', $options, $field );
+
+			// Set again after the filter, so replaced metadata can't drop the owner binding.
+			if ( empty( $options['metadata'] ) || ! is_array( $options['metadata'] ) ) {
+				$options['metadata'] = array();
+			}
+			$options['metadata'][ self::PAYMENT_OWNER_METADATA_KEY ] = self::get_payment_owner( true );
 
 			$session = \Forminator\Stripe\Checkout\Session::create(
 				$options,
@@ -2875,8 +2903,10 @@ class Forminator_Stripe extends Forminator_Field {
 				return new WP_Error( 'forminator_stripe_error', esc_html__( 'Checkout Session ID is not valid', 'forminator' ) );
 			}
 
-			// If the entry is still pending, return the session data for later processing.
-			if ( 'unpaid' === ( $session->payment_status ?? '' ) ) {
+			// Cards and Google Pay are still unpaid here. Apple Pay is already paid, because confirm()
+			// has to run in the submit tap, before this pending entry can be created.
+			$payment_status = (string) ( $session->payment_status ?? '' );
+			if ( in_array( $payment_status, array( 'unpaid', 'paid', 'no_payment_required' ), true ) ) {
 				// Claim the Checkout Session before the entry is created so one payment can
 				// only ever produce one entry, even for concurrent submissions.
 				if ( ! self::is_valid_checkout_session( $session->id ) ) {
@@ -2899,7 +2929,7 @@ class Forminator_Stripe extends Forminator_Field {
 				}
 
 				$entry_data = array(
-					'status'         => $session->payment_status ?? '',
+					'status'         => $payment_status,
 					'mode'           => $mode,
 					'currency'       => $currency,
 					'amount'         => $charge_amount,
@@ -2943,7 +2973,7 @@ class Forminator_Stripe extends Forminator_Field {
 						'form_id'        => $expected_form_id,
 						'field_id'       => self::get_property( 'element_id', $field, '' ),
 						'session_id'     => $session->id,
-						'payment_status' => $session->payment_status ?? '',
+						'payment_status' => $payment_status,
 					)
 				);
 				return new WP_Error( 'forminator_stripe_error', esc_html__( 'Checkout Session ID is not valid', 'forminator' ) );
@@ -3005,6 +3035,24 @@ class Forminator_Stripe extends Forminator_Field {
 		$current = self::get_payment_owner();
 
 		return is_string( $owner ) && '' !== $owner && '' !== $current && hash_equals( $owner, $current );
+	}
+
+	/**
+	 * Check that the current browser created the Checkout Session, using its Stripe metadata.
+	 *
+	 * Sessions without an owner never match.
+	 *
+	 * @since 1.58.3
+	 *
+	 * @param mixed $session Checkout Session object.
+	 * @return bool
+	 */
+	public static function is_checkout_session_owner( $session ): bool {
+		if ( ! is_object( $session ) || empty( $session->metadata ) ) {
+			return false;
+		}
+
+		return self::is_payment_owner( $session->metadata[ self::PAYMENT_OWNER_METADATA_KEY ] ?? '' );
 	}
 
 	/**
@@ -3133,9 +3181,21 @@ class Forminator_Stripe extends Forminator_Field {
 	 * @return bool
 	 */
 	private static function hold_payment_intent_claim( $intent_id ): bool {
-		global $wpdb;
+		return self::hold_claim( self::get_payment_intent_claim_held_option_key( $intent_id ) );
+	}
 
-		$option_name = self::get_payment_intent_claim_held_option_key( $intent_id );
+	/**
+	 * Take a single use lock stored as an option.
+	 *
+	 * The unique index on option_name makes this insert fail for anyone racing us.
+	 *
+	 * @since 1.58.3
+	 *
+	 * @param string $option_name Option name of the lock.
+	 * @return bool
+	 */
+	private static function hold_claim( $option_name ): bool {
+		global $wpdb;
 
 		// Losing the race is expected, so keep the duplicate key error out of the log.
 		$suppressed = $wpdb->suppress_errors();
@@ -3327,6 +3387,10 @@ class Forminator_Stripe extends Forminator_Field {
 			return false;
 		}
 
+		if ( ! self::hold_claim( self::get_checkout_session_claim_held_option_key( $session_id ) ) ) {
+			return false;
+		}
+
 		self::$claimed_checkout_sessions[ $session_id ] = false;
 
 		// The entry and its payment meta are on their way to storage, the payment is spent.
@@ -3378,12 +3442,14 @@ class Forminator_Stripe extends Forminator_Field {
 		unset( self::$claimed_checkout_sessions[ $session_id ] );
 
 		if ( ! $entry_stored ) {
+			delete_option( self::get_checkout_session_claim_held_option_key( $session_id ) );
 			self::restore_pending_checkout_session( $session_id );
 
 			return;
 		}
 
 		self::mark_checkout_session_consumed( $session_id );
+		delete_option( self::get_checkout_session_claim_held_option_key( $session_id ) );
 	}
 
 	/**
@@ -3398,7 +3464,12 @@ class Forminator_Stripe extends Forminator_Field {
 	 * @return bool
 	 */
 	private static function is_claimable_checkout_session( $session_id ): bool {
-		return self::has_pending_checkout_session( $session_id ) && ! self::is_consumed_checkout_session( $session_id );
+		$session_data = self::get_pending_checkout_session_data( $session_id );
+
+		// Only the browser that created the session may claim it.
+		return self::has_pending_checkout_session( $session_id )
+			&& self::is_payment_owner( $session_data['owner'] ?? '' )
+			&& ! self::is_consumed_checkout_session( $session_id );
 	}
 
 	/**
@@ -3454,6 +3525,18 @@ class Forminator_Stripe extends Forminator_Field {
 	 */
 	private static function get_consumed_checkout_session_option_key( $session_id ): string {
 		return self::CONSUMED_CHECKOUT_SESSION_OPTION_PREFIX . md5( $session_id );
+	}
+
+	/**
+	 * Build the option key marking a held Checkout Session claim.
+	 *
+	 * @since 1.58.3
+	 *
+	 * @param string $session_id Checkout Session ID.
+	 * @return string
+	 */
+	private static function get_checkout_session_claim_held_option_key( $session_id ): string {
+		return self::CHECKOUT_SESSION_CLAIM_HELD_OPTION_PREFIX . md5( $session_id );
 	}
 
 	/**
@@ -3673,6 +3756,8 @@ class Forminator_Stripe extends Forminator_Field {
 			if ( ! is_numeric( $created_at ) || time() - (int) $created_at > $retention ) {
 				unset( $checkout_sessions[ $session_id ] );
 				delete_option( self::get_checkout_session_option_key( $session_id ) );
+				// A request that died mid claim leaves its claim-held flag behind.
+				delete_option( self::get_checkout_session_claim_held_option_key( $session_id ) );
 			}
 		}
 
@@ -3773,6 +3858,25 @@ class Forminator_Stripe extends Forminator_Field {
 		}
 
 		update_option( self::CONSUMED_CHECKOUT_SESSION_CLEANUP_OPTION_KEY, $consumed_sessions, false );
+	}
+
+	/**
+	 * Whether a Checkout Session has finished Checkout and may receive the after-payment response.
+	 *
+	 * The payment-owner cookie only proves which browser started the session. An open/unpaid
+	 * session must not disclose thank-you messages, redirect URLs, or other gated content.
+	 * Status complete covers paid, no_payment_required, and async unpaid (ACH/SEPA) after the
+	 * customer finishes Checkout.
+	 *
+	 * @since 1.58.4
+	 *
+	 * @param mixed $session Checkout Session object.
+	 * @return bool
+	 */
+	public static function is_checkout_session_completed( $session ): bool {
+		return is_object( $session )
+			&& ! empty( $session->status )
+			&& 'complete' === $session->status;
 	}
 
 	/**

@@ -509,6 +509,18 @@ class Forminator_CForm_User_Signups {
 			return new WP_Error( 'invalid_access', esc_html__( 'Unfortunately, you do not have the required permissions or user role to perform this action.', 'forminator' ), $signup );
 		}
 
+		// Manual approval must be checked before create_user(): otherwise the account (and
+		// possibly a Multisite subsite) is created even when the caller cannot approve.
+		// The activation key alone is not enough — the approver must be logged in with
+		// entries access and be allowed to assign the signup role / create the site.
+		if ( isset( $signup->settings['activation-method'] )
+			&& 'manual' === $signup->settings['activation-method']
+			&& ( ! current_user_can( forminator_get_permission( 'forminator-entries' ) )
+				|| ! forminator_can_approve_user_and_create_site( $signup ) )
+		) {
+			return new WP_Error( 'invalid_access', esc_html__( 'Unfortunately, you do not have the required permissions or user role to perform this action.', 'forminator' ), $signup );
+		}
+
 		$user_id = username_exists( $signup->user_data['user_login'] );
 		if ( $user_id ) {
 			// User already exists.
@@ -522,15 +534,16 @@ class Forminator_CForm_User_Signups {
 			return new WP_Error( 'email_already_exists', esc_html__( 'Sorry, that email address is already used!', 'forminator' ), $signup );
 		}
 
-		if ( forminator_is_main_site() ) {
-			remove_action( 'forminator_cform_user_registered', array( 'Forminator_CForm_Front_User_Registration', 'create_site' ) );
-		}
-
 		$password = Forminator_CForm_Front_User_Registration::openssl_decrypt( $signup->user_data['user_pass'] );
 
 		$forminator_user_registration = new Forminator_CForm_Front_User_Registration();
-		$user_data                    = $signup->user_data;
-		$user_data['user_pass']       = $password;
+		// Constructor registers create_site on forminator_cform_user_registered; remove that
+		// instance callback so site creation stays on the explicit call below.
+		if ( forminator_is_main_site() ) {
+			remove_action( 'forminator_cform_user_registered', array( $forminator_user_registration, 'create_site' ) );
+		}
+		$user_data              = $signup->user_data;
+		$user_data['user_pass'] = $password;
 		if ( ! is_array( $user_data ) ) {
 
 			return new WP_Error( 'create_user', $user_data );
@@ -551,13 +564,6 @@ class Forminator_CForm_User_Signups {
 		if ( ! empty( $signup->form->id ) ) {
 			// Delete the cache for the form entries query.
 			Forminator_Form_Entry_Model::delete_form_entries_query_cache( $signup->form->id );
-		}
-
-		if ( isset( $signup->settings['activation-method'] )
-			&& 'manual' === $signup->settings['activation-method']
-			&& ! current_user_can( forminator_get_permission( 'forminator-entries' ) )
-		) {
-			return new WP_Error( 'user_activated', esc_html__( 'User account has been activated.', 'forminator' ), $signup );
 		}
 
 		// Create site only on main site and if option for that is enabled.

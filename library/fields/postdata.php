@@ -676,6 +676,9 @@ class Forminator_Postdata extends Forminator_Field {
 		$post_excerpt_label = self::get_property( 'post_excerpt_label', $field, '' );
 		$post_image_label   = self::get_property( 'post_image_label', $field, '' );
 
+		$image_field_name = $id . '-post-image';
+		$invalid_image    = ! empty( $post_image ) && $this->is_invalid_post_image_upload( $image_field_name );
+
 		if ( $this->is_required( $field ) ) {
 			if ( empty( $data ) ) {
 				$postdata_validation_message     = apply_filters(
@@ -714,7 +717,7 @@ class Forminator_Postdata extends Forminator_Field {
 					);
 					$this->validation_message[ $id . '-post-excerpt' ] = $postdata_post_excerpt_validation_message;
 				}
-				if ( ! empty( $post_image ) && empty( $image ) ) {
+				if ( ! empty( $post_image ) && empty( $image ) && ! $invalid_image ) {
 					$postdata_post_image_validation_message = apply_filters(
 						'forminator_postdata_field_post_image_validation_message',
 						/* Translators: 1. Post image label */
@@ -738,67 +741,108 @@ class Forminator_Postdata extends Forminator_Field {
 					}
 				}
 			}
-		} else {
+		} elseif ( ! empty( $data ) && is_array( $data ) ) {
 			// validation for postdata when its not required.
 			// `wp_insert_post` required at least ONE OF THESE to be available title / content / excerpt.
 			// check only when user send some data.
-			if ( ! empty( $data ) && is_array( $data ) ) {
-				if ( ! $title && ! $content && ! $excerpt ) {
-					// check if there is any field with content.
-					$is_content_available = false;
-					foreach ( $data as $datum ) {
-						if ( ! empty( $datum ) ) {
-							$is_content_available = true;
-							break;
-						}
-					}
-
-					// when $is_content_available false means, field not required, and user didnt put any content on form.
-					if ( $is_content_available ) {
-						// check if on postdata these sub field is avail available.
-						if ( ! empty( $post_title ) ) {
-							$this->validation_message[ $id . '-post-title' ] = apply_filters(
-								// nr = not required.
-								'forminator_postdata_field_post_title_nr_validation_message',
-								$this->get_default_error_message( $field ),
-								$id
-							);
-						}
-						if ( ! empty( $post_content ) ) {
-							$this->validation_message[ $id . '-post-content' ] = apply_filters(
-								// nr = not required.
-								'forminator_postdata_field_post_content_nr_validation_message',
-								$this->get_default_error_message( $field ),
-								$id
-							);
-						}
-						if ( ! empty( $post_excerpt ) ) {
-							$this->validation_message[ $id . '-post-excerpt' ] = apply_filters(
-								// nr = not required.
-								'forminator_postdata_field_post_excerpt_nr_validation_message',
-								$this->get_default_error_message( $field ),
-								$id
-							);
-						}
+			if ( ! $title && ! $content && ! $excerpt ) {
+				// check if there is any field with content.
+				$is_content_available = false;
+				foreach ( $data as $datum ) {
+					if ( ! empty( $datum ) ) {
+						$is_content_available = true;
+						break;
 					}
 				}
-			}
-			$image_field_name = $id . '-post-image';
-			if ( ! empty( $post_image ) && isset( $_FILES[ $image_field_name ] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
-				if ( isset( $_FILES[ $image_field_name ]['name'] ) && ! empty( $_FILES[ $image_field_name ]['name'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
-					$file_name = sanitize_file_name( $_FILES[ $image_field_name ]['name'] ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
-					$valid     = wp_check_filetype( $file_name );
 
-					if ( false === $valid['ext'] || ! in_array( $valid['ext'], $this->image_extensions, true ) ) {
-						$this->validation_message[ $image_field_name ] = apply_filters(
-							'forminator_postdata_field_post_image_nr_validation_message',
-							esc_html__( 'Uploaded file\'s extension is not allowed.', 'forminator' ),
+				// when $is_content_available false means, field not required, and user didnt put any content on form.
+				if ( $is_content_available ) {
+					// check if on postdata these sub field is avail available.
+					if ( ! empty( $post_title ) ) {
+						$this->validation_message[ $id . '-post-title' ] = apply_filters(
+							// nr = not required.
+							'forminator_postdata_field_post_title_nr_validation_message',
+							$this->get_default_error_message( $field ),
+							$id
+						);
+					}
+					if ( ! empty( $post_content ) ) {
+						$this->validation_message[ $id . '-post-content' ] = apply_filters(
+							// nr = not required.
+							'forminator_postdata_field_post_content_nr_validation_message',
+							$this->get_default_error_message( $field ),
+							$id
+						);
+					}
+					if ( ! empty( $post_excerpt ) ) {
+						$this->validation_message[ $id . '-post-excerpt' ] = apply_filters(
+							// nr = not required.
+							'forminator_postdata_field_post_excerpt_nr_validation_message',
+							$this->get_default_error_message( $field ),
 							$id
 						);
 					}
 				}
 			}
 		}
+
+		if ( $invalid_image ) {
+			$this->validation_message[ $image_field_name ] = apply_filters(
+				'forminator_postdata_field_post_image_nr_validation_message',
+				esc_html__( 'Uploaded file\'s extension is not allowed.', 'forminator' ),
+				$id
+			);
+		}
+	}
+
+	/**
+	 * Whether the featured-image input has a file that fails the type check.
+	 *
+	 * @param string $field_name File input name.
+	 * @return bool
+	 */
+	private function is_invalid_post_image_upload( $field_name ) {
+		if ( empty( $_FILES[ $field_name ]['name'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
+			return false;
+		}
+
+		$file_name = sanitize_file_name( wp_unslash( $_FILES[ $field_name ]['name'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		$tmp_name  = isset( $_FILES[ $field_name ]['tmp_name'] ) ? wp_unslash( $_FILES[ $field_name ]['tmp_name'] ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+
+		return false === $this->get_allowed_post_image_filetype( $file_name, $tmp_name );
+	}
+
+	/**
+	 * Map an uploaded featured image to an allowed extension and MIME type.
+	 *
+	 * Uses wp_check_filetype_and_ext() so the file contents have to match the name.
+	 *
+	 * @param string $file_name Sanitized file name.
+	 * @param mixed  $tmp_name  Uploaded temporary path.
+	 * @return array|false Ext and type, or false when the upload is not an allowed image.
+	 */
+	private function get_allowed_post_image_filetype( $file_name, $tmp_name ) {
+		if ( ! is_string( $tmp_name ) || '' === $tmp_name || ! is_uploaded_file( $tmp_name ) ) {
+			return false;
+		}
+
+		if ( ! function_exists( 'wp_check_filetype_and_ext' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/file.php';
+		}
+
+		$filetype   = wp_check_filetype_and_ext( $tmp_name, $file_name );
+		$image_exts = apply_filters( 'forminator_field_postdata_image_file_types', $this->image_extensions );
+		$ext        = isset( $filetype['ext'] ) ? (string) $filetype['ext'] : '';
+		$type       = isset( $filetype['type'] ) ? (string) $filetype['type'] : '';
+
+		if ( '' === $ext || '' === $type || ! in_array( $ext, $image_exts, true ) ) {
+			return false;
+		}
+
+		return array(
+			'ext'  => $ext,
+			'type' => $type,
+		);
 	}
 
 	/**
@@ -855,7 +899,17 @@ class Forminator_Postdata extends Forminator_Field {
 			return true;
 		}
 		if ( ! empty( $_FILES[ $field_name ]['name'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
-			$file_name = sanitize_file_name( $_FILES[ $field_name ]['name'] ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+			$file_name = sanitize_file_name( wp_unslash( $_FILES[ $field_name ]['name'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			$tmp_name  = isset( $_FILES[ $field_name ]['tmp_name'] ) ? wp_unslash( $_FILES[ $field_name ]['tmp_name'] ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+
+			// Check contents before the file is written. This runs before field validation.
+			$wp_filetype = $this->get_allowed_post_image_filetype( $file_name, $tmp_name );
+			if ( false === $wp_filetype ) {
+				return array(
+					'attachment_id' => 0,
+					'uploaded_file' => 0,
+				);
+			}
 
 			if ( ! function_exists( 'wp_filesystem' ) ) {
 				require_once ABSPATH . 'wp-admin/includes/file.php';
@@ -870,7 +924,7 @@ class Forminator_Postdata extends Forminator_Field {
 				);
 			}
 
-			$file_data = $wp_filesystem->get_contents( $_FILES[ $field_name ]['tmp_name'] ); // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput
+			$file_data = $wp_filesystem->get_contents( $tmp_name );
 
 			$upload_dir       = wp_upload_dir(); // Set upload folder.
 			$unique_file_name = wp_unique_filename( $upload_dir['path'], $file_name );
@@ -882,32 +936,26 @@ class Forminator_Postdata extends Forminator_Field {
 				$file = $upload_dir['basedir'] . '/' . $filename;
 			}
 
-			// Check image file type.
-			$wp_filetype = wp_check_filetype( $filename, null );
-			$image_exts  = apply_filters( 'forminator_field_postdata_image_file_types', $this->image_extensions );
-			if ( in_array( (string) $wp_filetype['ext'], $image_exts, true ) ) {
+			// Create the file on the server.
+			if ( $wp_filesystem->put_contents( $file, $file_data, FS_CHMOD_FILE ) ) {
+				// Set attachment data.
+				$attachment = array(
+					'post_mime_type' => $wp_filetype['type'],
+					'post_title'     => sanitize_file_name( $filename ),
+					'post_content'   => '',
+					'post_status'    => 'inherit',
+				);
 
-				// Create the file on the server.
-				if ( $wp_filesystem->put_contents( $file, $file_data, FS_CHMOD_FILE ) ) {
-					// Set attachment data.
-					$attachment = array(
-						'post_mime_type' => $wp_filetype['type'],
-						'post_title'     => sanitize_file_name( $filename ),
-						'post_content'   => '',
-						'post_status'    => 'inherit',
+				// Create the attachment.
+				$attachment_id = wp_insert_attachment( $attachment, $file );
+				self::generate_upload_metadata( $attachment_id, $file );
+
+				$uploaded_file = wp_get_attachment_image_src( $attachment_id, 'large', false );
+				if ( $uploaded_file && is_array( $uploaded_file ) ) {
+					return array(
+						'attachment_id' => $attachment_id,
+						'uploaded_file' => $uploaded_file,
 					);
-
-					// Create the attachment.
-					$attachment_id = wp_insert_attachment( $attachment, $file );
-					self::generate_upload_metadata( $attachment_id, $file );
-
-					$uploaded_file = wp_get_attachment_image_src( $attachment_id, 'large', false );
-					if ( $uploaded_file && is_array( $uploaded_file ) ) {
-						return array(
-							'attachment_id' => $attachment_id,
-							'uploaded_file' => $uploaded_file,
-						);
-					}
 				}
 			}
 		}
@@ -955,6 +1003,7 @@ class Forminator_Postdata extends Forminator_Field {
 		$image       = isset( $data['post-image'] ) ? $data['post-image'] : '';
 		$post_meta   = isset( $data['post-custom'] ) ? $data['post-custom'] : '';
 
+		// Shortcodes are neutralized in sanitize().
 		$post = array(
 			'post_author'  => $post_author,
 			'post_content' => wp_kses_post( $content ),
@@ -1156,7 +1205,39 @@ class Forminator_Postdata extends Forminator_Field {
 			$data['post-content'] = $content;
 		}
 
+		$post_type = self::get_property( 'post_type', $field, 'post' );
+		foreach ( array( 'post-title', 'post-content', 'post-excerpt' ) as $key ) {
+			if ( isset( $data[ $key ] ) ) {
+				$data[ $key ] = $this->neutralize_shortcodes( $data[ $key ], $post_type );
+			}
+		}
+
 		return apply_filters( 'forminator_field_postdata_sanitize', $data, $field, $original_data );
+	}
+
+	/**
+	 * Encode shortcode brackets unless the submitter can edit posts of this type.
+	 * Safer than strip_shortcodes(), which turns [[tag]] into a live [tag].
+	 *
+	 * @since 1.58.4
+	 *
+	 * @param string $text      Submitted text.
+	 * @param string $post_type Post type the field creates.
+	 *
+	 * @return string
+	 */
+	private function neutralize_shortcodes( $text, $post_type ) {
+		if ( ! is_string( $text ) || false === strpbrk( $text, '[]' ) ) {
+			return $text;
+		}
+
+		$post_type_object = get_post_type_object( $post_type );
+		$edit_cap         = $post_type_object ? $post_type_object->cap->edit_posts : 'edit_posts';
+		if ( current_user_can( $edit_cap ) ) {
+			return $text;
+		}
+
+		return str_replace( array( '[', ']' ), array( '&#91;', '&#93;' ), $text );
 	}
 
 	/**

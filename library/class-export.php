@@ -81,17 +81,70 @@ class Forminator_Export {
 
 		// schedule for check and send export.
 		add_action( 'init', array( &$this, 'schedule_entries_exporter' ) );
+		add_action( 'forminator_after_export_schedule_save', array( &$this, 'reschedule_entries_exporter' ) );
 		add_action( 'forminator_send_export', array( &$this, 'maybe_send_export' ) );
+	}
+
+	/**
+	 * Re-evaluate the export schedule after settings change.
+	 *
+	 * @since 1.58.3
+	 */
+	public function reschedule_entries_exporter() {
+		delete_transient( 'forminator_send_export_cleared' );
+		delete_transient( 'forminator_send_export' );
+		$this->schedule_entries_exporter();
 	}
 
 	/**
 	 * Set up the schedule
 	 *
+	 * Only schedule when at least one export schedule is enabled. Otherwise unschedule
+	 * so unused sites do not run forminator_send_export every minute.
+	 *
 	 * @since 1.0
 	 * @since 1.27 Change from WP cron to Action Scheduler
+	 * @since 1.58.3 Only schedule when an export is enabled
 	 */
 	public function schedule_entries_exporter() {
-		forminator_set_recurring_action( 'forminator_send_export', MINUTE_IN_SECONDS );
+		// Skip work while the unscheduled state is cached.
+		if ( get_transient( 'forminator_send_export_cleared' ) ) {
+			return;
+		}
+
+		if ( $this->has_enabled_export_schedule() ) {
+			forminator_set_recurring_action( 'forminator_send_export', MINUTE_IN_SECONDS );
+			return;
+		}
+
+		forminator_unschedule_action( 'forminator_send_export' );
+	}
+
+	/**
+	 * Whether any scheduled export is enabled and has a recipient.
+	 *
+	 * @since 1.58.3
+	 *
+	 * @return bool
+	 */
+	public function has_enabled_export_schedule() {
+		$export_schedules = $this->get_entries_export_schedule();
+		if ( empty( $export_schedules ) ) {
+			return false;
+		}
+
+		foreach ( $export_schedules as $row ) {
+			if ( empty( $row['enabled'] ) || 'false' === $row['enabled'] ) {
+				continue;
+			}
+			if ( isset( $row['email'] ) && empty( $row['email'] ) ) {
+				continue;
+			}
+
+			return true;
+		}
+
+		return false;
 	}
 
 	/**
@@ -317,10 +370,12 @@ class Forminator_Export {
 	 * @param bool $force force send, ignore last_sent timestamp.
 	 */
 	public function maybe_send_export( $force = false ) {
-		$export_schedules = $this->get_entries_export_schedule();
-		if ( empty( $export_schedules ) ) {
+		if ( ! $this->has_enabled_export_schedule() ) {
+			forminator_unschedule_action( 'forminator_send_export' );
 			return;
 		}
+
+		$export_schedules = $this->get_entries_export_schedule();
 
 		$receipts = array();
 		$files    = array();

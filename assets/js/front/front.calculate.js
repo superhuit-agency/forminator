@@ -427,6 +427,12 @@
 				}
 			} else if ( this.field_has_inputMask( $element ) ) {
 				value = parseFloat( $element.inputmask('unmaskedvalue').replace(',','.') );
+			} else if ( this.field_is_hidden( $element ) ) {
+				const hasCalculation = $element.data( 'has-calculation' );
+				if ( hasCalculation !== undefined && hasCalculation === true ) {
+					var number = $element.val();
+					value = parseFloat( number.replace( ',', '.' ) );
+				}
 			} else if ( $element.length ) {
 				var number = $element.val();
 				value = parseFloat( number.replace(',','.') );
@@ -477,6 +483,14 @@
 
 		field_is_select: function ($element) {
 			return $element.is('select');
+		},
+
+		field_is_hidden( $element ) {
+			return (
+				$element.length &&
+				$element.attr( 'type' ) === 'hidden' &&
+				$element.attr( 'name' ).startsWith( 'hidden-' )
+			);
 		},
 
 		displayErrorMessage: function ($element, errorMessage) {

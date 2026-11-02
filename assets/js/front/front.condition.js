@@ -1297,6 +1297,12 @@
 			if( paymentElement.length > 0 && $stripe_element.length === 0 ) {
 				if( ! paymentElement.hasClass('forminator-hidden') ) {
 					this.$el.find('.forminator-button-submit').closest('.forminator-row').addClass('forminator-hidden');
+					paymentElement.find( '.forminator-save-draft-link' ).show();
+				}
+			}
+			if ( paymentElement.length > 0 && $stripe_element.length > 0 ) {
+				if ( ! paymentElement.hasClass('forminator-hidden') ) {
+					paymentElement.find( '.forminator-save-draft-link' ).hide();
 				}
 			}
 			if ( paymentPageElement.length > 0 ) {

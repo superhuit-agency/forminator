@@ -59,6 +59,7 @@ function forminator_pp_currency_list() {
  * @since  1.0
  * @since  1.15 Added new supported currencies and removed unsupported
  * @since  1.20 Added JOD
+ * @since  1.58.3 Added GHS
  *
  * @url    Stripe Currencies: https://stripe.com/docs/currencies
  * @url    Unicode hex table: https://gist.github.com/mroyce/a7e37ced540f45104de4cc03224937c7
@@ -114,6 +115,7 @@ function forminator_currency_list() {
 			'FJD' => array( 'Fiji, Dollars', '24' ),
 			'GMD' => array( 'Gambia, Dalasis', '44' ),
 			'GEL' => array( 'Georgia, Lari', '6c, 61, 72, 69' ),
+			'GHS' => array( 'Ghana, Cedis', '20b5' ),
 			'GIP' => array( 'Gibraltar, Pounds', 'a3' ),
 			'GTQ' => array( 'Guatemala, Quetzales', '51' ),
 			'GNF' => array( 'Guinea, Francs', '46, 47' ),

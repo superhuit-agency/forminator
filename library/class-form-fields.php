@@ -148,6 +148,7 @@ class Forminator_Fields {
 	public function cron_init() {
 		$this->schedule_delete_temp_files();
 		$this->cleanup_stripe_checkout_sessions();
+		$this->cleanup_paypal_orders();
 		// Check if the Stripe webhook is valid and update the option accordingly.
 		Forminator_Gateway_Stripe::has_valid_webhook();
 	}
@@ -164,6 +165,21 @@ class Forminator_Fields {
 
 		if ( is_object( $stripe_field ) && method_exists( $stripe_field, 'cleanup_checkout_sessions' ) ) {
 			$stripe_field->cleanup_checkout_sessions();
+		}
+	}
+
+	/**
+	 * Cleanup bindings of PayPal orders that were never submitted.
+	 *
+	 * @since 1.58.4
+	 *
+	 * @return void
+	 */
+	public function cleanup_paypal_orders() {
+		$paypal_field = Forminator_Core::get_field_object( 'paypal' );
+
+		if ( is_object( $paypal_field ) && method_exists( $paypal_field, 'cleanup_order_bindings' ) ) {
+			$paypal_field->cleanup_order_bindings();
 		}
 	}
 

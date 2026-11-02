@@ -94,7 +94,7 @@ class Forminator_Form_Entry_Model {
 	 * @return string
 	 */
 	private function get_entry_status( $source ) {
-		return ! empty( $source->status ) ? $source->status : ( $this->is_spam ? 'spam' : ( ! empty( $this->draft_id ) ? 'draft' : 'active' ) );
+		return ! empty( $source->status ) ? $source->status : ( ! empty( $this->draft_id ) ? 'draft' : 'active' );
 	}
 
 
@@ -810,7 +810,6 @@ class Forminator_Form_Entry_Model {
 		$offset   = 0;
 		$args     = array(
 			'form_id'  => $form_id,
-			'is_spam'  => 0,
 			'per_page' => $per_page,
 			'offset'   => $offset,
 		);
@@ -2382,10 +2381,10 @@ class Forminator_Form_Entry_Model {
 		$entry      = null;
 		$table_name = Forminator_Database_Tables::get_table_name( Forminator_Database_Tables::FORM_ENTRY );
 		if ( 'all' !== $entry_type ) {
-			$sql = "SELECT `entry_id` FROM {$table_name} WHERE `entry_type` = %s AND ( `status` = 'active' OR `status` = 'pending' ) ORDER BY `date_created` DESC";
+			$sql = "SELECT `entry_id` FROM {$table_name} WHERE `entry_type` = %s AND ( `status` = 'active' OR `status` = 'pending' ) ORDER BY `date_created` DESC LIMIT 1";
 			$sql = $wpdb->prepare( $sql, $entry_type ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 		} else {
-			$sql = "SELECT `entry_id` FROM {$table_name} WHERE `status` = 'active' OR `status` = 'pending' ORDER BY `date_created` DESC";
+			$sql = "SELECT `entry_id` FROM {$table_name} WHERE `status` = 'active' OR `status` = 'pending' ORDER BY `date_created` DESC LIMIT 1";
 		}
 		$entry_id = $wpdb->get_var( $sql ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery
 
@@ -2413,7 +2412,7 @@ class Forminator_Form_Entry_Model {
 			$order = 'DESC';
 		}
 		$table_name = Forminator_Database_Tables::get_table_name( Forminator_Database_Tables::FORM_ENTRY );
-		$sql        = "SELECT `entry_id` FROM {$table_name} WHERE `form_id` = %d AND ( `status` = 'active' OR `status` = 'pending' ) ORDER BY `date_created` {$order}";
+		$sql        = "SELECT `entry_id` FROM {$table_name} WHERE `form_id` = %d AND ( `status` = 'active' OR `status` = 'pending' ) ORDER BY `date_created` {$order} LIMIT 1";
 		$entry_id   = $wpdb->get_var( $wpdb->prepare( $sql, $form_id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery
 
 		if ( ! empty( $entry_id ) ) {
@@ -2569,8 +2568,10 @@ class Forminator_Form_Entry_Model {
 	 *
 	 * @return array
 	 * @since 1.5.3
+	 * @deprecated since 1.58.3
 	 */
 	public static function get_newer_entry_ids( $entry_type, $date_created ) {
+		_deprecated_function( __METHOD__, '1.58.3' );
 		global $wpdb;
 		$entry_table_name = Forminator_Database_Tables::get_table_name( Forminator_Database_Tables::FORM_ENTRY );
 		$sql              = "SELECT e.entry_id AS entry_id
@@ -2588,6 +2589,35 @@ class Forminator_Form_Entry_Model {
 		$entry_ids = $wpdb->get_col( $sql ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery
 
 		return $entry_ids;
+	}
+
+	/**
+	 * Get count of entries newer than $date_created
+	 *
+	 * @param string $entry_type Entry type.
+	 * @param string $date_created Created date.
+	 *
+	 * @return int
+	 * @since 1.58.3
+	 */
+	public static function count_newer_entries( $entry_type, $date_created ) {
+		global $wpdb;
+		$entry_table_name = Forminator_Database_Tables::get_table_name( Forminator_Database_Tables::FORM_ENTRY );
+		$sql              = "SELECT COUNT( e.entry_id ) AS total_entries
+							FROM {$entry_table_name} e
+							WHERE e.entry_type = %s
+							AND ( e.status = 'active' OR e.status = 'pending' )
+							AND e.date_created > %s";
+
+		$sql = $wpdb->prepare(
+			$sql, // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+			$entry_type,
+			esc_sql( $date_created )
+		);
+
+		$total_entries = intval( $wpdb->get_var( $sql ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery
+
+		return $total_entries;
 	}
 
 	/**
@@ -2620,8 +2650,10 @@ class Forminator_Form_Entry_Model {
 	 *
 	 * @return array
 	 * @since 1.5.3
+	 * @deprecated since 1.58.3
 	 */
 	public static function get_newer_entry_ids_of_form_id( $form_id, $date_created ) {
+		_deprecated_function( __METHOD__, '1.58.3' );
 		global $wpdb;
 		$entry_table_name = Forminator_Database_Tables::get_table_name( Forminator_Database_Tables::FORM_ENTRY );
 		$sql              = "SELECT e.entry_id AS entry_id
@@ -2639,6 +2671,35 @@ class Forminator_Form_Entry_Model {
 		$entry_ids = $wpdb->get_col( $sql ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery
 
 		return $entry_ids;
+	}
+
+	/**
+	 * Count entries newer than $date_created of form_id
+	 *
+	 * @param int    $form_id Form Id.
+	 * @param string $date_created Created date.
+	 *
+	 * @return int
+	 * @since 1.58.3
+	 */
+	public static function count_newer_entries_by_form_id( $form_id, $date_created ) {
+		global $wpdb;
+		$entry_table_name = Forminator_Database_Tables::get_table_name( Forminator_Database_Tables::FORM_ENTRY );
+		$sql              = "SELECT COUNT( e.entry_id ) AS total_entries
+							FROM {$entry_table_name} e
+							WHERE e.form_id = %d
+							AND ( e.status = 'active' OR e.status = 'pending' )
+							AND e.date_created > %s";
+
+		$sql = $wpdb->prepare(
+			$sql, // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+			$form_id,
+			esc_sql( $date_created )
+		);
+
+		$total_entries = intval( $wpdb->get_var( $sql ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery
+
+		return $total_entries;
 	}
 
 	/**
@@ -2920,8 +2981,9 @@ class Forminator_Form_Entry_Model {
 			$where .= $wpdb->prepare( ' AND entries.form_id = %d', esc_sql( $args['form_id'] ) );
 		}
 
-		if ( isset( $args['is_spam'] ) ) {
-			$where .= $wpdb->prepare( ' AND entries.is_spam = %s', esc_sql( $args['is_spam'] ) );
+		// Exclude spam entries by default, unless status or entry_status is explicitly set.
+		if ( empty( $args['status'] ) && ( empty( $args['entry_status'] ) || 'all' === $args['entry_status'] ) ) {
+			$where .= $wpdb->prepare( ' AND entries.status != %s', esc_sql( 'spam' ) );
 		}
 
 		// Prefer status filter when present. Supports string or array values.
@@ -2997,6 +3059,10 @@ class Forminator_Form_Entry_Model {
 
 		if ( isset( $args['entry_status'] ) && 'failed' === $args['entry_status'] ) {
 			$where .= " AND entries.status = 'failed'";
+		}
+
+		if ( isset( $args['entry_status'] ) && 'spam' === $args['entry_status'] ) {
+			$where .= " AND entries.status = 'spam'";
 		}
 
 		/**

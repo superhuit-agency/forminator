@@ -66,6 +66,13 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 	public static $registration = null;
 
 	/**
+	 * Login waiting for the payment to be confirmed
+	 *
+	 * @var Forminator_CForm_Front_User_Login|null
+	 */
+	private static $deferred_login = null;
+
+	/**
 	 * Plugin instance
 	 *
 	 * @var null
@@ -157,16 +164,7 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 	 * @return array
 	 */
 	private static function prepare_pp_price( $amount ) {
-		$integer_currencies = array(
-			'HUF',
-			'JPY',
-			'TWD',
-		);
-		if ( isset( $amount['currency_code'] ) && in_array( $amount['currency_code'], $integer_currencies, true ) ) {
-			$amount['value'] = number_format( (float) $amount['value'], 0, '.', '' );
-		} else {
-			$amount['value'] = number_format( (float) $amount['value'], 2, '.', '' );
-		}
+		$amount['value'] = Forminator_PayPal::format_amount( $amount['value'], $amount['currency_code'] ?? '' );
 
 		return $amount;
 	}
@@ -267,7 +265,12 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 		$paypal = new Forminator_PayPal_Express();
 		$order  = $paypal->create_order( $request, $mode );
 
-		if ( is_wp_error( $order ) || empty( $order->id ) ) {
+		// Bind the order to this form, browser and total.
+		if (
+			is_wp_error( $order )
+			|| empty( $order->id )
+			|| ! Forminator_PayPal::store_order_binding( $order->id, $form_id, $mode, $purchase_unit['amount']['value'], $purchase_unit['amount']['currency_code'] )
+		) {
 			wp_send_json_error( esc_html__( 'Cannot create a new order on PayPal. If the error persists, please contact us for further assistance.', 'forminator' ) );
 		}
 
@@ -562,6 +565,16 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 		self::$prepared_data['paymentid'] = $payment_id;
 		$session                          = $stripe_field->get_checkout_session( self::$info['stripe_field'] );
 
+		// Without local pending data, the owner bound to the session on Stripe decides.
+		if ( ! is_array( $session_data ) && ! is_wp_error( $session ) && ! Forminator_Stripe::is_checkout_session_owner( $session ) ) {
+			wp_send_json_error(
+				array(
+					'message'     => self::get_foreign_payment_message(),
+					'recoverable' => false,
+				)
+			);
+		}
+
 		if ( ! Forminator_Stripe::has_pending_checkout_session( $payment_id ) && Forminator_Stripe::can_restore_pending_checkout_session( $payment_id ) ) {
 			$session_form_id = is_object( $session ) && ! empty( $session->client_reference_id ) ? (string) $session->client_reference_id : '';
 			$payment_status  = is_object( $session ) && ! empty( $session->payment_status ) ? (string) $session->payment_status : '';
@@ -628,21 +641,55 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 
 		$response = $this->handle_form( false, true );
 		if ( is_array( $response ) && isset( $response['success'] ) && $response['success'] ) {
-			// If the form is a login form, return the full response to the front end to handle the login process.
-			if ( isset( self::$module_settings['form-type'] ) && 'login' === self::$module_settings['form-type'] ) {
-				wp_send_json_success(
-					$response
-				);
-			} else {
-				wp_send_json_success(
-					array(
-						'message'  => $response['message'],
-						'entry_id' => $response['entry_id'],
-					)
-				);
-			}
+			wp_send_json_success( self::get_pending_checkout_validate_success_response( $response ) );
 		}
 		wp_send_json_error( $response );
+	}
+
+	/**
+	 * Build the pending Checkout validate success payload.
+	 *
+	 * Pending validate runs before Checkout finishes, so after-payment Behavior
+	 * (thank-you / redirect) must not be returned. Login forms still need the
+	 * Defender 2FA fields from the original response.
+	 *
+	 * @param array $response Full handle_form success response.
+	 * @return array
+	 */
+	private static function get_pending_checkout_validate_success_response( $response ) {
+		if ( isset( self::$module_settings['form-type'] ) && 'login' === self::$module_settings['form-type'] ) {
+			return self::get_pending_checkout_login_validate_response( $response );
+		}
+
+		return array(
+			'entry_id' => isset( $response['entry_id'] ) ? $response['entry_id'] : 0,
+		);
+	}
+
+	/**
+	 * Keep Defender 2FA fields on pending Checkout validate for login forms.
+	 *
+	 * Starts from the existing login response and only removes after-payment
+	 * Behavior keys. Invalid 2FA still needs its error message.
+	 *
+	 * @param array $response Full handle_form success response.
+	 * @return array
+	 */
+	private static function get_pending_checkout_login_validate_response( $response ) {
+		unset(
+			$response['url'],
+			$response['behav'],
+			$response['redirect'],
+			$response['newtab'],
+			$response['fadeout'],
+			$response['fadeout_time']
+		);
+
+		if ( empty( $response['authentication'] ) || 'invalid' !== $response['authentication'] ) {
+			unset( $response['message'] );
+		}
+
+		return $response;
 	}
 
 	/**
@@ -873,7 +920,14 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 		}
 
 		$forminator_user_login = new Forminator_CForm_Front_User_Login();
-		$login_user            = $forminator_user_login->process_login( self::$module_object, $entry, self::$info['field_data_array'] );
+
+		// PayPal is captured later, so only check the credentials now.
+		if ( self::$is_paypal_payment ) {
+			$forminator_user_login->defer_signon();
+			self::$deferred_login = $forminator_user_login;
+		}
+
+		$login_user = $forminator_user_login->process_login( self::$module_object, $entry, self::$info['field_data_array'] );
 		if ( is_wp_error( $login_user['user'] ) ) {
 			$messages = $login_user['user']->get_error_messages();
 			throw new Exception(
@@ -916,6 +970,29 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 
 		self::remove_password();
 		return true;
+	}
+
+	/**
+	 * Sign on the user whose login waited for the payment.
+	 *
+	 * The payment is already taken, so a failure is only logged.
+	 *
+	 * @since 1.58.4
+	 *
+	 * @return void
+	 */
+	private static function complete_deferred_login() {
+		if ( ! self::$deferred_login ) {
+			return;
+		}
+
+		$login                = self::$deferred_login;
+		self::$deferred_login = null;
+
+		$user = $login->complete_deferred_signon();
+		if ( is_wp_error( $user ) ) {
+			forminator_maybe_log( __METHOD__, $user->get_error_messages() );
+		}
 	}
 
 	/**
@@ -1510,20 +1587,11 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 			}
 			throw new Exception( esc_html( $stripe_entry_data['value']->get_error_message() ) );
 		}
+		if ( ! empty( $stripe_entry_data['value']['error'] ) ) {
+			throw new Exception( esc_html( $stripe_entry_data['value']['error'] ) );
+		}
 
-		/**
-		 * Fires after charge stripe
-		 *
-		 * @since 1.7
-		 *
-		 * @param Forminator_Form_Model $module_object
-		 * @param array $field field properties.
-		 * @param array $stripe_entry_data
-		 * @param array $submitted_data
-		 * @param array $field_data_array
-		 */
-		do_action( 'forminator_custom_form_after_stripe_charge', self::$module_object, $field, $stripe_entry_data, self::$prepared_data, self::$info['field_data_array'] );
-
+		// Not paid yet, the hook fires once the Checkout Session is paid.
 		if ( $field_object->is_checkout_session( $field ) ) {
 			return $stripe_entry_data;
 		}
@@ -1570,6 +1638,20 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 		);
 		$stripe_entry_data['value'] = array_merge( $stripe_entry_data['value'], $result );
 
+		/**
+		 * Fires after the Stripe payment is confirmed
+		 *
+		 * @since 1.7
+		 * @since 1.58.4 Fires only after the payment succeeded.
+		 *
+		 * @param Forminator_Form_Model $module_object
+		 * @param array $field field properties.
+		 * @param array $stripe_entry_data
+		 * @param array $submitted_data
+		 * @param array $field_data_array
+		 */
+		do_action( 'forminator_custom_form_after_stripe_charge', self::$module_object, $field, $stripe_entry_data, self::$prepared_data, self::$info['field_data_array'] );
+
 		return $stripe_entry_data;
 	}
 
@@ -1611,6 +1693,7 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 	 *
 	 * @param object $entry Entry.
 	 * @return array|void
+	 * @throws Exception When the configured Stripe mode is unavailable.
 	 */
 	private static function handle_stripe( $entry ) {
 		if ( self::$is_draft || self::$is_spam ) {
@@ -1622,8 +1705,12 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 		}
 
 		$stripe_mode = isset( self::$info['stripe_field']['mode'] ) ? self::$info['stripe_field']['mode'] : 'test';
+		// Fail closed: unavailable Stripe must not skip payment and continue as a free submit
+		// (e.g. registration with a configured role).
 		if ( ! forminator_is_stripe_mode_ready( $stripe_mode ) ) {
-			return;
+			throw new Exception(
+				esc_html__( 'Payment is currently unavailable. Please try again later.', 'forminator' )
+			);
 		}
 
 		$stripe_field_data = self::stripe_field_to_entry_data_array( $entry );
@@ -1695,6 +1782,14 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 			return;
 		}
 
+		$paypal_mode = isset( self::$info['paypal_field']['mode'] ) ? self::$info['paypal_field']['mode'] : 'sandbox';
+		// Fail closed: unavailable PayPal must not skip payment and continue as a free submit.
+		if ( ! forminator_is_paypal_mode_ready( $paypal_mode ) ) {
+			throw new Exception(
+				esc_html__( 'Payment is currently unavailable. Please try again later.', 'forminator' )
+			);
+		}
+
 		if ( self::$module_object->is_payment_require_ssl() && ! is_ssl() ) {
 			throw new Exception(
 				esc_html(
@@ -1730,10 +1825,12 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 	 */
 	private function post_submission_process( $entry ) {
 		if ( ! self::$is_draft && ! self::$is_abandoned ) {
-			$addon_data = array();
-			// Process integrated addons and attach their data to the entry.
-			$addon_data = self::attach_addons_add_entry_fields( $addon_data, $entry );
-			$entry->set_fields( $addon_data );
+			if ( $this->can_trigger_integrations( $entry ) ) {
+				$addon_data = array();
+				// Process integrated addons and attach their data to the entry.
+				$addon_data = self::attach_addons_add_entry_fields( $addon_data, $entry );
+				$entry->set_fields( $addon_data );
+			}
 		}
 		self::maybe_create_post( $entry );
 		self::attach_addons_after_entry_saved( $entry );
@@ -2016,6 +2113,20 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 			if ( ! empty( $stripe_data ) ) {
 				// Update stripe data in entry meta.
 				$this->update_stripe_meta( $entry, $stripe_data );
+
+				$trigger_integration = apply_filters( 'forminator_trigger_integrations_on_payment_in_process', false, $entry );
+				if ( true === $trigger_integration ) {
+					$addon_data = array();
+					// Process integrated addons and attach their data to the entry.
+					$addon_data = self::attach_addons_add_entry_fields( $addon_data, $entry );
+					// Add a flag to indicate that the entry has triggered integrations, so they won't be processed again on successful payment.
+					$addon_data[] = array(
+						'name'  => '_triggered_integrations',
+						'value' => 1,
+					);
+					$entry->set_fields( $addon_data );
+				}
+
 				return true;
 			}
 		} catch ( Exception $e ) {
@@ -2048,7 +2159,9 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 					if ( self::$is_leads ) {
 
 						// Update the entry status to active.
-						$entry->update_status( 'active' );
+						if ( $entry->update_status( 'active' ) ) {
+							self::fire_checkout_after_stripe_charge( $stripe_data );
+						}
 
 						// Process integrated add-ons and emails for quizzes.
 						$form_action = new Forminator_Quiz_Front_Action();
@@ -2094,7 +2207,9 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 					}
 
 					// Update the entry status to active.
-					$entry->update_status( 'active' );
+					if ( $entry->update_status( 'active' ) ) {
+						self::fire_checkout_after_stripe_charge( $stripe_data );
+					}
 
 					// Update hidden fields with submission ID if they exist in the prepared data.
 					$this->maybe_update_hidden_fields( $entry );
@@ -2140,6 +2255,35 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 			forminator_maybe_log( __METHOD__, $e->getMessage(), $entry );
 		}
 		return false;
+	}
+
+	/**
+	 * Fire the Stripe after charge hook for a paid Checkout Session.
+	 *
+	 * Fires once, when the entry turns active. Subscriptions are left to the add-on.
+	 *
+	 * @since 1.58.4
+	 *
+	 * @param array $stripe_data Stripe entry meta with the final transaction ID.
+	 * @return void
+	 */
+	private static function fire_checkout_after_stripe_charge( $stripe_data ) {
+		if (
+			! is_array( $stripe_data )
+			|| 'COMPLETED' !== ( $stripe_data['status'] ?? '' )
+			|| ! empty( $stripe_data['subscription_id'] )
+		) {
+			return;
+		}
+
+		$field             = self::$info['stripe_field'] ?? array();
+		$stripe_entry_data = array(
+			'name'  => $field['element_id'] ?? '',
+			'value' => $stripe_data,
+		);
+
+		/** This action is documented in handle_stripe_single(). */
+		do_action( 'forminator_custom_form_after_stripe_charge', self::$module_object, $field, $stripe_entry_data, self::$prepared_data, self::$info['field_data_array'] ?? array() );
 	}
 
 	/**
@@ -2422,6 +2566,11 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 						if ( ! Forminator_Stripe::is_payment_owner( $payment_response['owner'] ?? '' ) ) {
 							return self::get_foreign_payment_response();
 						}
+						// Re-check Stripe so a stale unpaid transient cannot disclose gated content.
+						if ( ! $this->pending_checkout_session_allows_after_payment_response( $session_id ) ) {
+							delete_transient( $transient_response_key );
+							return self::get_incomplete_checkout_payment_response();
+						}
 						// Delete the transient after retrieving the response, as it is no longer needed.
 						delete_transient( $transient_response_key );
 						return $payment_response;
@@ -2461,8 +2610,19 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 
 				// Only process entries of the current form.
 				if ( $current_form_id === (int) $form_id ) {
-					// Apply stored payment description once the PaymentIntent exists (after confirm).
 					$stripe_settings = $this->get_stripe_field_settings();
+
+					// Owner cookie is not proof of payment. Active entries were already confirmed by
+					// webhook/cron; failed entries keep their error path. Pending ones need a
+					// completed Checkout Session before gated thank-you/redirect content.
+					if (
+						! in_array( $entry->status, array( 'active', 'failed' ), true )
+						&& ! $this->pending_checkout_session_allows_after_payment_response( $session_id, $stripe_settings )
+					) {
+						return self::get_incomplete_checkout_payment_response();
+					}
+
+					// Apply stored payment description once the PaymentIntent exists (after confirm).
 					if ( ! empty( $stripe_settings ) ) {
 						$stripe_field_obj = Forminator_Core::get_field_object( 'stripe' );
 						if ( $stripe_field_obj instanceof Forminator_Stripe ) {
@@ -2533,6 +2693,50 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 			}
 		}
 		return $response;
+	}
+
+	/**
+	 * Whether a pending Checkout Session may receive the after-payment response.
+	 *
+	 * @param string     $session_id Checkout Session ID.
+	 * @param array|null $stripe_settings Stripe field settings.
+	 * @return bool
+	 */
+	private function pending_checkout_session_allows_after_payment_response( $session_id, $stripe_settings = null ) {
+		if ( empty( $session_id ) ) {
+			return false;
+		}
+
+		if ( empty( $stripe_settings ) ) {
+			$stripe_settings = $this->get_stripe_field_settings();
+		}
+
+		$stripe_field_obj = Forminator_Core::get_field_object( 'stripe' );
+		if ( ! $stripe_field_obj instanceof Forminator_Stripe || empty( $stripe_settings ) ) {
+			return false;
+		}
+
+		$session = $stripe_field_obj->get_checkout_session_by_id( $session_id, $stripe_settings );
+
+		return Forminator_Stripe::is_checkout_session_completed( $session );
+	}
+
+	/**
+	 * Response when Checkout has not finished yet.
+	 *
+	 * Keeps the pending session so the owner can complete payment and retry.
+	 *
+	 * @return array
+	 */
+	private static function get_incomplete_checkout_payment_response() {
+		self::$submit_errors = array();
+
+		return array(
+			'return' => true,
+			'data'   => self::return_error(
+				esc_html__( 'Payment is not complete. Please finish payment and try again.', 'forminator' )
+			),
+		);
 	}
 
 	/**
@@ -2625,8 +2829,8 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 				}
 
 				self::maybe_login( $entry );
-				if ( $is_pending && ! empty( self::$response_attrs['authentication'] ) ) {
-					// To handle Defender 2FA, we should not create a pending entry if the user is not authenticated yet.
+				if ( ( $is_pending || self::$is_paypal_payment ) && ! empty( self::$response_attrs['authentication'] ) ) {
+					// To handle Defender 2FA, no pending entry or PayPal payment until the user is authenticated.
 					if ( in_array( self::$response_attrs['authentication'], array( 'invalid', 'show' ), true ) ) {
 						return self::return_success();
 					}
@@ -2658,6 +2862,8 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 			}
 			self::handle_paypal( $entry );
 			unset( $delete_submission );
+
+			self::complete_deferred_login();
 
 			self::process_uploads( 'transfer' );
 
@@ -2955,7 +3161,9 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 			// Set the entry ID in the prepared data so that the form fields can be correctly processed for addon.
 			self::$prepared_data['entry_id'] = $entry->entry_id;
 			// If the entry is pending, we need to re-prepare the fields info to handle post submission process.
-			$fields = self::get_fields();
+			// Reset it first, so fields already prepared from the entry are not processed twice.
+			self::$info['field_data_array'] = array();
+			$fields                         = self::get_fields();
 			foreach ( $fields as $field_index => $field ) {
 				self::set_field_data_array( $field_index, $field );
 			}
@@ -3677,14 +3885,47 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 			return;
 		}
 		forminator_maybe_log( __METHOD__, $paypal_entry_data['value'] );
+		if ( is_wp_error( $paypal_entry_data['value'] ) ) {
+			throw new Exception( esc_html( $paypal_entry_data['value']->get_error_message() ) );
+		}
 		if ( ! empty( $paypal_entry_data['value']['error'] ) ) {
 			throw new Exception( esc_html( $paypal_entry_data['value']['error'] ) );
 		}
 
+		// Never capture an order that failed validation.
+		if ( ! empty( $entry_data['error'] ) || empty( $entry_data['transaction_id'] ) ) {
+			throw new Exception( esc_html( ! empty( $entry_data['error'] ) ? $entry_data['error'] : __( 'Payment failed, please try again!', 'forminator' ) ) );
+		}
+
+		$paypal  = new Forminator_PayPal_Express();
+		$mode    = isset( $field['mode'] ) ? $field['mode'] : 'sandbox';
+		$capture = $paypal->capture_order( $entry_data['transaction_id'], $mode );
+		$payment = $field_object->get_completed_capture( $capture, $field );
+
+		if ( is_wp_error( $payment ) ) {
+			forminator_maybe_log(
+				__METHOD__,
+				array(
+					'transaction_id' => $entry_data['transaction_id'],
+					'mode'           => $mode,
+					'error'          => $payment->get_error_code(),
+					'order_status'   => isset( $capture->status ) ? $capture->status : '',
+					'capture_result' => $capture,
+				)
+			);
+
+			throw new Exception( esc_html( $payment->get_error_message() ) );
+		}
+
+		$paypal_entry_data['value']['status']           = 'COMPLETED';
+		$paypal_entry_data['value']['transaction_id']   = $payment->id;
+		$paypal_entry_data['value']['transaction_link'] = $field_object::get_transanction_link( $mode, $payment->id );
+
 		/**
-		 * Fires after charge paypal
+		 * Fires after the PayPal payment is captured and confirmed
 		 *
 		 * @since 1.7
+		 * @since 1.58.4 Fires only after a completed capture.
 		 *
 		 * @param Forminator_Form_Model $module_object
 		 * @param array $field field properties.
@@ -3693,32 +3934,6 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 		 * @param array $field_data_array
 		 */
 		do_action( 'forminator_custom_form_after_paypal_charge', self::$module_object, $field, $paypal_entry_data, self::$prepared_data, self::$info['field_data_array'] );
-
-		$paypal  = new Forminator_PayPal_Express();
-		$mode    = isset( $field['mode'] ) ? $field['mode'] : 'sandbox';
-		$capture = $paypal->capture_order( $entry_data['transaction_id'], $mode );
-
-		if ( ! isset( $capture->status ) || 'COMPLETED' !== $capture->status ) {
-			forminator_maybe_log(
-				__METHOD__,
-				array(
-					'transaction_id' => $entry_data['transaction_id'],
-					'mode'           => $mode,
-					'order_status'   => isset( $capture->status ) ? $capture->status : '',
-					'capture_result' => $capture,
-				)
-			);
-
-			throw new Exception( esc_html__( 'Payment failed, please try again!', 'forminator' ) );
-		}
-		$paypal_entry_data['value']['status'] = 'COMPLETED';
-
-		if ( isset( $capture->purchase_units[0]->payments->captures[0]->id ) ) {
-			$transaction_id = $capture->purchase_units[0]->payments->captures[0]->id;
-
-			$paypal_entry_data['value']['transaction_id']   = $transaction_id;
-			$paypal_entry_data['value']['transaction_link'] = $field_object::get_transanction_link( $mode, $transaction_id );
-		}
 
 		self::$info['field_data_array'][] = $paypal_entry_data;
 	}
@@ -4080,7 +4295,8 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 				// skip validation, hidden values = 0 or 1.
 				$value = self::replace_to( $field_id, $converted_formula );
 			} else {
-				$value = $visible_fields[ $field_id ];
+				// Cast the value to float to ensure that it is a numeric value. This prevents issues with non-numeric values being injected into the formula.
+				$value = floatval( $visible_fields[ $field_id ] );
 			}
 
 			// Replace only the first occurence.

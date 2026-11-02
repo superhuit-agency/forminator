@@ -165,6 +165,22 @@ class Forminator_Form_Reports_Model {
 	}
 
 	/**
+	 * Whether any report is currently active.
+	 *
+	 * @since 1.58.3
+	 *
+	 * @return bool
+	 */
+	public function has_active_reports() {
+		global $wpdb;
+		$table_name = $this->get_table_name();
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$count = $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(1) FROM ' . esc_sql( $table_name ) . ' WHERE status = %s', 'active' ) );
+
+		return (int) $count > 0;
+	}
+
+	/**
 	 * Load reports data by id
 	 *
 	 * @param int $id Id.
