@@ -20,6 +20,7 @@ class Forminator_Googlesheet_Form_Hooks extends Forminator_Integration_Form_Hook
 	 * @return array
 	 */
 	protected function custom_entry_fields( $submitted_data, $current_entry_fields ): array {
+		$entry                = func_get_args()[2];
 		$addon_setting_values = $this->settings_instance->get_settings_values();
 		$data                 = array();
 
@@ -29,7 +30,7 @@ class Forminator_Googlesheet_Form_Hooks extends Forminator_Integration_Form_Hook
 				// exec only on completed connection.
 				$data[] = array(
 					'name'  => 'status-' . $key,
-					'value' => $this->get_status_on_create_row( $key, $submitted_data, $addon_setting_value, $current_entry_fields ),
+					'value' => $this->get_status_on_create_row( $key, $submitted_data, $addon_setting_value, $current_entry_fields, $entry ),
 				);
 			}
 		}
@@ -42,15 +43,16 @@ class Forminator_Googlesheet_Form_Hooks extends Forminator_Integration_Form_Hook
 	 *
 	 * @since 1.0 Google Sheets Integration
 	 *
-	 * @param string $connection_id Connection Id.
-	 * @param array  $submitted_data Submitted data.
-	 * @param array  $connection_settings Connection settings.
-	 * @param array  $form_entry_fields Form entry fields.
+	 * @param string                           $connection_id Connection Id.
+	 * @param array                            $submitted_data Submitted data.
+	 * @param array                            $connection_settings Connection settings.
+	 * @param array                            $form_entry_fields Form entry fields.
+	 * @param Forminator_Form_Entry_Model|null $entry Entry.
 	 *
 	 * @return array `is_sent` true means its success send data to Google Sheets, false otherwise.
 	 * @throws Forminator_Integration_Exception Throws Integration Exception.
 	 */
-	public function get_status_on_create_row( $connection_id, $submitted_data, $connection_settings, $form_entry_fields ) {
+	public function get_status_on_create_row( $connection_id, $submitted_data, $connection_settings, $form_entry_fields, $entry ) {
 		// initialize as null.
 		$api = null;
 
@@ -168,6 +170,12 @@ class Forminator_Googlesheet_Form_Hooks extends Forminator_Integration_Form_Hook
 					// Use raw prepared data since $submitted_data has already been stringified.
 					if ( in_array( $field_type, array( 'select', 'radio', 'checkbox' ), true ) ) {
 						$form_value = forminator_replace_field_data( $module, $element_id, $raw_data, false, $print_value );
+						if ( false !== strpos( $form_value, 'custom_option: ' ) ) {
+							$custom_value = $submitted_data[ 'custom-' . $element_id ] ?? '';
+							if ( '' !== $custom_value ) {
+								$form_value = str_replace( 'custom_option: ', '', $form_value );
+							}
+						}
 					} else {
 						$form_value = Forminator_Form_Entry_Model::meta_value_to_string( $field_type, $meta_value, false, PHP_INT_MAX, $field );
 					}
@@ -175,6 +183,11 @@ class Forminator_Googlesheet_Form_Hooks extends Forminator_Integration_Form_Hook
 					// Replace custom_option with actual custom value.
 					if ( false !== strpos( $form_value, 'custom_option' ) && isset( $submitted_data[ 'custom-' . $element_id ] ) ) {
 						$form_value = str_replace( 'custom_option', $submitted_data[ 'custom-' . $element_id ], $form_value );
+					}
+
+					// Replace submission_id with the submission ID.
+					if ( 'hidden' === $field_type && 'submission_id' === $form_value ) {
+						$form_value = forminator_get_submission_id( $module, $entry );
 					}
 				}
 

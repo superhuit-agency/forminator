@@ -229,6 +229,11 @@ abstract class Forminator_Admin_Module {
 			$settings['msg_count'] = wp_kses_post( $original_settings['msg_count'] );
 		}
 
+		// Keep percentage strings in the PDF password.
+		if ( isset( $original_settings['pdf_password'] ) ) {
+			$settings['pdf_password'] = trim( wp_strip_all_tags( $original_settings['pdf_password'] ) );
+		}
+
 		$settings = apply_filters( 'forminator_builder_data_settings_before_saving', $settings, $original_settings );
 
 		return $settings;

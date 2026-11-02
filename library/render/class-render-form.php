@@ -185,15 +185,24 @@ abstract class Forminator_Render_Form {
 	 *
 	 * @since 1.0
 	 *
-	 * @param array $atts Attributes.
+	 * @param array|string $atts    Attributes.
+	 * @param string|null  $content Enclosed content.
+	 * @param string       $tag     Shortcode tag, empty for direct calls.
 	 *
 	 * @return string
 	 */
-	public function render_shortcode( $atts = array() ) {
+	public function render_shortcode( $atts = array(), $content = null, $tag = '' ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundBeforeLastUsed -- Shortcode callback signature.
 		// Divi 5 VB strips scripts from harvested shortcodes, so a rendered
 		// form would be inert. Show a notice instead.
 		if ( forminator_is_divi5_vb_shortcode_request() ) {
 			return self::divi5_vb_preview_notice( static::$module_slug );
+		}
+
+		$atts = is_array( $atts ) ? $atts : array();
+
+		// Only form managers may set preview attributes via shortcode text.
+		if ( '' !== $tag && ! current_user_can( forminator_get_permission( 'forminator-cform' ) ) ) {
+			unset( $atts['is_preview'], $atts['preview_data'], $atts['is_block_editor'] );
 		}
 
 		// use already created instance if already available.

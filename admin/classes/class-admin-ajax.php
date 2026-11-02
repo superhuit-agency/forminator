@@ -170,6 +170,79 @@ class Forminator_Admin_AJAX {
 		}
 
 		add_action( 'wp_ajax_forminator_deactivation_survey', array( $this, 'submit_deactivation_survey' ) );
+
+		add_action( 'wp_ajax_forminator_load_dashboard_summary_widget', array( $this, 'load_dashboard_summary_widget' ) );
+		add_action( 'wp_ajax_forminator_load_dashboard_recent_form_widget', array( $this, 'load_dashboard_recent_form_widget' ) );
+		add_action( 'wp_ajax_forminator_load_dashboard_recent_poll_widget', array( $this, 'load_dashboard_recent_poll_widget' ) );
+		add_action( 'wp_ajax_forminator_load_dashboard_recent_quiz_widget', array( $this, 'load_dashboard_recent_quiz_widget' ) );
+	}
+
+	/**
+	 * Load dashboard summary widget
+	 *
+	 * @since 1.58.3
+	 */
+	public function load_dashboard_summary_widget() {
+		forminator_validate_ajax( 'forminator_load_dashboard_summary_widget', false, 'forminator' );
+		$content = forminator_template( 'dashboard/widgets/widget-summary' );
+		wp_send_json_success( array( 'html' => $content ) );
+	}
+
+	/**
+	 * Load dashboard recent form widget
+	 *
+	 * @since 1.58.3
+	 */
+	public function load_dashboard_recent_form_widget() {
+		forminator_validate_ajax( 'forminator_load_dashboard_recent_form_widget', false, 'forminator' );
+		$args                       = array();
+		$args['module_slug']        = 'form';
+		$args['preview_title']      = esc_html__( 'Preview', 'forminator' );
+		$args['delete_title']       = esc_html__( 'Delete Form', 'forminator' );
+		$args['delete_description'] = esc_html__( 'Are you sure you wish to permanently delete this form?', 'forminator' );
+		$args['view_all']           = esc_html__( 'View all forms', 'forminator' );
+		$args['total']              = forminator_cforms_total();
+
+		$content = forminator_template( 'common/dashboard/widget-recent-modules', $args );
+		wp_send_json_success( array( 'html' => $content ) );
+	}
+
+	/**
+	 * Load dashboard recent poll widget
+	 *
+	 * @since 1.58.3
+	 */
+	public function load_dashboard_recent_poll_widget() {
+		forminator_validate_ajax( 'forminator_load_dashboard_recent_poll_widget', false, 'forminator' );
+		$args                       = array();
+		$args['module_slug']        = 'poll';
+		$args['preview_title']      = esc_html__( 'Polls', 'forminator' );
+		$args['delete_title']       = esc_html__( 'Delete Poll', 'forminator' );
+		$args['delete_description'] = esc_html__( 'Are you sure you wish to permanently delete this poll?', 'forminator' );
+		$args['view_all']           = esc_html__( 'View all polls', 'forminator' );
+		$args['total']              = forminator_polls_total();
+
+		$content = forminator_template( 'common/dashboard/widget-recent-modules', $args );
+		wp_send_json_success( array( 'html' => $content ) );
+	}
+
+	/**
+	 * Load dashboard recent quiz widget
+	 *
+	 * @since 1.58.3
+	 */
+	public function load_dashboard_recent_quiz_widget() {
+		forminator_validate_ajax( 'forminator_load_dashboard_recent_quiz_widget', false, 'forminator' );
+		$args                       = array();
+		$args['module_slug']        = 'quiz';
+		$args['preview_title']      = esc_html__( 'Quizzes', 'forminator' );
+		$args['delete_title']       = esc_html__( 'Delete Quiz', 'forminator' );
+		$args['delete_description'] = esc_html__( 'Are you sure you wish to permanently delete this quiz?', 'forminator' );
+		$args['view_all']           = esc_html__( 'View all quizzes', 'forminator' );
+		$args['total']              = forminator_quizzes_total();
+
+		$content = forminator_template( 'common/dashboard/widget-recent-modules', $args );
+		wp_send_json_success( array( 'html' => $content ) );
 	}
 
 	/**
@@ -2714,8 +2787,9 @@ class Forminator_Admin_AJAX {
 
 			if ( ! empty( $report_data ) ) {
 				$response = array(
-					'reports'    => $report_data,
-					'chart_data' => $chart_data,
+					'reports'       => $report_data,
+					'chart_data'    => $chart_data,
+					'total_entries' => $reports['total_entries'],
 				);
 				$response = apply_filters( 'forminator_report_data', $response, $form_id, $form_type, $start_date, $end_date );
 				wp_send_json_success( $response );

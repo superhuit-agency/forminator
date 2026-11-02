@@ -938,9 +938,16 @@ class Forminator_Quiz_Front_Action extends Forminator_Front_Action {
 
 		try {
 			self::$module_id = $entry->form_id;
+			// Create the lead form post, as it is skipped while the payment is pending.
+			$quiz_settings = static::$module_object->settings;
+			if ( $quiz_settings['hasLeads'] && ! empty( $quiz_settings['leadsId'] ) ) {
+				Forminator_CForm_Front_Action::maybe_create_post_for_lead_form( $entry, $quiz_settings['leadsId'] );
+				// Reset the module object to the quiz form model.
+				static::$module_object = Forminator_Base_Form_Model::get_model( self::$module_id );
+			}
 			// Get the quiz result from the entry meta as after payment submission/redirection, the quiz result is not available in the request.
 			$quiz_result = $entry->get_meta( 'entry' );
-			// Process integrated addons, create WP posts, user registration and emails.
+			// Process integrated addons and emails.
 			$this->post_submission_process( $entry, $quiz_result );
 			return true;
 		} catch ( Exception $e ) {
@@ -969,17 +976,10 @@ class Forminator_Quiz_Front_Action extends Forminator_Front_Action {
 	 * @return void
 	 */
 	private function post_submission_process( $entry, $quiz_result ) {
-		$quiz_settings = static::$module_object->settings;
-		if ( $quiz_settings['hasLeads'] && ! empty( $quiz_settings['leadsId'] ) ) {
-			Forminator_CForm_Front_Action::maybe_create_post_for_lead_form( $entry, $quiz_settings['leadsId'] );
-		}
 		$quiz_entry       = $entry->get_meta( 'entry', null );
 		$is_prevent_store = static::$module_object->is_prevent_store();
 		// Emails and addons should only be processed if the entry is not empty or store submission is off - Only the lead form entry is saved, and the quiz entry may not have been submitted yet.
 		if ( ! empty( $quiz_entry ) || ( $is_prevent_store && empty( $entry->entry_id ) ) ) {
-			// Reset the module object to the quiz form model, as it might have been changed by the lead form model.
-			static::$module_object = Forminator_Base_Form_Model::get_model( self::$module_id );
-
 			$addon_data = array(
 				array(
 					'name'  => 'entry',

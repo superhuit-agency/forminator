@@ -337,4 +337,16 @@ class Forminator_Hub_Connector {
 	public static function get_hub_connect_logo(): string {
 		return apply_filters( 'forminator_hub_connect_logo', 'forminator-templates' );
 	}
+
+	/**
+	 * Check if current user can manage hub connector
+	 *
+	 * @return bool
+	 */
+	public static function can_manage_hub_connector(): bool {
+		if ( is_multisite() ? current_user_can( 'manage_network_options' ) : current_user_can( 'manage_options' ) ) {
+			return true;
+		}
+		return false;
+	}
 }

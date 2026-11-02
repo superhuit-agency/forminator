@@ -363,7 +363,7 @@ class Forminator_Slider extends Forminator_Field {
 	public function validate( $field, $data ) {
 		$id = self::get_property( 'element_id', $field );
 
-		$is_empty = ! isset( $data ) || '' === $data;
+		$is_empty = ! isset( $data ) || '' === $data || array() === $data;
 		$sub_id   = $id;
 		if ( self::is_range_slider( $field ) ) {
 			$sub_id .= '-max';
@@ -372,6 +372,18 @@ class Forminator_Slider extends Forminator_Field {
 			} elseif ( ! isset( $data['max'] ) || '' === $data['max'] ) {
 				$is_empty = true;
 			}
+		}
+
+		if ( $this->is_required( $field ) && $is_empty ) {
+			$required_validation_message         = self::get_property( 'required_message', $field, esc_html( self::$default_required_messages[ $this->type ] ) );
+			$this->validation_message[ $sub_id ] = apply_filters(
+				'forminator_field_slider_required_field_validation_message',
+				$required_validation_message,
+				$id,
+				$field,
+				$data,
+				$this
+			);
 		}
 
 		if ( ! $is_empty ) {
@@ -408,18 +420,6 @@ class Forminator_Slider extends Forminator_Field {
 					$min
 				);
 			}
-		}
-
-		if ( $this->is_required( $field ) && $is_empty ) {
-			$required_validation_message         = self::get_property( 'required_message', $field, esc_html( self::$default_required_messages[ $this->type ] ) );
-			$this->validation_message[ $sub_id ] = apply_filters(
-				'forminator_field_slider_required_field_validation_message',
-				$required_validation_message,
-				$id,
-				$field,
-				$data,
-				$this
-			);
 		}
 	}
 

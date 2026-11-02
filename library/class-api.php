@@ -1457,7 +1457,6 @@ class Forminator_API {
 			$offset       = ( $current_page - 1 ) * $per_page;
 			$args         = array(
 				'form_id'  => $form_id,
-				'is_spam'  => 0,
 				'per_page' => $per_page,
 				'offset'   => $offset,
 			);

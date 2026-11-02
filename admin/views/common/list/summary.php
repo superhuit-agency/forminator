@@ -13,7 +13,7 @@ $soon                 = 'quiz' === $this::$module_slug;
 if ( $count > 0 || $is_search ) {
 	$count_active = $this->countModules( 'publish' );
 	// Count total entries from last 30 days.
-	$total_entries_from_last_month = count( Forminator_Form_Entry_Model::get_newer_entry_ids( $entry_type, $sql_month_start_date ) );
+	$total_entries_from_last_month = Forminator_Form_Entry_Model::count_newer_entries( $entry_type, $sql_month_start_date );
 
 	$most_entry = Forminator_Form_Entry_Model::get_most_entry( $entry_type );
 

@@ -353,7 +353,6 @@ abstract class Forminator_Admin_View_Page extends Forminator_Admin_Page {
 
 			$args = array(
 				'form_id'  => $this->model->id,
-				'is_spam'  => 0,
 				'per_page' => $per_page,
 				'offset'   => $offset,
 				'order_by' => 'entries.date_created',

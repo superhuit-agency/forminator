@@ -50,6 +50,14 @@ class Forminator_Poll_Front_Action extends Forminator_Front_Action {
 
 			$entry = self::get_entry();
 
+			self::get_field_data_array();
+
+			if ( self::is_spam() ) {
+				$entry->is_spam = 1;
+				self::$is_spam  = true;
+				$entry->status  = 'spam';
+			}
+
 			// If preview, skip integrations.
 			if ( ! $preview ) {
 				self::attach_addons_on_poll_submit( self::$module_object );
@@ -125,11 +133,8 @@ class Forminator_Poll_Front_Action extends Forminator_Front_Action {
 
 	/**
 	 * Get field data array
-	 *
-	 * @param object $entry Entry object.
-	 * @return array
 	 */
-	private static function get_field_data_array( $entry ) {
+	private static function get_field_data_array() {
 		$field_data = self::get_field_data();
 		// get fields labels.
 		$fields_labels    = self::$module_object->pluck_fields_array( 'title', 'element_id', '1' );
@@ -139,14 +144,6 @@ class Forminator_Poll_Front_Action extends Forminator_Front_Action {
 				'value' => isset( $fields_labels[ $field_data ] ) ? $fields_labels[ $field_data ] : '1',
 			),
 		);
-		if ( self::$module_object->is_method_browser_cookie() ) {
-			self::set_vote_browser_cookie( self::$module_id );
-		} else {
-			$field_data_array[] = array(
-				'name'  => '_forminator_user_ip',
-				'value' => Forminator_Geo::get_user_ip(),
-			);
-		}
 
 		$extra_field = isset( self::$prepared_data[ self::$module_id . '-extra' ] ) ? self::$prepared_data[ self::$module_id . '-extra' ] : false;
 		if ( ! empty( $extra_field ) ) {
@@ -154,14 +151,9 @@ class Forminator_Poll_Front_Action extends Forminator_Front_Action {
 				'name'  => 'extra',
 				'value' => $extra_field,
 			);
-
-			if ( self::is_spam() ) {
-				$entry->is_spam = 1;
-				self::$is_spam  = true;
-			}
 		}
 
-		return $field_data_array;
+		self::$info['field_data_array'] = $field_data_array;
 	}
 
 	/**
@@ -170,7 +162,14 @@ class Forminator_Poll_Front_Action extends Forminator_Front_Action {
 	 * @param object $entry Entry object.
 	 */
 	private static function save_entry_fields( $entry ) {
-		$field_data_array = self::get_field_data_array( $entry );
+		if ( self::$module_object->is_method_browser_cookie() ) {
+			self::set_vote_browser_cookie( self::$module_id );
+		} else {
+			self::$info['field_data_array'][] = array(
+				'name'  => '_forminator_user_ip',
+				'value' => Forminator_Geo::get_user_ip(),
+			);
+		}
 
 		/**
 		 * Filter saved data before persisted into the database
@@ -182,7 +181,7 @@ class Forminator_Poll_Front_Action extends Forminator_Front_Action {
 		 *
 		 * @return array $field_data_array
 		 */
-		$field_data_array = apply_filters( 'forminator_polls_submit_field_data', $field_data_array, self::$module_id );
+		self::$info['field_data_array'] = apply_filters( 'forminator_polls_submit_field_data', self::$info['field_data_array'], self::$module_id );
 
 		/**
 		 * Action called before setting fields to database
@@ -193,10 +192,10 @@ class Forminator_Poll_Front_Action extends Forminator_Front_Action {
 		 * @param int $form_id - the form id.
 		 * @param array $field_data_array - the entry data.
 		 */
-		do_action( 'forminator_polls_submit_before_set_fields', $entry, self::$module_id, $field_data_array );
+		do_action( 'forminator_polls_submit_before_set_fields', $entry, self::$module_id, self::$info['field_data_array'] );
 
 		// ADDON add_entry_fields.
-		$added_data_array = self::attach_addons_add_entry_fields( $field_data_array, $entry );
+		$added_data_array = self::attach_addons_add_entry_fields( self::$info['field_data_array'], $entry );
 
 		$entry->set_fields( $added_data_array );
 	}

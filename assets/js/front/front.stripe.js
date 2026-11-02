@@ -57,9 +57,11 @@
 		this._checkoutVisibilitySnapshot = '';
 		this._checkoutRefreshRequestId = 0;
 		this._checkoutMountRequestId = 0;
+		this._selectedPaymentMethodType = '';
 		this._returnedCheckoutSessionId = '';
 		this._isCheckoutReturnFlow = false;
 		this._checkoutReturnError = '';
+		this._paidCheckoutSessionId = '';
 		this.billingDetails        = {};
 		this.init();
 	}
@@ -468,8 +470,12 @@
 					var checkoutBillingCountryFieldId = self.getMappedBillingCountryFieldId();
 					var $checkoutBillingCountryField = checkoutBillingCountryFieldId ? self.get_form_field(checkoutBillingCountryFieldId) : $();
 					var hasValidator = self.$el.data('validator');
+					// Apple Pay must call confirm() in this tap, before the session sync and validation requests.
+					// A paid session from a failed validation must keep its id, so do not refresh or confirm it again.
+					var retryPaidCheckout = self.isPaidCheckoutRetry();
+					var confirmWalletNow = ! retryPaidCheckout && self.requiresImmediateCheckoutConfirm() && self.canConfirmCheckoutImmediately();
 
-					if ( ! self._isCheckoutReturnFlow ) {
+					if ( ! retryPaidCheckout && ! confirmWalletNow && ! self._isCheckoutReturnFlow ) {
 						try {
 							await self.syncCheckoutSessionBeforeConfirm();
 						} catch ( error ) {
@@ -531,7 +537,18 @@
 						return;
 					}
 
-					await self.confirmCheckoutSession();
+					if ( retryPaidCheckout ) {
+						try {
+							await self.validateCheckoutSessionSubmission();
+						} catch ( error ) {
+							return;
+						}
+
+						self.verifyCheckoutSessionSubmission();
+						return;
+					}
+
+					await self.confirmCheckoutSession( confirmWalletNow );
 					return;
 				}
 
@@ -593,6 +610,7 @@
 				}
 
 				self._isCheckoutReturnFlow = false;
+				self._paidCheckoutSessionId = '';
 				self._beforeSubmitCallback = null;
 				self.clearCheckoutSessionPaymentData();
 				self.clearCheckoutQuizState();
@@ -673,6 +691,44 @@
 
 		isCheckoutSessionPreview: function() {
 			return this.isCheckoutSession() && this.settings.is_preview;
+		},
+
+		// Apple Pay opens its sheet in the submit tap and finishes on this page.
+		// Google Pay and redirect methods validate first, so the pending entry already exists.
+		requiresImmediateCheckoutConfirm: function() {
+			return 'apple_pay' === this._selectedPaymentMethodType;
+		},
+
+		// The Apple Pay sheet already took this payment, and validation did not store an entry.
+		isPaidCheckoutRetry: function() {
+			var paidId = this._paidCheckoutSessionId || '';
+
+			return '' !== paidId && paidId === ( this.getStripeData('paymentid') || '' );
+		},
+
+		rememberPaidCheckoutSession: function() {
+			var paymentId = this.getStripeData('paymentid') || '';
+
+			if ( paymentId ) {
+				this._paidCheckoutSessionId = paymentId;
+			}
+		},
+
+		// The Checkout Session can be confirmed without another server round trip.
+		canConfirmCheckoutImmediately: function() {
+			if ( this.isCheckoutSessionPreview() || this._isCheckoutReturnFlow || ! this._checkoutCanConfirm ) {
+				return false;
+			}
+
+			if ( ! this._checkoutActions || this.getStripeData('forceMountStripeField') ) {
+				return false;
+			}
+
+			if ( this._checkoutDependentSnapshot !== this.getCheckoutSessionFieldsSnapshot('dependent') ) {
+				return false;
+			}
+
+			return this._checkoutVisibilitySnapshot === this.getCheckoutVisibilitySnapshot();
 		},
 
 		// Detect whether the Stripe field is hidden by visibility conditions.
@@ -1022,7 +1078,8 @@
 			var self = this;
 
 			// Nothing to rebuild while the Stripe field is hidden by visibility conditions.
-			if ( self.isStripeFieldHidden() ) {
+			// A paid Apple Pay session must keep its id until validation stores the entry.
+			if ( self.isStripeFieldHidden() || self.isPaidCheckoutRetry() ) {
 				return Promise.resolve();
 			}
 
@@ -1243,7 +1300,7 @@
 		},
 
 		// Confirm the hosted Checkout Session and continue form submission.
-		confirmCheckoutSession: async function() {
+		confirmCheckoutSession: async function( createPendingEntryAfterConfirm ) {
 			if ( ! this._checkoutActions ) {
 				this.logStripeClientError(
 					'checkout_confirm_missing_actions',
@@ -1279,6 +1336,17 @@
 					return;
 				}
 
+				// The wallet sheet had to open before validation, so the pending entry does not exist yet.
+				if ( createPendingEntryAfterConfirm ) {
+					try {
+						await this.validateCheckoutSessionSubmission();
+					} catch ( error ) {
+						// Keep this paymentid. The next submit validates it again and must not confirm a second charge.
+						this.rememberPaidCheckoutSession();
+						return;
+					}
+				}
+
 				this.verifyCheckoutSessionSubmission();
 			} catch ( error ) {
 				this.logStripeClientError('checkout_confirm_exception', error);
@@ -1297,6 +1365,11 @@
 					}, 0);
 				},
 				onFailure: async function() {
+					// Rebuilding would replace the paid session and the next submit could charge again.
+					if ( self.isPaidCheckoutRetry() ) {
+						return;
+					}
+
 					// Server validation failed while checking the returned session, so rebuild Checkout before another attempt.
 					await self.resetCheckoutSession();
 				},
@@ -1538,6 +1611,11 @@
 							self._stripeData['forceMountStripeField'] = hasForceMountStripeField ? !! data.data.forceMountStripeField : false;
 							if ( hasCheckoutPhoneCollectionEnabled ) {
 								self._stripeData['checkoutPhoneCollectionEnabled'] = !! data.data.checkoutPhoneCollectionEnabled;
+							}
+
+							if ( hasPaymentId && self._paidCheckoutSessionId && data.data.paymentid !== self._paidCheckoutSessionId ) {
+								// A refresh arrived after Apple Pay. Keep the paid session id.
+								hasPaymentId = false;
 							}
 
 							if ( hasPaymentId ) {
@@ -1996,6 +2074,7 @@
 			}
 			this._elements = null;
 			this._paymentElement = null;
+			this._selectedPaymentMethodType = '';
 			this._contactElement = null;
 			this._currencySelectorElement = null;
 			this._checkout = null;
@@ -2054,6 +2133,7 @@
 				self.updateBillingDetails();
 			});
 			this._paymentElement.on('change', function(event) {
+				self._selectedPaymentMethodType = event.value.type || '';
 				let isBlik = event.value.type === 'blik';
 				self._stripeData['paymentMethodType'] = isBlik ? 'blik' : '';
 			});
@@ -2164,6 +2244,9 @@
 						}
 
 						self._paymentElement = checkout.createPaymentElement(sanitizedPaymentOptions);
+						self._paymentElement.on('change', function(event) {
+							self._selectedPaymentMethodType = event && event.value && event.value.type ? event.value.type : '';
+						});
 						self._paymentElement.mount('#payment-element-' + fieldId);
 
 						if ( self.hasCheckoutContactElement() && contactElement && typeof checkout.createContactDetailsElement === 'function' ) {

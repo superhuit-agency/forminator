@@ -41,6 +41,20 @@ class Forminator_CForm_Front_User_Login extends Forminator_User {
 	public $settings;
 
 	/**
+	 * Whether sign on waits for complete_deferred_signon()
+	 *
+	 * @var bool
+	 */
+	private $defer_signon = false;
+
+	/**
+	 * Checked credentials waiting for sign on
+	 *
+	 * @var array
+	 */
+	private $deferred_signon = array();
+
+	/**
 	 * Forminator_CForm_Front_User_Login constructor
 	 */
 	public function __construct() {
@@ -226,6 +240,14 @@ class Forminator_CForm_Front_User_Login extends Forminator_User {
 						'value' => $user_fields,
 					);
 				}
+			} elseif ( $this->defer_signon ) {
+				// Only check the credentials, sign on follows the payment.
+				if ( empty( $sign_on ) ) {
+					$sign_on = wp_authenticate( $username, $password );
+				}
+				if ( ! is_wp_error( $sign_on ) ) {
+					$this->deferred_signon = $user_fields;
+				}
 			} else {
 				$sign_on = wp_signon( $user_fields );
 			}
@@ -235,6 +257,35 @@ class Forminator_CForm_Front_User_Login extends Forminator_User {
 		$response['user']           = $sign_on;
 
 		return $response;
+	}
+
+	/**
+	 * Check the credentials in process_login() without signing on.
+	 *
+	 * @since 1.58.4
+	 *
+	 * @return void
+	 */
+	public function defer_signon() {
+		$this->defer_signon = true;
+	}
+
+	/**
+	 * Sign on the user whose credentials passed process_login().
+	 *
+	 * @since 1.58.4
+	 *
+	 * @return WP_User|WP_Error|null Null when nothing waits for sign on.
+	 */
+	public function complete_deferred_signon() {
+		if ( empty( $this->deferred_signon ) ) {
+			return null;
+		}
+
+		$user_fields           = $this->deferred_signon;
+		$this->deferred_signon = array();
+
+		return wp_signon( $user_fields );
 	}
 
 	/**

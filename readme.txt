@@ -3,7 +3,7 @@ Contributors: WPMUDEV
 Tags: contact form, custom form, forms, payment form, WordPress form plugin
 Requires at least: 6.4
 Tested up to: 7.1
-Stable tag: 1.58.1
+Stable tag: 1.58.3
 Requires PHP: 7.4
 License: GPL v3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
@@ -74,7 +74,7 @@ Forminator comes stacked with crowd favorite third-party integrations – email 
 - [Campaign Monitor](https://www.campaignmonitor.com/)
 - [ActiveCampaign](https://www.activecampaign.com/)
 - [Google Sheets](https://www.google.com/sheets/about/)
-- Webhooks ([n8n](https://n8n.io/), ([Zapier](https://zapier.com/), [Make](https://www.make.com/), [Tray](https://tray.io/), etc)
+- Webhooks ([n8n](https://n8n.io/), [Zapier](https://zapier.com/), [Make](https://www.make.com/), [Tray](https://tray.io/), etc)
 - [Trello](https://trello.com/)
 - [MailChimp](https://mailchimp.com/)
 - [AWeber](https://www.aweber.com/)
@@ -231,6 +231,45 @@ We take plugin security incredibly seriously; if you have a bug or vulnerability
 
 == Changelog ==
 
+= 1.58.4 ( 2026-10-29 ) =
+
+- Fix: Post Data featured images are now rejected when the file contents do not match an allowed image type
+- Fix: Browser cookie for poll vote limits now lasts for the configured time when the site timezone is not UTC
+- Fix: HubSpot tickets now receive the quiz name when the Quiz Name variable is used
+- Fix: The {quiz_answer} tag now includes the quiz answers in notification emails for quizzes with a lead form
+- Fix: Mapping a date field to a Trello due date no longer causes a fatal error on submission
+- Fix: Subsite administrators no longer see a blank page when connecting the site from the Templates page
+- Fix: Disconnecting PayPal no longer logs a console error when a form has a PayPal field
+- Fix: Security hardening (props: Charles Vosburgh, Naoki Kawahigashi)
+
+
+= 1.58.3 ( 2026-10-21 ) =
+
+- Enhancement: Checkbox and Multi-select fields can now limit how many options a visitor may select
+- Enhancement: Generated PDF files can now be password protected with a fixed password or a value from the submission
+- Enhancement: Spam submissions can be reviewed with the Spam status filter
+- Enhancement: Slack channel lists now include channels beyond the first page
+- Enhancement: Added Ghana Cedi (GHS) to the currency list
+- Enhancement: Currency symbols now appear in the currency field dropdown
+- Enhancement: The dashboard summary and recent modules now load in the background
+- Enhancement: Export and report background jobs are scheduled only when those features are in use
+- Enhancement: Added `forminator_trigger_integrations_on_payment_in_process` and `forminator_trigger_integrations_again_on_payment_success` filters so integrations can run while a delayed Stripe payment is still processing
+- Fix: Apple Pay now opens its payment sheet when the form Submit button is tapped
+- Fix: Forms with both Stripe and PayPal no longer show two Save as Draft buttons
+- Fix: Resent notification emails now include repeater field values
+- Fix: The Other option is no longer written twice in a Google Sheets cell
+- Fix: A hidden field set to the submission ID now sends that ID to Google Sheets
+- Fix: Stripe redirect payment methods, such as Amazon Pay, no longer replace the success message with Invalid CAPTCHA when Cloudflare Turnstile is enabled
+- Fix: A required Slider field that is left empty now shows the required message instead of a minimum or maximum error
+- Fix: Consent text is no longer pushed to the edge of the form
+- Fix: ActiveCampaign no longer stops the submission when a checkbox field is mapped
+- Fix: The dashboard no longer runs out of memory when the entry table is large
+- Fix: The Geolocation reports widget no longer keeps the no-location message when the selected range has submissions
+- Fix: The File Upload "No file chosen" text no longer gets cut off on small screens
+- Fix: File Upload fields no longer raise a PHP warning when Akismet checks the submission
+- Fix: Security hardening
+
+
 = 1.58.2 ( 2026-10-12 ) =
 
 - Fix: Quiz lead forms now submit correctly inside Elementor popups
@@ -308,258 +347,6 @@ We take plugin security incredibly seriously; if you have a bug or vulnerability
 - Enhancement: Add a filter to customize the CSS class of the `forminator-row` section
 - Fix: Prevent leading apostrophes from being added to string cells in Google Sheets
 - Fix: Prevent the deactivation survey modal from stacking on the Plugins page
-
-
-= 1.57.2.1 ( 2026-09-17 ) =
-
-- Fix: Security improvements (props: Karthik Ramakrishnan, Dion Mulaj, vuxvinh)
-
-
-= 1.57.2 ( 2026-08-27 ) =
-
-- Fix: Security improvements
-
-
-= 1.57.1.1 ( 2026-08-27 ) =
-
-- Fix: Security improvements (props: Badr Azeez)
-
-
-= 1.57.1 ( 2026-08-18 ) =
-
-- Fix: Security issue affecting Multisite site registration (props: Jakub Herman)
-
-
-= 1.57.0.8 ( 2026-08-18 ) =
-
-- Fix: Security issue affecting payment processing (props: Jakub Herman)
-
-
-= 1.57.0.7 ( 2026-08-18 ) =
-
-- Fix: Privilege escalation vulnerability
-
-
-= 1.57.0.6 ( 2026-08-18 ) =
-
-- Fix: Vulnerability - PHP Object Injection
-
-
-= 1.57.0.5 ( 2026-08-18 ) =
-
-- Fix: Security improvements on Hub-Connector (props: Jakub Herman)
-
-
-= 1.57.0.4 ( 2026-08-18 ) =
-
-- Fix: Cross-Site Scripting (XSS) vulnerability
-
-
-= 1.57.0.3 ( 2026-08-18 ) =
-
-- Fix: Cross-Site Scripting (XSS) vulnerability
-
-
-= 1.57.0.2 ( 2026-08-18 ) =
-
-- Fix: Cross-Site Scripting (XSS) vulnerability
-
-
-= 1.57.0.1 ( 2026-08-18 ) =
-
-- Fix: Cross-Site Scripting (XSS) vulnerability
-
-
-= 1.57.0 (2026-08-12) =
-
-- Enhancement: Added an option to set a custom Submission ID for each form
-- Enhancement: Added Submission ID prefix setting
-- Enhancement: Exporting/Importing quizzes that include a lead generation form
-- Enhancement: Added an option to fill empty fields with "N/A" in email notifications
-- Enhancement: Datepicker field now includes an offset setting for Today date
-- Enhancement: Improved Stripe error logging and parameter handling
-- Enhancement: Improved Mailchimp integration member deletion and status validation
-- Enhancement: Added country prefix support for phone field merge tags
-- Enhancement: Added more supported languages for Stripe field
-- Enhancement: Stripe currency dropdowns are now sorted alphabetically by currency code
-- Enhancement: Added deprecation warnings for the legacy Stripe card element field
-- Enhancement: Stripe field now reloads only for the last amount change instead of refreshing on every quick change
-- Enhancement: Form submission is no longer blocked when mapped billing phone or email fields are hidden by visibility conditions
-- Enhancement: Added a notice for Divi 5 Visual Builder shortcode-render incompatibility
-- Enhancement: Notification data is now passed to the forminator_custom_form_mail_admin_message filter
-- Fix: PayPal payments now work correctly with more than one repeater field
-- Fix: Draft saving no longer fails when a Stripe variable amount is invalid
-- Fix: Integration settings validation messages are now translatable
-- Fix: Resolved JavaScript error when switching between Visual and Code editor in Rich Textarea and Post Data fields
-- Fix: Shortcode generator modal no longer leaves blank space on the page on load
-- Fix: Defender 2FA options are now selectable in Safari browser when using a Forminator login form
-- Fix: Name fields with a single subfield now use the full-width layout correctly
-- Fix: Poll results no longer jump-scroll after each vote
-- Fix: Pagination in the form preview modal now scrolls instead of overflowing
-- Fix: Gutenberg block preview now works correctly with plain permalinks
-- Fix: Polls now load correctly on the front end when using the Reload Page submission method
-- Fix: Resolved JavaScript error when closing the Forminator modal in the Classic Editor
-- Fix: Signature field placeholder now displays correctly
-- Fix: Corrected phone number validation for Benin (BJ) 10-digit numbers
-- Fix: Added missing color customization controls for Post Data sub-fields
-- Fix: Clearer error when Mailchimp rejects an incomplete Address field
-- Fix: Draft submissions are now visible on the Submissions page when no prior entries exist
-- Fix: Publish header no longer stays sticky after closing form preview
-- Fix: Custom CSS styles now apply correctly to Select2 dropdowns
-- Fix: Searching for a form while the page is still loading no longer causes an error
-- Fix: Resolved undefined array key warning for Signature fields in Lead Forms
-- Fix: File attachment settings are now imported correctly from Contact Form 7
-- Fix: Radio, Checkbox, and Select values now appear correctly in Resend Draft emails
-- Fix: TinyMCE Visual and Code modes now switch correctly inside Hustle popups
-- Fix: Clicking submission-settings checkboxes no longer triggers unwanted page auto-scroll
-- Fix: Three-dot dropdown now opens correctly in Gujarati and Hindi locales
-- Fix: Resolved critical error when empty HTML and Number fields are repeated inside a Field Group
-- Fix: Trello due date format is now validated with clearer error handling for invalid dates
-
-
-= 1.56.2 (2026-07-30) =
-
-- Fix: Arbitrary file upload vulnerability
-
-
-= 1.56.1 (2026-07-30) =
-
-- Fix: Cross-Site Scripting (XSS) vulnerability
-
-
-= 1.56.0.1 (2026-07-30) =
-
-- Fix: Privilege escalation vulnerability
-
-
-= 1.56.0 ( 2026-07-21 ) =
-
-- New: Added Stripe Connect (OAuth) authorization for connecting Stripe accounts
-- New: Added Stripe Checkout Sessions payment flow
-- New: Added Adaptive Pricing support
-- Enhancement: Automatically migrate existing forms to the Stripe Checkout Sessions API
-- Enhancement: Separated Live and Test Stripe API key configurations
-- Enhancement: Removed the manual Stripe authorization section to simplify connecting accounts
-- Enhancement: Improved S3 and cloud storage compatibility for attachment path validation
-- Enhancement: Strip zero-width Unicode characters during input sanitization
-- Enhancement: Added the ability to change the View Results button text for paginated quizzes
-- Enhancement: Security improvements
-- Fix: Preview now loads in the site editor when a form is added through Blocks > Form
-- Fix: Corrected invalid payment amounts when using the round() function in Calculation fields
-- Fix: Improved CSV export escaping for leading control characters
-- Fix: Select field submission limit no longer breaks with AJAX-loaded HTML options
-- Fix: Select fields with HTML tags and apostrophes in option values now validate correctly
-- Fix: HTML tags are now stripped from select option values when counting limits
-- Fix: Prevented a fatal error on form save when an outdated Stripe add-on is active
-- Fix: Corrected the Stripe payment mode warning on the forms list page
-- Fix: Removed the legacy Google Charts CDN enqueue from admin and poll front-end
-- Fix: Disconnect modal no longer strips punctuation from its text
-- Fix: Fixed PHP warning in logs when the scheduled export function is triggered
-
-
-= 1.55.1 ( 2026-07-02 ) =
-
-- Fix: Security improvements
-
-
-= 1.55.0 ( 2026-06-10 ) =
-
-- Enhancement: Improved performance for forms with complex conditional logic and large numbers of fields in Safari
-- Enhancement: Added configurable PDF rendering options for displaying images as images or links/text
-- Enhancement: Improved MailerLite integration support for double opt-in workflows
-- Enhancement: Added support for default values in the Rating field
-- Enhancement: Added submission ID support to both manual and scheduled submission exports
-- Enhancement: Improved Post Data field error messages to display the relevant field label
-- Enhancement: Added clearer password strength requirement guidance
-- Enhancement: Added validation for Poll notification subject fields
-- Enhancement: Security improvements
-- Fix: Form submissions no longer fail when a required field has visibility condition based on Upload field
-- Fix: Save Draft now works correctly for repeated Group fields containing Multiple File Upload fields when resuming drafts
-- Fix: Signature field submissions are now saved correctly when forms are loaded via AJAX inside popups
-- Fix: Captcha v2 validation is now enforced before users can proceed to the next page in paginated forms
-- Fix: Resolved reCAPTCHA invalid alerts appearing on paginated forms
-- Fix: Defender Login Protection feature now works correctly in Forminator login forms
-- Fix: Warning appears when Group Field and Save & Continue are enabled
-- Fix: Corrected warning message displayed after draft submission when using Page Reload with AJAX-loaded forms
-- Fix: Misc Data fields now work correctly in Resume Message for Save & Continue forms
-- Fix: Submissions Export button no longer redirects users to the front-end site while the page is loading
-- Fix: TinyMCE editor now initializes correctly inside Elementor popups
-- Fix: Improved Rich Text field compatibility with modal boxes and popups
-- Fix: Resolved AJAX loading conflicts between Forminator forms and Hustle popups on the same page
-- Fix: Eliminated unnecessary multiple views when creating, editing, and saving posts with attached forms, quizzes, or polls
-- Fix: Resolved console errors when creating new forms or copying shortcodes
-- Fix: HTML field now works correctly when multiple forms are present on the same page
-- Fix: Datepicker limits based on another Datepicker now work correctly when multiple copies of the same form exist on a page
-- Fix: Datepicker now validates pasted and browser-autofilled date values correctly
-- Fix: Corrected file size calculations during uploads to ensure accurate validation messages
-- Fix: Upload field now correctly restricts selectable file types when only ZIP files are allowed
-- Fix: Multiple uploaded files now display correctly in HTML fields
-- Fix: Prevented HTML from appearing in Textarea field submissions
-- Fix: Select fields containing HTML tags in option values can now be submitted correctly
-- Fix: Submission limits for Select fields now work correctly in Quiz Lead forms
-- Fix: Quiz submission CSV exports now include values for questions with multiple correct answers
-- Fix: Removed duplicate "Ready to send" button from paginated Personality Quiz previews
-- Fix: Pagination step labels no longer persist after removing Page Break fields and re-importing forms
-- Fix: Resolved empty Hidden field data issue when using the "Embed Post/Page Title" option
-- Fix: Country Address field pre-population now works correctly when default values are modified
-- Fix: Corrected phone number validation issues for some countries
-- Fix: Post Data field macros now work correctly inside HTML fields
-- Fix: Removed obsolete calculator values from Google Sheets after Calculation fields are removed from forms
-- Fix: Corrected display issues with custom-sized radio and checkbox images when horizontally aligned
-- Fix: Added support for customizing quiz question description colors
-- Fix: Social share messages now post correctly to LinkedIn profiles
-- Fix: View Poll Results now scrolls correctly to the results chart
-- Fix: Poll notification fields now display properly
-- Fix: Forminator blocks can now be aligned properly within the Gutenberg editor
-- Fix: Removed PHP 8.5 deprecation warning related to Poll functionality
-
-
-= 1.54.0 ( 2026-05-20 ) =
-
-- Enhancement: Improve compatibility with WP 7.0
-- Enhancement: Support multiple Webhook integrations in a form
-- Enhancement: Improve Autofill based on current user data
-- Enhancement: Improve monthly average calculation in Reports
-- Enhancement: Add show/hide password toggle
-- Enhancement: Improve compatibility with Oxygen builder
-- Enhancement: Update Bunny fonts list
-- Enhancement: Add ability to copy and email draft entry links on Submissions page
-- Enhancement: Support .avif, .heif, .heics, .heifs file types in Upload fields
-- Enhancement: Simplified some country labels for better UX in Address fields
-- Enhancement: Remove default maximum value from Number and Currency fields
-- Enhancement: Support default date settings for all Date picker types
-- Enhancement: Reduce disk access load on server
-- Fix: Contact Form 7 File upload fields import
-- Fix: Login form reload issue with browser cache
-- Fix: Google Pay is incorrectly showing 0 for subscriptions
-- Fix: Conflict with Geolocation add-on and Turnstile
-- Fix: Sending option labels instead of values to Google Sheets integration
-- Fix: Payment Intent ID is not valid issue
-- Fix: reCAPTCHA js errors
-- Fix: Legacy Javascript usage
-- Fix: Border radius for dropdown options
-- Fix: Issue with special characters in the Radio field options
-- Fix: Upload field inline validation for draft entries
-- Fix: Issue with user meta mapping on Registration form
-- Fix: Incorrect repeated items calculations in draft entries
-- Fix: Select dropdown not working on 3rd-party popups
-- Fix: Empty Quiz answers in CSV
-- Fix: Inline validation not working for Post Field > Content subfield
-- Fix: Failed submissions due to forbidden MIME types are stored
-- Fix: Pagination steps labels overlapping
-- Fix: Signature field placeholder disappears
-- Fix: Signature field on Preview
-- Fix: Quiz cannot be saved when answer is '0'
-- Fix: Personality Quiz conditions inside Email Routing
-- Fix: Form submission requires double-click due to reCAPTCHA on Divi theme
-- Fix: Incorrect active forms count
-- Fix: File upload field view in Basic style
-- Fix: Quiz description alignment
-- Fix: PayPal payment option briefly shows up on form submission
-- Fix: Webhook fails to trigger due to Consent field condition value localization
-- Fix: Rounding in Calculation fields
-- Fix: Query parameter not working for Prefix options in Name fields
-- Fix: Polls can be published without answers
 
 
 **Full changelog can be found here – [Forminator changelog](https://wpmudev.com/project/forminator-pro/#changelog_all?utm_source=wordpress.org&utm_medium=readme&utm_campaign=forminator-readme&utm_content=wpmu_dev_changelog_link).**

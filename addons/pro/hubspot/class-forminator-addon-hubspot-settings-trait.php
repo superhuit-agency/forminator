@@ -276,7 +276,7 @@ trait Forminator_Hubspot_Settings_Trait {
 		if ( 'quiz' === static::$module_slug ) {
 			$fields = array_merge(
 				array(
-					'{quiz_name}' => __( 'Quiz Name', 'forminator' ),
+					'quiz_name' => __( 'Quiz Name', 'forminator' ),
 				),
 				$fields
 			);

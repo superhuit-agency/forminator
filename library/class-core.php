@@ -900,7 +900,8 @@ class Forminator_Core {
 
 		// Cannot use esc_url_raw coz it strips curly braces.
 		if ( 'redirect-url' === $current_key
-			|| 'formula' === $current_key ) { // Cannot use sanitize_text_field as it removes percentage strings.
+			|| 'formula' === $current_key
+			|| 'pdf_password' === $current_key ) { // Cannot use sanitize_text_field as it removes percentage strings.
 			return trim( wp_strip_all_tags( $data ) );
 		}
 

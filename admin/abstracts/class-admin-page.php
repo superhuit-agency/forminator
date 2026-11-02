@@ -189,6 +189,7 @@ abstract class Forminator_Admin_Page {
 	public function add_page_hooks() {
 		$page_action = filter_input( INPUT_GET, 'page_action' );
 		if ( ! forminator_cloud_templates_disabled() && 'hub_connection' === $page_action
+				&& Forminator_Hub_Connector::can_manage_hub_connector()
 				&& ! Forminator_Hub_Connector::hub_connector_connected() ) {
 			return;
 		}
@@ -354,9 +355,14 @@ abstract class Forminator_Admin_Page {
 
 			$page_action    = filter_input( INPUT_GET, 'page_action' );
 			$hub_connecting = ! forminator_cloud_templates_disabled() && 'hub_connection' === $page_action;
-			if ( $hub_connecting && ! Forminator_Hub_Connector::hub_connector_connected() ) {
+			$can_manage_hub = Forminator_Hub_Connector::can_manage_hub_connector();
+			if ( $hub_connecting && ! Forminator_Hub_Connector::hub_connector_connected()
+				&& $can_manage_hub ) {
 				do_action( 'wpmudev_hub_connector_ui', 'forminator' );
 			} else {
+				if ( $hub_connecting && ! Forminator_Hub_Connector::hub_connector_connected() && ! $can_manage_hub ) {
+					$this->show_hub_connector_error();
+				}
 				if ( ! $this->is_edit_page() ) {
 					$this->render_header();
 				}
@@ -375,6 +381,24 @@ abstract class Forminator_Admin_Page {
 
 		</main>
 
+		<?php
+	}
+
+	/**
+	 * Show error if user does not have permission to connect site to hub
+	 */
+	private function show_hub_connector_error() {
+		?>
+		<div class="sui-notice sui-notice-error" style="margin-bottom: 10px;">
+			<div class="sui-notice-content">
+				<div class="sui-notice-message">
+					<span class="sui-notice-icon sui-md sui-icon-info" aria-hidden="true"></span>
+					<p>
+						<?php esc_html_e( 'You do not have permission to connect this site.', 'forminator' ); ?>
+					</p>
+				</div>
+			</div>
+		</div>
 		<?php
 	}
 

@@ -127,7 +127,16 @@ class Forminator_Hidden extends Forminator_Field {
 			$class_attr = sprintf( ' class="%s"', esc_attr( $custom_class ) );
 		}
 
-		return sprintf( '<input type="hidden" id="%s"%s name="%s" value="%s" />', esc_attr( $id . '_' . Forminator_CForm_Front::$uid ), $class_attr, esc_attr( $name ), $value );
+		$default_value = self::get_property( 'default_value', $field );
+		// Allow only 'custom_value' and 'query' to be calculable.
+		$is_calculable = ! empty( $default_value ) && in_array( $default_value, array( 'custom_value', 'query' ), true );
+
+		$calculable_attr = '';
+		if ( $is_calculable ) {
+			$calculable_attr = ' data-has-calculation="true"';
+		}
+
+		return sprintf( '<input type="hidden" id="%s"%s%s name="%s" value="%s" />', esc_attr( $id . '_' . Forminator_CForm_Front::$uid ), $class_attr, $calculable_attr, esc_attr( $name ), $value );
 	}
 
 	/**
@@ -209,7 +218,19 @@ class Forminator_Hidden extends Forminator_Field {
 	 * @return string
 	 */
 	public static function get_calculable_value( $submitted_field_data, $field_settings ) {
-		$calculable_value = $submitted_field_data;
+		$default_value = self::get_property( 'default_value', $field_settings );
+		// Allow only 'custom_value' and 'query' to be calculable.
+		$calculable_value = 0;
+		if ( 'custom_value' === $default_value ) {
+			$custom_value = self::get_property( 'custom_value', $field_settings );
+			if ( ! empty( $custom_value ) && is_numeric( $custom_value ) ) {
+				$calculable_value = floatval( $custom_value );
+			}
+		} elseif ( 'query' === $default_value
+			&& ! empty( $submitted_field_data ) && is_numeric( $submitted_field_data ) ) {
+			$calculable_value = floatval( $submitted_field_data );
+		}
+
 		/**
 		 * Filter formula being used on calculable value on hidden field
 		 *

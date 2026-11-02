@@ -90,21 +90,13 @@ class Forminator_Akismet extends Forminator_Spam_Protection {
 		foreach ( $posted_params as $param ) {
 			if ( isset( $param['name'] ) && isset( $param['value'] ) ) {
 				$has_akismet_data = true;
-				if ( filter_var( $param['value'], FILTER_VALIDATE_EMAIL ) ) {
+				if ( is_string( $param['value'] ) && filter_var( $param['value'], FILTER_VALIDATE_EMAIL ) ) {
 					$post_data['comment_author_email'] = $param['value'];
 				}
-				if ( is_array( $param['value'] ) ) {
-					if (
-						isset( $param['field_type'] ) &&
-						'signature' === $param['field_type'] &&
-						! empty( $param['value']['file']['file_url'] )
-					) {
-						$post_data['content'] .= "\n\n" . $param['value']['file']['file_url'];
-					} else {
-						$post_data['content'] .= "\n\n" . implode( ', ', $param['value'] );
-					}
-				} else {
-					$post_data['content'] .= "\n\n" . $param['value'];
+
+				$content_value = $this->get_akismet_content_value( $param['value'] );
+				if ( '' !== $content_value ) {
+					$post_data['content'] .= "\n\n" . $content_value;
 				}
 			}
 		}
@@ -157,6 +149,55 @@ class Forminator_Akismet extends Forminator_Spam_Protection {
 		}
 
 		return $is_spam;
+	}
+
+	/**
+	 * Convert a field value into a string Akismet can use as comment content.
+	 *
+	 * Nested values such as File Upload payloads must not be passed to implode(),
+	 * which triggers "Array to string conversion" warnings on PHP 8+.
+	 *
+	 * @since 1.58.3
+	 *
+	 * @param mixed $value Field value.
+	 * @return string
+	 */
+	private function get_akismet_content_value( $value ) {
+		if ( is_string( $value ) || is_numeric( $value ) ) {
+			return (string) $value;
+		}
+
+		if ( ! is_array( $value ) ) {
+			return '';
+		}
+
+		// Signature and upload fields store URLs under file.file_url.
+		if ( ! empty( $value['file']['file_url'] ) ) {
+			$file_url = $value['file']['file_url'];
+			if ( is_array( $file_url ) ) {
+				$file_url = array_filter( $file_url, 'is_scalar' );
+				return implode( ', ', $file_url );
+			}
+
+			return is_scalar( $file_url ) ? (string) $file_url : '';
+		}
+
+		$parts = array();
+		foreach ( $value as $item ) {
+			if ( is_scalar( $item ) ) {
+				$parts[] = (string) $item;
+				continue;
+			}
+
+			if ( is_array( $item ) ) {
+				$nested = $this->get_akismet_content_value( $item );
+				if ( '' !== $nested ) {
+					$parts[] = $nested;
+				}
+			}
+		}
+
+		return implode( ', ', $parts );
 	}
 
 	/**

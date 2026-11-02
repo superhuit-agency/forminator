@@ -17,6 +17,27 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Forminator_PayPal extends Forminator_Field {
 
 	/**
+	 * Option prefix of an order binding.
+	 *
+	 * @since 1.58.4
+	 */
+	public const ORDER_OPTION_PREFIX = 'forminator_paypal_order_';
+
+	/**
+	 * Option key listing order bindings for cleanup.
+	 *
+	 * @since 1.58.4
+	 */
+	public const ORDER_CLEANUP_OPTION_KEY = 'forminator_paypal_order_cleanup';
+
+	/**
+	 * Currencies PayPal takes without decimals.
+	 *
+	 * @since 1.58.4
+	 */
+	public const ZERO_DECIMAL_CURRENCIES = array( 'HUF', 'JPY', 'TWD' );
+
+	/**
 	 * Name
 	 *
 	 * @var string
@@ -294,7 +315,13 @@ class Forminator_PayPal extends Forminator_Field {
 		$entry_data['currency'] = $currency;
 		$charge_amount          = $this->get_payment_amount( $field );
 		$charge_amount          = number_format( $charge_amount, 2, '.', '' );
-		$transaction_id         = Forminator_CForm_Front_Action::$prepared_data['payment_transaction_id'];
+		$transaction_id         = Forminator_CForm_Front_Action::$prepared_data['payment_transaction_id'] ?? '';
+
+		// Accept only an order created for this form, browser and total.
+		$binding_error = self::get_order_binding_error( $transaction_id, $mode, $charge_amount, $currency );
+		if ( '' !== $binding_error ) {
+			return self::get_binding_error_entry_data( $binding_error, $transaction_id, $mode );
+		}
 
 		$paypal = new Forminator_PayPal_Express();
 		$order  = $paypal->get_order( $transaction_id, $mode );
@@ -334,7 +361,7 @@ class Forminator_PayPal extends Forminator_Field {
 		}
 
 		// Validate amount.
-		if ( ! isset( $order->purchase_units[0]->amount->value ) || floatval( $order->purchase_units[0]->amount->value ) !== floatval( $charge_amount ) ) {
+		if ( ! isset( $order->purchase_units[0]->amount->value ) || self::format_amount( $charge_amount, $currency ) !== (string) $order->purchase_units[0]->amount->value ) {
 			forminator_maybe_log(
 				__METHOD__,
 				array(
@@ -369,6 +396,11 @@ class Forminator_PayPal extends Forminator_Field {
 			);
 		}
 
+		// Claim after PayPal confirmed the order, so a failed lookup can be retried.
+		if ( ! self::claim_order_binding( $transaction_id ) ) {
+			return self::get_binding_error_entry_data( 'already_claimed', $transaction_id, $mode );
+		}
+
 		$entry_data['amount']         = $charge_amount;
 		$entry_data['status']         = $order->status;
 		$entry_data['transaction_id'] = $transaction_id;
@@ -390,6 +422,247 @@ class Forminator_PayPal extends Forminator_Field {
 		$entry_data = apply_filters( 'forminator_field_paypal_process_to_entry_data', $entry_data, $field, Forminator_Front_Action::$module_object, Forminator_CForm_Front_Action::$prepared_data, Forminator_CForm_Front_Action::$info['field_data_array'] );
 
 		return $entry_data;
+	}
+
+	/**
+	 * Format an amount the way it is sent to PayPal.
+	 *
+	 * @since 1.58.4
+	 *
+	 * @param mixed  $amount   Amount.
+	 * @param string $currency Currency code.
+	 * @return string
+	 */
+	public static function format_amount( $amount, $currency ): string {
+		$decimals = in_array( strtoupper( (string) $currency ), self::ZERO_DECIMAL_CURRENCIES, true ) ? 0 : 2;
+
+		return number_format( (float) $amount, $decimals, '.', '' );
+	}
+
+	/**
+	 * Check a PayPal order ID before it is used in an API path.
+	 *
+	 * @since 1.58.4
+	 *
+	 * @param mixed $order_id Order ID.
+	 * @return bool
+	 */
+	private static function is_valid_order_id( $order_id ): bool {
+		return is_string( $order_id ) && 1 === preg_match( '/^[A-Za-z0-9-]{1,64}$/', $order_id );
+	}
+
+	/**
+	 * Store what an order was created for.
+	 *
+	 * @since 1.58.4
+	 *
+	 * @param string $order_id Order ID.
+	 * @param string $form_id  Form ID.
+	 * @param string $mode     Payment mode.
+	 * @param mixed  $amount   Amount.
+	 * @param string $currency Currency code.
+	 * @return bool
+	 */
+	public static function store_order_binding( $order_id, $form_id, $mode, $amount, $currency ): bool {
+		if ( ! self::is_valid_order_id( $order_id ) ) {
+			return false;
+		}
+
+		update_option(
+			self::get_order_option_key( $order_id ),
+			array(
+				'form_id'    => (string) $form_id,
+				'mode'       => 'live' === $mode ? 'live' : 'sandbox',
+				'amount'     => self::format_amount( $amount, $currency ),
+				'currency'   => strtoupper( (string) $currency ),
+				// Reuses the Stripe browser token.
+				'owner'      => Forminator_Stripe::get_payment_owner( true ),
+				'created_at' => time(),
+			),
+			false
+		);
+
+		$orders              = get_option( self::ORDER_CLEANUP_OPTION_KEY, array() );
+		$orders              = is_array( $orders ) ? $orders : array();
+		$orders[ $order_id ] = time();
+		update_option( self::ORDER_CLEANUP_OPTION_KEY, $orders, false );
+
+		return true;
+	}
+
+	/**
+	 * Check that an order was created for this form, browser and total.
+	 *
+	 * @since 1.58.4
+	 *
+	 * @param mixed  $order_id Order ID.
+	 * @param string $mode     Payment mode.
+	 * @param mixed  $amount   Expected amount.
+	 * @param string $currency Expected currency code.
+	 * @return string Empty when the order matches, the reason otherwise.
+	 */
+	private static function get_order_binding_error( $order_id, $mode, $amount, $currency ): string {
+		if ( ! self::is_valid_order_id( $order_id ) ) {
+			return 'invalid_order_id';
+		}
+
+		$binding = get_option( self::get_order_option_key( $order_id ), false );
+		if ( ! is_array( $binding ) ) {
+			return 'unknown_order';
+		}
+
+		if ( ! Forminator_Stripe::is_payment_owner( $binding['owner'] ?? '' ) ) {
+			return 'owner_mismatch';
+		}
+
+		$form_id = ! empty( Forminator_Front_Action::$module_object->id ) ? (string) Forminator_Front_Action::$module_object->id : '';
+		if (
+			( $binding['form_id'] ?? '' ) !== $form_id
+			|| ( 'live' === $mode ? 'live' : 'sandbox' ) !== ( $binding['mode'] ?? '' )
+			|| self::format_amount( $amount, $currency ) !== ( $binding['amount'] ?? '' )
+			|| strtoupper( (string) $currency ) !== ( $binding['currency'] ?? '' )
+		) {
+			return 'binding_mismatch';
+		}
+
+		return '';
+	}
+
+	/**
+	 * Claim an order once, only the request that deletes the option succeeds.
+	 *
+	 * @since 1.58.4
+	 *
+	 * @param string $order_id Order ID, checked by get_order_binding_error().
+	 * @return bool
+	 */
+	private static function claim_order_binding( $order_id ): bool {
+		if ( ! delete_option( self::get_order_option_key( $order_id ) ) ) {
+			return false;
+		}
+
+		self::remove_order_from_cleanup( $order_id );
+
+		return true;
+	}
+
+	/**
+	 * Log a rejected order and return the entry data error.
+	 *
+	 * @since 1.58.4
+	 *
+	 * @param string $reason   Reason code.
+	 * @param mixed  $order_id Order ID.
+	 * @param string $mode     Payment mode.
+	 * @return array
+	 */
+	private static function get_binding_error_entry_data( $reason, $order_id, $mode ): array {
+		forminator_maybe_log(
+			__METHOD__,
+			array(
+				'validation'     => 'binding',
+				'reason'         => $reason,
+				'transaction_id' => $order_id,
+				'mode'           => $mode,
+			)
+		);
+
+		return array(
+			'error' => esc_html__( 'Error! Something went wrong during checkout and payment couldn\'t be approved.', 'forminator' ),
+		);
+	}
+
+	/**
+	 * Remove an order from the cleanup list.
+	 *
+	 * @since 1.58.4
+	 *
+	 * @param string $order_id Order ID.
+	 * @return void
+	 */
+	private static function remove_order_from_cleanup( $order_id ) {
+		$orders = get_option( self::ORDER_CLEANUP_OPTION_KEY, array() );
+		if ( is_array( $orders ) && isset( $orders[ $order_id ] ) ) {
+			unset( $orders[ $order_id ] );
+			update_option( self::ORDER_CLEANUP_OPTION_KEY, $orders, false );
+		}
+	}
+
+	/**
+	 * Delete bindings of orders that were never submitted.
+	 *
+	 * @since 1.58.4
+	 *
+	 * @return void
+	 */
+	public function cleanup_order_bindings() {
+		$orders = get_option( self::ORDER_CLEANUP_OPTION_KEY, array() );
+		if ( ! is_array( $orders ) || empty( $orders ) ) {
+			return;
+		}
+
+		$expired_before = time() - DAY_IN_SECONDS;
+		foreach ( $orders as $order_id => $created_at ) {
+			if ( (int) $created_at < $expired_before ) {
+				delete_option( self::get_order_option_key( (string) $order_id ) );
+				unset( $orders[ $order_id ] );
+			}
+		}
+
+		update_option( self::ORDER_CLEANUP_OPTION_KEY, $orders, false );
+	}
+
+	/**
+	 * Build the option key of an order binding.
+	 *
+	 * @since 1.58.4
+	 *
+	 * @param string $order_id Order ID.
+	 * @return string
+	 */
+	private static function get_order_option_key( $order_id ): string {
+		return self::ORDER_OPTION_PREFIX . md5( (string) $order_id );
+	}
+
+	/**
+	 * Get the capture if it completed for the expected total.
+	 *
+	 * Checks the capture itself, an order can be COMPLETED with a pending or declined capture.
+	 *
+	 * @since 1.58.4
+	 *
+	 * @param mixed $response Capture order response.
+	 * @param array $field    Field.
+	 * @return object|WP_Error
+	 */
+	public function get_completed_capture( $response, $field ) {
+		// A failed request returns a WP_Error, the caller logs it.
+		if ( is_wp_error( $response ) || ! is_object( $response ) ) {
+			return new WP_Error( 'forminator_paypal_capture_failed', esc_html__( 'Payment failed, please try again!', 'forminator' ) );
+		}
+
+		$currency = self::get_property( 'currency', $field, $this->get_default_currency() );
+		$amount   = $this->get_payment_amount( $field );
+		$capture  = $response->purchase_units[0]->payments->captures[0] ?? null;
+
+		if ( ! isset( $response->status ) || 'COMPLETED' !== $response->status || ! is_object( $capture ) || empty( $capture->id ) ) {
+			return new WP_Error( 'forminator_paypal_capture_failed', esc_html__( 'Payment failed, please try again!', 'forminator' ) );
+		}
+
+		// The money may still arrive, so don't ask the payer to pay again.
+		if ( 'PENDING' === ( $capture->status ?? '' ) ) {
+			return new WP_Error( 'forminator_paypal_capture_pending', esc_html__( 'Your payment is still being processed by PayPal and couldn\'t be confirmed. Please contact us before trying again.', 'forminator' ) );
+		}
+
+		if (
+			'COMPLETED' !== ( $capture->status ?? '' )
+			|| (string) ( $capture->amount->value ?? '' ) !== self::format_amount( $amount, $currency )
+			|| strtoupper( (string) ( $capture->amount->currency_code ?? '' ) ) !== strtoupper( (string) $currency )
+		) {
+			return new WP_Error( 'forminator_paypal_capture_failed', esc_html__( 'Payment failed, please try again!', 'forminator' ) );
+		}
+
+		return $capture;
 	}
 
 	/**

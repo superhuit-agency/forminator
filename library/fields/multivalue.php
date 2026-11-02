@@ -349,14 +349,25 @@ class Forminator_MultiValue extends Forminator_Field {
 	 * @return string
 	 */
 	public function get_validation_rules() {
-		$rules       = '';
-		$field       = $this->field;
-		$id          = self::get_property( 'element_id', $field );
-		$is_required = $this->is_required( $field );
+		$rules         = '';
+		$field         = $this->field;
+		$id            = self::get_property( 'element_id', $field );
+		$is_required   = $this->is_required( $field );
+		$validated_max = $this->get_validated_max_selections( $field );
+
+		if ( $validated_max > 0 ) {
+			// Use object format to support multiple validation rules.
+			$rules .= '"' . $this->get_id( $field ) . '[]": {' . "\n";
+			if ( $is_required ) {
+				$rules .= '"required": true,' . "\n";
+			}
+			$rules .= '"maxCheckboxSelections": ' . $validated_max . ',' . "\n";
+			$rules .= '},' . "\n";
+		} elseif ( $is_required ) {
+			$rules .= '"' . $this->get_id( $field ) . '[]": "required",';
+		}
 
 		if ( $is_required ) {
-			$rules .= '"' . $this->get_id( $field ) . '[]": "required",';
-
 			$enable_custom_option = self::get_property( 'enable_custom_option', $field, false );
 			if ( $enable_custom_option ) {
 				$rules .= '"custom-' . $this->get_id( $field ) . '": {' . "\n";
@@ -380,16 +391,34 @@ class Forminator_MultiValue extends Forminator_Field {
 		$id          = self::get_property( 'element_id', $field );
 		$is_required = $this->is_required( $field );
 
-		if ( $is_required ) {
-			$required_message = self::get_property( 'required_message', $field, $this->get_required_error_message() );
-			$required_message = apply_filters(
-				'forminator_multi_field_required_validation_message',
-				$required_message,
-				$id,
-				$field
-			);
-			$messages        .= '"' . $this->get_id( $field ) . '[]": "' . forminator_addcslashes( $required_message ) . '",' . "\n";
+		// Get max selections settings.
+		$validated_max = $this->get_validated_max_selections( $field );
 
+		// Check if we need object format (when limit_selections is enabled).
+		$needs_object_format = $validated_max > 0;
+
+		if ( $needs_object_format ) {
+			// Use object format to support multiple validation rules.
+			$messages .= '"' . $this->get_id( $field ) . '[]": {' . "\n";
+
+			if ( $is_required ) {
+				$required_message = $this->get_required_validation_message( $field, 'forminator_multi_field_required_validation_message' );
+				$messages        .= '"required": "' . forminator_addcslashes( $required_message ) . '",' . "\n";
+			}
+
+			// Add max selections validation message.
+			$max_error_message = $this->get_max_selections_error_message( $field, $validated_max, 'forminator_checkbox_field_max_selections_validation_message' );
+			$messages         .= '"maxCheckboxSelections": "' . forminator_addcslashes( $max_error_message ) . '",' . "\n";
+
+			$messages .= '},' . "\n";
+		} elseif ( $is_required ) {
+			// Use simple string format when only required validation is needed.
+			$required_message = $this->get_required_validation_message( $field, 'forminator_multi_field_required_validation_message' );
+			$messages        .= '"' . $this->get_id( $field ) . '[]": "' . forminator_addcslashes( $required_message ) . '",' . "\n";
+		}
+
+		// Handle custom option validation message.
+		if ( $is_required ) {
 			$enable_custom_option = self::get_property( 'enable_custom_option', $field, false );
 			if ( $enable_custom_option ) {
 				$custom_value_required_message = self::get_property( 'custom_value_error_message', $field, '' );
@@ -441,6 +470,14 @@ class Forminator_MultiValue extends Forminator_Field {
 				break;
 			}
 		}
+
+		// Validate max selections.
+		$validated_max = $this->get_validated_max_selections( $field );
+		if ( $validated_max > 0 && is_array( $data ) && count( $data ) > $validated_max ) {
+			$max_error_message               = $this->get_max_selections_error_message( $field, $validated_max, 'forminator_checkbox_field_max_selections_validation_message' );
+			$this->validation_message[ $id ] = $max_error_message;
+		}
+
 		if ( $this->is_required( $field ) ) {
 			$required_message = self::get_property( 'required_message', $field, esc_html( $this->get_required_error_message() ) );
 			if ( empty( $data ) ) {

@@ -169,10 +169,9 @@ $is_show_fields     = ! method_exists( $this, 'has_leads' ) || (bool) $this->has
 							<option value="draft" <?php selected( 'draft', $entry_status ); ?> ><?php esc_html_e( 'Draft', 'forminator' ); ?></option>
 							<?php if ( ! forminator_form_abandonment_disabled() ) { ?>
 								<option value="abandoned" <?php selected( 'abandoned', $entry_status ); ?> ><?php esc_html_e( 'Abandoned', 'forminator' ); ?></option>
-								<?php
-							}
-						}
-						?>
+							<?php } ?>
+						<?php } ?>
+						<option value="spam" <?php selected( 'spam', $entry_status ); ?> ><?php esc_html_e( 'Spam', 'forminator' ); ?></option>
 						<option value="pending" <?php selected( 'pending', $entry_status ); ?> ><?php esc_html_e( 'Pending', 'forminator' ); ?></option>
 						<option value="failed" <?php selected( 'failed', $entry_status ); ?> ><?php esc_html_e( 'Failed', 'forminator' ); ?></option>
 					</select>

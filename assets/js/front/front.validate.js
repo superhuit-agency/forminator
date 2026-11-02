@@ -117,20 +117,34 @@
 				},
 
 				onfocusout: function ( element ) {
+					var $element = $( element );
+
+					// Checkbox selection limits: defer so validation runs after a click
+					// that caused this blur finishes updating the checked state.
+					if ( $element.is( 'input[type="checkbox"]' ) ) {
+						var checkboxRules = $element.rules();
+						if ( checkboxRules && undefined !== checkboxRules.maxCheckboxSelections ) {
+							setTimeout( function () {
+								$element.valid();
+							}, 0 );
+							$element.trigger( 'validation:focusout' );
+							return;
+						}
+					}
 
 					//datepicker will be validated when its closed
-					if ( $( element ).hasClass('hasDatepicker') === false ) {
-						$( element ).valid();
+					if ( $element.hasClass('hasDatepicker') === false ) {
+						$element.valid();
 					}
 					//validate Confirm email.
-					if ( $( element ).hasClass( 'forminator-email--field' ) ) {
-						let name = $( element ).attr( 'name' ),
+					if ( $element.hasClass( 'forminator-email--field' ) ) {
+						let name = $element.attr( 'name' ),
 							confirmEmail = $( 'input[name="confirm_' + name + '"]' );
 						if ( confirmEmail.length && confirmEmail.val() ) {
 							confirmEmail.valid();
 						}
 					}
-					$( element ).trigger('validation:focusout');
+					$element.trigger('validation:focusout');
 				},
 
 				highlight: function (element, errorClass, message) {
@@ -365,6 +379,15 @@
 					holder.removeAttr( 'aria-invalid' );
 
 					setTimeout( function () {
+						// A later validation may have marked this field invalid again
+						// (e.g. rapid checkbox clicks past a selection limit). Do not
+						// clear an error that was re-shown after this unhighlight ran.
+						var validator = holder.closest( 'form' ).data( 'validator' );
+						var fieldName = holder.attr( 'name' );
+						if ( validator && fieldName && validator.invalid[ fieldName ] ) {
+							return;
+						}
+
 						// Remove error message
 						holderError.remove();
 
@@ -404,6 +427,16 @@
 			// Trigger change for the required checkbox field.
 			$( '.forminator-field.required input[type="checkbox"]' ).on( 'input', function () {
 				$( this ).not( ':checked' ).trigger( 'focusout' );
+			});
+
+			// Selection limits: validate on change after the checked state updates.
+			// Needed when focus does not move (same checkbox) and for rapid multi-clicks.
+			$form.on( 'change', 'input[type="checkbox"]', function () {
+				var $input = $( this );
+				var rules  = $input.rules();
+				if ( rules && undefined !== rules.maxCheckboxSelections ) {
+					$input.valid();
+				}
 			});
 
 			// Remove error messages after disabling validation.
@@ -781,6 +814,30 @@
 			}
 		}
 		return true;
+	});
+
+	// Validate maximum checkbox/multiselect selections.
+	$.validator.addMethod( 'maxCheckboxSelections', function ( value, element, param ) {
+		var name = element.name;
+		var selectedCount = 0;
+		var $element = $( element );
+
+		if ( ! name ) {
+			return true;
+		}
+
+		// Check if element is a select multiple or checkbox inputs.
+		if ( $element.is( 'select[multiple]' ) ) {
+			var selectedValues = $element.val();
+			selectedCount = Array.isArray( selectedValues ) ? selectedValues.length : 0;
+		} else {
+			// Count checked checkboxes within the same form only.
+			selectedCount = $( element.form )
+				.find( 'input[name="' + name + '"]:checked' )
+				.length;
+		}
+
+		return selectedCount <= param;
 	});
 
 	function parseFloatFromString( value ) {
