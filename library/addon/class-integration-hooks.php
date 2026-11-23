@@ -845,7 +845,8 @@ abstract class Forminator_Integration_Hooks {
 
 		// For quiz lead forms, $prepared_data contains quiz data (answers, entry_id)
 		// instead of form field values. Load field data from the lead entry meta.
-		if ( ! empty( $field_data['has_lead'] ) && ! empty( $field_data['entry_id'] ) ) {
+		// Only quiz submissions have a verified lead entry.
+		if ( 'quiz' === static::$slug && ! empty( $field_data['has_lead'] ) && ! empty( $field_data['entry_id'] ) ) {
 			$entry = forminator_lead_form_data( $field_data );
 			if ( ! empty( $entry->meta_data ) ) {
 				$field_data = $entry->meta_data;

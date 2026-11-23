@@ -19,6 +19,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Forminator_Export {
 
 	/**
+	 * Scheduled export temp directory prefix.
+	 *
+	 * @since 1.58.6
+	 */
+	const TEMP_EXPORT_DIR_PREFIX = 'forminator-export-';
+
+	/**
 	 * Plugin instance
 	 *
 	 * @var null
@@ -472,13 +479,7 @@ class Forminator_Export {
 
 					$export_results[] = $export_result;
 
-					// Attach under a readable name, the temp file name is random.
-					$attachment_name = $export_result->file_name;
-					if ( isset( $current_files[ $attachment_name ] ) ) {
-						// Same form name exported twice in the same second, keep both files.
-						$attachment_name = $export_result->model->id . '-' . $attachment_name;
-					}
-					$current_files[ $attachment_name ] = $export_result->file_path;
+					$current_files[ $export_result->file_name ] = $export_result->file_path;
 				}
 				if ( ! empty( $export_results ) ) {
 					$subject      = $this->get_mail_subject( $export_results );
@@ -490,7 +491,7 @@ class Forminator_Export {
 		} finally {
 			// Always delete the exports, even when sending fails.
 			foreach ( array_unique( $files ) as $file ) {
-				wp_delete_file( $file );
+				self::delete_temp_export_file( $file );
 			}
 		}
 		if ( $receipts ) {
@@ -920,30 +921,48 @@ class Forminator_Export {
 		$model = $export_result->model;
 		$data  = $export_result->data;
 
-		require_once ABSPATH . 'wp-admin/includes/file.php';
-
-		// Write to a random temp file outside the uploads directory, it is only needed as a mail attachment.
-		$tmp_path = wp_tempnam( 'forminator-export-' . wp_generate_password( 16, false ) );
-		if ( empty( $tmp_path ) || ! file_exists( $tmp_path ) ) {
-			forminator_maybe_log( __METHOD__, 'Failed to create the temporary export file.' );
+		// Write to a random private temp directory, the file is only needed as a mail attachment.
+		$tmp_dir = get_temp_dir() . self::TEMP_EXPORT_DIR_PREFIX . wp_generate_password( 16, false );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- WP_Filesystem may use FTP/SSH, which cannot write to the system temp directory.
+		if ( ! mkdir( $tmp_dir, 0700 ) ) {
+			forminator_maybe_log( __METHOD__, 'Failed to create the temporary export directory.' );
 
 			return false;
 		}
 
-		chmod( $tmp_path, 0600 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_chmod -- Restrict the export to the owner before writing it.
+		// Some mailers ignore the attachment name, so keep a unique .csv name on disk.
+		$file_name = sanitize_title( $model->name ) . '-' . $model->id . '-' . gmdate( 'ymdHis' ) . '.csv';
+		$tmp_path  = $tmp_dir . '/' . $file_name;
 
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- WP_Filesystem may use FTP/SSH, which cannot write to the system temp directory.
 		if ( false === file_put_contents( $tmp_path, $this->csvstr( $data ) ) ) {
-			wp_delete_file( $tmp_path );
+			self::delete_temp_export_file( $tmp_path );
 			forminator_maybe_log( __METHOD__, 'Failed to write the export file.' );
 
 			return false;
 		}
 
 		$export_result->file_path = $tmp_path;
-		$export_result->file_name = sanitize_title( $model->name ) . '-' . gmdate( 'ymdHis' ) . '.csv';
+		$export_result->file_name = $file_name;
 
 		return $export_result;
+	}
+
+	/**
+	 * Delete a scheduled export file and its temp directory.
+	 *
+	 * @since 1.58.6
+	 *
+	 * @param string $file_path Export file path.
+	 */
+	private static function delete_temp_export_file( $file_path ) {
+		wp_delete_file( $file_path );
+
+		// Only remove the directory created for this export.
+		$tmp_dir = dirname( $file_path );
+		if ( ! file_exists( $file_path ) && 0 === strpos( basename( $tmp_dir ), self::TEMP_EXPORT_DIR_PREFIX ) && is_dir( $tmp_dir ) ) {
+			rmdir( $tmp_dir ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- WP_Filesystem may use FTP/SSH, which cannot write to the system temp directory.
+		}
 	}
 
 	/**

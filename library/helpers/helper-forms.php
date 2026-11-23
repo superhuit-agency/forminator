@@ -1295,6 +1295,13 @@ function forminator_sanitize_rich_textarea_widget_hooks( $content ) {
 function forminator_get_rich_textarea_allowed_html() {
 	$allowed_html = wp_kses_allowed_html( 'post' );
 
+	// Form-interactive tags can break out of a parent <textarea> context when
+	// stored draft HTML is rendered back into a textarea without esc_textarea().
+	$disallowed_tags = array( 'textarea', 'input', 'select', 'option', 'optgroup', 'button', 'form' );
+	foreach ( $disallowed_tags as $tag ) {
+		unset( $allowed_html[ $tag ] );
+	}
+
 	// Validate URL attributes so entity-encoded markup cannot ride in them.
 	$url_attributes = wp_kses_uri_attributes();
 
@@ -1319,6 +1326,23 @@ function forminator_get_rich_textarea_allowed_html() {
 				);
 			}
 		}
+
+		// Title, alt, name, and ARIA text are not URLs. ThickBox reads title/name
+		// and inserts the decoded value with innerHTML, so reject encoded markup.
+		foreach ( array_keys( $attributes ) as $attribute ) {
+			$is_text_attribute = in_array( $attribute, array( 'title', 'alt', 'name' ), true ) || 0 === strpos( $attribute, 'aria-' );
+			if ( ! $is_text_attribute || ! isset( $allowed_html[ $tag ][ $attribute ] ) ) {
+				continue;
+			}
+
+			if ( in_array( $attribute, $url_attributes, true ) ) {
+				continue;
+			}
+
+			$allowed_html[ $tag ][ $attribute ] = array(
+				'value_callback' => 'forminator_is_allowed_rich_textarea_text_attribute',
+			);
+		}
 	}
 
 	return $allowed_html;
@@ -1333,15 +1357,63 @@ function forminator_get_rich_textarea_allowed_html() {
  * @return bool
  */
 function forminator_is_allowed_rich_textarea_class_attribute( $class_value ) {
-	$classes = preg_split( '/\s+/', $class_value, -1, PREG_SPLIT_NO_EMPTY );
+	// Decode first so thick&#98;ox cannot pass the check and become thickbox in the browser.
+	$class_value = forminator_decode_rich_textarea_entities( $class_value );
+	$classes     = preg_split( '/\s+/', $class_value, -1, PREG_SPLIT_NO_EMPTY );
+
+	if ( ! is_array( $classes ) ) {
+		return false;
+	}
+
+	// Classes that bind admin behavior. ThickBox copies the decoded title into
+	// #TB_ajaxWindowTitle via innerHTML when an administrator clicks the link.
+	$behavior_classes = array(
+		'thickbox',
+		'thickbox-loading',
+		'open-plugin-details-modal',
+	);
 
 	foreach ( $classes as $class_name ) {
-		if ( preg_match( '/^(sui|fui)-/i', $class_name ) ) {
+		$class_name = strtolower( $class_name );
+
+		if ( preg_match( '/^(sui|fui)-/', $class_name ) ) {
+			return false;
+		}
+
+		// Reserved Forminator frontend hooks must not come from public submissions.
+		if ( 0 === strpos( $class_name, 'forminator-' ) ) {
+			return false;
+		}
+
+		if ( in_array( $class_name, $behavior_classes, true ) ) {
 			return false;
 		}
 	}
 
 	return true;
+}
+
+/**
+ * Decode HTML entities until the value stops changing.
+ *
+ * Kses keeps entity-encoded characters in attribute values. Decode every layer
+ * so a later check sees the characters a browser or admin script would see.
+ *
+ * @since 1.58.6
+ *
+ * @param string $value Attribute value.
+ * @return string
+ */
+function forminator_decode_rich_textarea_entities( $value ) {
+	$decoded = (string) $value;
+
+	// Decoding only ever shortens the string, so this converges.
+	do {
+		$previous = $decoded;
+		$decoded  = html_entity_decode( $previous, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+	} while ( $decoded !== $previous );
+
+	return $decoded;
 }
 
 /**
@@ -1357,17 +1429,31 @@ function forminator_is_allowed_rich_textarea_class_attribute( $class_value ) {
  * @return bool
  */
 function forminator_is_allowed_rich_textarea_url_attribute( $url_value ) {
-	$decoded = (string) $url_value;
-
-	// Decode until stable to catch multi-encoded characters. Decoding only ever
-	// shortens the string, so this converges.
-	do {
-		$previous = $decoded;
-		$decoded  = html_entity_decode( $previous, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
-	} while ( $decoded !== $previous );
+	$decoded = forminator_decode_rich_textarea_entities( $url_value );
 
 	// These characters can break out of a downstream HTML/JS sink.
 	if ( preg_match( '/[<>"\'`]/', $decoded ) ) {
+		return false;
+	}
+
+	return true;
+}
+
+/**
+ * Check whether a free-text attribute is safe for public rich-text admin output.
+ *
+ * Quotes are normal in titles and labels. Angle brackets are not: ThickBox and
+ * similar admin scripts decode the attribute and insert it as HTML.
+ *
+ * @since 1.58.6
+ *
+ * @param string $text_value Attribute value.
+ * @return bool
+ */
+function forminator_is_allowed_rich_textarea_text_attribute( $text_value ) {
+	$decoded = forminator_decode_rich_textarea_entities( $text_value );
+
+	if ( preg_match( '/[<>`]/', $decoded ) ) {
 		return false;
 	}
 

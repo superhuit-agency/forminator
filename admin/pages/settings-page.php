@@ -141,6 +141,10 @@ class Forminator_Settings_Page extends Forminator_Admin_Page {
 	public static function only_appearance_settings( $all_settings ) {
 		// todo: refactor - it's better to use separate array `appearance` in the modal settings,
 		// which includes all appearance settings. And then we can remove this method.
+		$exclude = array(
+			'indicator-label',
+			'remember-me-label',
+		);
 		$consist = array(
 			'-font-family',
 			'-custom-family',
@@ -205,6 +209,9 @@ class Forminator_Settings_Page extends Forminator_Admin_Page {
 
 		foreach ( $all_settings as $key => $value ) {
 			$apply = false;
+			if ( in_array( $key, $exclude, true ) ) {
+				continue;
+			}
 			if ( in_array( $key, $props, true ) || 'basic-' === substr( $key, 0, 6 ) ) {
 				$apply = true;
 			}

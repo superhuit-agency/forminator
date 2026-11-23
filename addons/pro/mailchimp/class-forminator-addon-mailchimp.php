@@ -514,4 +514,45 @@ class Forminator_Mailchimp extends Forminator_Integration {
 
 		wp_send_json_success( $html );
 	}
+
+	/**
+	 * Check whether a submission may update an existing member.
+	 *
+	 * Only the WordPress user with the member's email may. Account emails are not always verified,
+	 * so sites can tighten this with the filter.
+	 *
+	 * @since 1.59.0
+	 *
+	 * @param string                           $email Submitted email.
+	 * @param object                           $member Existing member.
+	 * @param int                              $module_id Module ID.
+	 * @param string                           $list_id Audience ID.
+	 * @param Forminator_Form_Entry_Model|null $entry Entry.
+	 *
+	 * @return bool
+	 */
+	public function can_update_member( $email, $member, $module_id, $list_id, $entry = null ) {
+		// Payments completed later use the stored submitter, not the current user.
+		$submitter = $entry instanceof Forminator_Form_Entry_Model ? $entry->get_meta( '_submitter_user_id', null ) : null;
+		$user      = null === $submitter ? wp_get_current_user() : new WP_User( (int) $submitter );
+		$email     = strtolower( trim( (string) ( $member->email_address ?? $email ) ) );
+		$is_owner  = $user->exists() && strtolower( trim( $user->user_email ) ) === $email;
+
+		/**
+		 * Filter whether a submission may update an existing Mailchimp member
+		 *
+		 * Returning true lets anyone who submits the email overwrite the member.
+		 *
+		 * @since 1.59.0
+		 *
+		 * @param bool                             $is_owner Whether the submitter's account email matches the member.
+		 * @param string                           $email Member email.
+		 * @param object                           $member Existing member.
+		 * @param int                              $module_id Module ID.
+		 * @param string                           $list_id Audience ID.
+		 * @param Forminator_Form_Entry_Model|null $entry Entry.
+		 * @param WP_User                          $user Submitter, ID 0 for guests. Check it with user_can(), not current_user_can().
+		 */
+		return (bool) apply_filters( 'forminator_addon_mailchimp_update_existing_member', $is_owner, $email, $member, $module_id, $list_id, $entry, $user );
+	}
 }

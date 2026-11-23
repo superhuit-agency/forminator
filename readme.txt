@@ -3,7 +3,7 @@ Contributors: WPMUDEV
 Tags: contact form, custom form, forms, payment form, WordPress form plugin
 Requires at least: 6.4
 Tested up to: 7.1
-Stable tag: 1.58.3
+Stable tag: 1.58.4
 Requires PHP: 7.4
 License: GPL v3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
@@ -230,6 +230,23 @@ We take plugin security incredibly seriously; if you have a bug or vulnerability
 6. Publish Polls with Real-time Stats
 
 == Changelog ==
+
+= 1.58.6 ( 2026-11-16 ) =
+
+- Fix: Scheduled export emails no longer send a .tmp file, or drop the attachment, when an SMTP plugin is used
+- Fix: Security hardening
+
+
+= 1.58.5 ( 2026-11-09 ) =
+
+- Fix: Empty Stripe card details no longer clear their validation errors after submit
+- Fix: An AJAX-loaded PayPal form no longer causes a fatal error when another shortcode on the page is missing
+- Fix: PayPal payments no longer fail with an Invalid site key error when another form on the page has a CAPTCHA
+- Fix: Adding a rich text link no longer closes an Elementor popup that contains the form
+- Fix: Applying an appearance preset no longer resets the Submission Indicator or Remember me label
+- Fix: Apply Submission Filters is visible again for Editors when WPML translation is enabled
+- Fix: Security hardening
+
 
 = 1.58.4 ( 2026-10-29 ) =
 

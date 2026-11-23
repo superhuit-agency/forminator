@@ -188,6 +188,7 @@
 			// initiate merge tags
 			$( form_selector ).forminatorFrontMergeTags({
 				forminatorFields: self.settings.forminator_fields,
+				formFieldIds: self.settings.form_field_ids || [],
 				print_value: self.settings.print_value,
 			});
 
@@ -1518,6 +1519,10 @@
 				if (size === 'invisible') {
 					data.badge    = $(captcha_field).data('badge');
 					data.callback = function (token) {
+						var action = $( captcha_field ).data( 'action' );
+						if( typeof action !== 'undefined' && action === 'forminator_create_paypal_order' ) {
+							return; // Skip triggering submit for PayPal order creation, as it submits the form after payment.
+						}
 						$(self.element).trigger('submit.frontSubmit');
 					};
 				} else {
@@ -1985,8 +1990,60 @@
 		forminator_render_turnstile();
 	} );
 
+	// WordPress draws the rich-text link toolbar, the advanced link modal, and the
+	// link search list on document.body. Elementor treats that click as outside
+	// the popup and closes it. Tell the open popup to ignore those nodes.
+	function forminator_keep_elementor_popup_open_for_editor( id, instance ) {
+		var popup = document.getElementById( 'elementor-popup-modal-' + id );
+		var modal;
+		var hide;
+		var extra = '.mce-inline-toolbar-grp, #wp-link-wrap, #wp-link-backdrop, .ui-autocomplete';
+		var current;
+
+		if ( ! popup && instance && instance.$element && instance.$element.length ) {
+			popup = instance.$element[ 0 ];
+		}
+
+		if ( ! popup || ! popup.querySelector || ! popup.querySelector( 'textarea[id^="forminator-wp-editor-"]' ) ) {
+			return;
+		}
+
+		if ( instance && typeof instance.getModal === 'function' ) {
+			modal = instance.getModal();
+		} else if (
+			window.elementorFrontend &&
+			elementorFrontend.documentsManager &&
+			elementorFrontend.documentsManager.documents &&
+			elementorFrontend.documentsManager.documents[ id ] &&
+			typeof elementorFrontend.documentsManager.documents[ id ].getModal === 'function'
+		) {
+			modal = elementorFrontend.documentsManager.documents[ id ].getModal();
+		}
+
+		if ( ! modal || typeof modal.getSettings !== 'function' || typeof modal.setSettings !== 'function' ) {
+			return;
+		}
+
+		hide = modal.getSettings( 'hide' );
+
+		if ( ! hide || ( hide.ignore && 'string' !== typeof hide.ignore ) ) {
+			return;
+		}
+
+		current = hide.ignore ? hide.ignore : '';
+
+		if ( -1 !== current.indexOf( 'mce-inline-toolbar-grp' ) ) {
+			return;
+		}
+
+		modal.setSettings( 'hide', {
+			ignore: current ? current + ', ' + extra : extra
+		} );
+	}
+
 	// Elementor Popup show event
-	jQuery( document ).on( 'elementor/popup/show', () => {
+	jQuery( document ).on( 'elementor/popup/show', ( event, id, instance ) => {
+		forminator_keep_elementor_popup_open_for_editor( id, instance );
 		forminator_render_captcha();
 		forminator_render_hcaptcha();
 		forminator_render_turnstile();

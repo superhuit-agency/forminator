@@ -159,6 +159,7 @@ class Forminator_Core {
 
 		if ( ! FORMINATOR_PRO ) {
 			add_action( 'init', array( __CLASS__, 'load_cross_sell_module' ) );
+			add_action( 'init', array( __CLASS__, 'load_black_friday_module' ) );
 		}
 
 		// Clean up Action Scheduler.
@@ -666,6 +667,22 @@ class Forminator_Core {
 		}
 
 		include_once forminator_plugin_dir() . 'library/class-handle-webhooks.php';
+	}
+
+	/**
+	 * Load Black Friday module
+	 *
+	 * @return void
+	 */
+	public static function load_black_friday_module() {
+		$black_friday_module_path = forminator_plugin_dir() . 'library/lib/wpmudev-blackfriday/campaign.php';
+		if ( ! file_exists( $black_friday_module_path ) ) {
+			return;
+		}
+		if ( ! class_exists( '\WPMUDEV\Modules\BlackFriday\Campaign' ) ) {
+			require_once $black_friday_module_path;
+			new \WPMUDEV\Modules\BlackFriday\Campaign();
+		}
 	}
 
 	/**

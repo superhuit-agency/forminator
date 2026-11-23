@@ -576,14 +576,23 @@ class Forminator_Form_Entry_Model {
 	/**
 	 * Updated status
 	 *
-	 * @param string $status The new status.
+	 * @since 1.59.0 Added `$expected_status` parameter.
+	 *
+	 * @param string      $status The new status.
+	 * @param string|null $expected_status Update only if the current status matches.
 	 * @return bool
 	 */
-	public function update_status( $status ) {
+	public function update_status( $status, $expected_status = null ) {
 		global $wpdb;
 
 		if ( empty( $this->entry_id ) ) {
 			return false;
+		}
+
+		$where = array( 'entry_id' => $this->entry_id );
+		if ( ! is_null( $expected_status ) ) {
+			// Update only if the status still matches, so concurrent requests cannot both change it.
+			$where['status'] = $expected_status;
 		}
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
@@ -592,9 +601,14 @@ class Forminator_Form_Entry_Model {
 			array(
 				'status' => $status,
 			),
-			array( 'entry_id' => $this->entry_id )
+			$where
 		);
 		if ( ! $result ) {
+			if ( ! is_null( $expected_status ) ) {
+				// Reload the status changed by another request.
+				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+				$this->status = (string) $wpdb->get_var( $wpdb->prepare( "SELECT `status` FROM {$this->table_name} WHERE `entry_id` = %d", $this->entry_id ) );
+			}
 			return false;
 		}
 		$this->status = $status;
@@ -3204,25 +3218,17 @@ class Forminator_Form_Entry_Model {
 	 * @param string $field_name - Field name.
 	 * @param string $field_type - Field type.
 	 * @param array  $option Option settings.
-	 * @param bool   $freeze Optional. Should it save transient option for the current request or not. False by default.
+	 * @param bool   $freeze Optional. Should it reserve the option for the current request or not. False by default.
 	 * @return bool
 	 */
 	public static function is_option_limit_reached( $module_id, $field_name, $field_type, $option, $freeze = false ) {
+		global $wpdb;
+
 		if ( empty( $option['limit'] ) ) {
 			return false;
 		}
-		$entries = self::select_count_entries_by_meta_field(
-			$module_id,
-			$field_name,
-			forminator_normalize_choice_option_value( $option['value'] ),
-			forminator_normalize_choice_option_value( $option['label'] ),
-			$field_type
-		);
 
-		if ( $option['limit'] <= $entries ) {
-			return true;
-		}
-
+		$reserved = 0;
 		if ( $freeze ) {
 			/**
 			 * Filter the time interval (in seconds) after which transient option for limited Select Option for submissions in process will be expired.
@@ -3231,36 +3237,50 @@ class Forminator_Form_Entry_Model {
 			 * @param string $module_id Module ID.
 			 */
 			$expiration = apply_filters( 'forminator_form_select_option_limit_interval', 10, $module_id );
-			do {
-				// Use md5 hash to handle special characters in the option value.
-				$transient_key = 'forminator_select_option_limit_in_process' . $module_id . $field_name . md5( $option['value'] ) . '_' . $entries;
-				$is_set        = set_transient( $transient_key, true, $expiration );
-				if ( ! $is_set ) {
-					++$entries;
+			// Use md5 hash to handle special characters in the option value.
+			$key_prefix      = 'forminator_select_option_limit_in_process' . $module_id . $field_name . md5( $option['value'] ) . '_';
+			$key_like        = $wpdb->esc_like( $key_prefix ) . '%';
+			$reservation_key = $key_prefix . wp_generate_password( 12, false );
+			// Delete expired reservations.
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE `option_name` LIKE %s AND `option_value` < %d", $key_like, time() ) );
+			// Reserve before counting, so concurrent requests see each other.
+			add_option( $reservation_key, time() + $expiration, '', 'no' );
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$reserved = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->options} WHERE `option_name` LIKE %s AND `option_name` <> %s", $key_like, $reservation_key ) );
+		}
+
+		// Count entries after reservations, so none are missed.
+		$entries = self::select_count_entries_by_meta_field(
+			$module_id,
+			$field_name,
+			forminator_normalize_choice_option_value( $option['value'] ),
+			forminator_normalize_choice_option_value( $option['label'] ),
+			$field_type
+		);
+
+		if ( $option['limit'] <= $entries + $reserved ) {
+			if ( $freeze ) {
+				delete_option( $reservation_key );
+			}
+			return true;
+		}
+
+		if ( $freeze ) {
+			add_filter(
+				'forminator_submission_success',
+				function ( $response ) use ( $reservation_key ) {
+					delete_option( $reservation_key );
+					return $response;
 				}
-			} while ( ! $is_set && $entries < $option['limit'] );
-
-			// Only register cleanup filters if transient was successfully set.
-			if ( $is_set ) {
-				add_filter(
-					'forminator_submission_success',
-					function ( $response ) use ( $transient_key ) {
-						delete_transient( $transient_key );
-						return $response;
-					}
-				);
-				add_filter(
-					'forminator_submission_error',
-					function ( $response ) use ( $transient_key ) {
-						delete_transient( $transient_key );
-						return $response;
-					}
-				);
-			}
-
-			if ( $option['limit'] <= $entries ) {
-				return true;
-			}
+			);
+			add_filter(
+				'forminator_submission_error',
+				function ( $response ) use ( $reservation_key ) {
+					delete_option( $reservation_key );
+					return $response;
+				}
+			);
 		}
 
 		return false;

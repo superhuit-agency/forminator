@@ -289,9 +289,6 @@
 		/**
 		 * Make sure a captcha token exists before the order is created.
 		 *
-		 * The PayPal flow never executes an invisible widget, so it holds no token. A v3 site
-		 * key can be executed directly, returning one without the widget's submit callback.
-		 *
 		 * @param {jQuery} $form Form.
 		 * @returns {Promise}
 		 */
@@ -299,8 +296,8 @@
 			var $captcha = $form.find( '.forminator-g-recaptcha' ).first(),
 				sitekey;
 
-			// Already carrying a token, or nothing to execute.
-			if ( ! $captcha.length || $form.find( 'input[name="forminator-captcha-token"]' ).val() ) {
+			// If there is no captcha, resolve immediately.
+			if ( ! $captcha.length ) {
 				return Promise.resolve();
 			}
 
@@ -314,14 +311,38 @@
 				return Promise.resolve();
 			}
 
-			return Promise.resolve( grecaptcha.execute( sitekey, { action: 'forminator_paypal' } ) )
+			const recaptcha_widget = $captcha.data( 'forminator-recapchta-widget' );
+			if ( typeof recaptcha_widget === 'undefined' || recaptcha_widget === '' ) {
+				return Promise.resolve();
+			}
+
+			var $field = $form.find( 'input[name="forminator-captcha-token"]' );
+
+			if ( $field.length ) {
+				$field.remove();
+				window.grecaptcha.reset( recaptcha_widget );
+			}
+
+			$captcha.data( 'action', 'forminator_create_paypal_order' );
+			return Promise.resolve()
+				.then( function () {
+					return window.grecaptcha.execute( recaptcha_widget );
+				} )
 				.then( function ( token ) {
 					if ( token ) {
-						$( '<input>', { type: 'hidden', name: 'forminator-captcha-token' } ).val( token ).appendTo( $form );
+						$( '<input>', {
+							type: 'hidden',
+							name: 'forminator-captcha-token',
+						} )
+							.val( token )
+							.appendTo( $form );
 					}
 				} )
-				.catch( function () {
-					// A v2 invisible key cannot be executed this way, the server decides what to do.
+				.catch( function ( error ) {
+					console.error( error );
+				} )
+				.finally( function () {
+					$captcha.removeData( 'action' );
 				} );
 		},
 

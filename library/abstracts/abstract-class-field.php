@@ -578,7 +578,11 @@ abstract class Forminator_Field {
 			$html .= self::get_description( $description, $attr['id'], $description_position );
 		}
 
-		$html .= sprintf( '<textarea %s >%s</textarea>', $markup, wp_kses_post( $content ) );
+		// get_post_data() / some callers already entity-encode; decode first so
+		// esc_textarea() does not double-encode.
+		// Still encode for the textarea text context so stored HTML cannot close this tag.
+		$content = htmlspecialchars_decode( (string) $content, ENT_QUOTES );
+		$html   .= sprintf( '<textarea %s >%s</textarea>', $markup, esc_textarea( $content ) );
 
 		if ( 'above' !== $description_position ) {
 			$html .= self::get_description( $description, $attr['id'], $description_position );
@@ -2419,10 +2423,43 @@ abstract class Forminator_Field {
 	 */
 	public static function add_htaccess_file( $upload_root ) {
 		$htaccess_file = $upload_root . '.htaccess';
-		if ( file_exists( $htaccess_file ) ) {
+		$rules         = self::get_upload_root_htaccess_rules();
+
+		/**
+		 * A filter to allow the modification/disabling of parsing certain PHP
+		 *
+		 * @since 1.23.1
+		 *
+		 * @param mixed $rules The Rules of what to parse or not to parse
+		 */
+		$rules = apply_filters( 'forminator_upload_root_htaccess_rules', $rules );
+
+		// Refresh an existing file when the security rules change. insert_with_markers() keeps lines outside the Forminator block.
+		if ( file_exists( $htaccess_file ) && self::upload_htaccess_is_current( $htaccess_file, $rules ) ) {
 			return;
 		}
-		$rules = '# Disable parsing of PHP for some server configurations.
+
+		if ( ! function_exists( 'insert_with_markers' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/misc.php';
+		}
+
+		if ( ! empty( $rules ) ) {
+			insert_with_markers( $htaccess_file, 'Forminator', $rules );
+		}
+	}
+
+	/**
+	 * Apache rules for the Forminator upload root.
+	 *
+	 * .rtx is text/richtext in WordPress, and fileinfo often reads those bytes as text/plain.
+	 * Debian and Ubuntu Apache do not map .rtx, so the response has no Content-Type and the browser may sniff it as HTML.
+	 *
+	 * @since 1.58.5
+	 *
+	 * @return string
+	 */
+	private static function get_upload_root_htaccess_rules() {
+		return '# Disable parsing of PHP for some server configurations.
 <Files *>
   SetHandler none
   SetHandler default-handler
@@ -2435,19 +2472,37 @@ abstract class Forminator_Field {
 </IfModule>
 <IfModule headers_module>
   Header set X-Robots-Tag "noindex"
+  Header set X-Content-Type-Options "nosniff"
+</IfModule>
+<IfModule mime_module>
+  <FilesMatch "(?i)\.rtx$">
+    ForceType text/plain
+  </FilesMatch>
 </IfModule>';
+	}
 
-		/**
-		 * A filter to allow the modification/disabling of parsing certain PHP
-		 *
-		 * @since 1.23.1
-		 *
-		 * @param mixed $rules The Rules of what to parse or not to parse
-		 */
-		$rules = apply_filters( 'forminator_upload_root_htaccess_rules', $rules );
-		if ( ! empty( $rules ) ) {
-			insert_with_markers( $htaccess_file, 'Forminator', $rules );
+	/**
+	 * Whether the upload .htaccess already contains the current Forminator rules.
+	 *
+	 * @since 1.58.5
+	 *
+	 * @param string $htaccess_file Htaccess path.
+	 * @param mixed  $rules         Rules that would be written.
+	 * @return bool
+	 */
+	private static function upload_htaccess_is_current( $htaccess_file, $rules ) {
+		$contents = file_get_contents( $htaccess_file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local .htaccess, not a remote URL.
+		if ( ! is_string( $contents ) ) {
+			return false;
 		}
+
+		// A filtered ruleset that drops the .rtx rule is left as the site configured it.
+		if ( ! is_string( $rules ) || false === strpos( $rules, 'ForceType text/plain' ) ) {
+			return false !== strpos( $contents, '# BEGIN Forminator' );
+		}
+
+		return false !== strpos( $contents, 'ForceType text/plain' )
+			&& false !== strpos( $contents, 'X-Content-Type-Options' );
 	}
 
 	/**

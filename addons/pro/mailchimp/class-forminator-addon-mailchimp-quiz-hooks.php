@@ -32,6 +32,7 @@ class Forminator_Mailchimp_Quiz_Hooks extends Forminator_Integration_Quiz_Hooks 
 	 * @throws Forminator_Integration_Exception Throws Integration Exception.
 	 */
 	protected function custom_entry_fields( $submitted_data, $current_entry_fields ): array {
+		$entry                  = func_get_args()[2];
 		$quiz_id                = $this->module_id;
 		$quiz_settings_instance = $this->settings_instance;
 		$gdpr                   = false;
@@ -215,6 +216,7 @@ class Forminator_Mailchimp_Quiz_Hooks extends Forminator_Integration_Quiz_Hooks 
 				$status = 'pending';
 			}
 
+			$member_status_request = null;
 			try {
 				// keep subscribed if already subscribed.
 				$member_status_request = $mailchimp_api->get_member( $addon_setting_values['mail_list_id'], $subscriber_hash, array() );
@@ -229,6 +231,12 @@ class Forminator_Mailchimp_Quiz_Hooks extends Forminator_Integration_Quiz_Hooks 
 				if ( $is_double_opt_in_enabled ) {
 					$status = 'pending';
 				}
+			}
+
+			// Only the owner may update an existing member.
+			if ( is_object( $member_status_request ) && ! empty( $member_status_request->status )
+				&& ! $this->addon->can_update_member( $submitted_data[ $addon_setting_values['fields_map']['EMAIL'] ], $member_status_request, $quiz_id, $addon_setting_values['mail_list_id'], $entry ) ) {
+				throw new Forminator_Integration_Exception( esc_html__( 'Member already exists, only its owner can update it.', 'forminator' ) );
 			}
 
 			$args = array(

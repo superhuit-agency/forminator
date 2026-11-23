@@ -688,11 +688,25 @@ class Forminator_Quiz_Front_Action extends Forminator_Front_Action {
 			$wrong_counter   = 0;
 			$index_counter   = 0; // We need this because $id is not an index.
 
+			$valid_answer_keys = ! empty( $question['answers'] ) ? array_keys( $question['answers'] ) : array();
 			foreach ( $user_answers as $id => $pick ) {
 				$question_id = preg_replace( '/(-\d+$)/', '', $id );
 
 				if ( $question_slug !== $question_id ) {
 					continue; }
+
+				// Check if the picked answer is valid for the current question.
+				// If it is, remove it from the list of valid answers to prevent duplicates.
+				if ( is_scalar( $pick ) && in_array( intval( $pick ), $valid_answer_keys, true ) ) {
+					$key = array_search( intval( $pick ), $valid_answer_keys, true );
+					unset( $valid_answer_keys[ $key ] );
+				} else {
+					wp_send_json_error(
+						array(
+							'error' => apply_filters( 'forminator_quizzes_process_knowledge_submit_invalid_answer_error', esc_html__( 'Invalid answer.', 'forminator' ) ),
+						)
+					);
+				}
 
 				$is_correct  = $model->is_correct_answer_for_question( $question_id, $pick );
 				$user_answer = $model->getAnswer( $question_id, $pick );

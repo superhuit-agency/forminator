@@ -2,9 +2,9 @@
 # This file is distributed under the same license as the Forminator package.
 msgid ""
 msgstr ""
-"Project-Id-Version: Forminator 1.58.4\n"
+"Project-Id-Version: Forminator 1.58.6\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/build\n"
-"POT-Creation-Date: 2026-10-29 10:56:48+00:00\n"
+"POT-Creation-Date: 2026-11-16 13:50:11+00:00\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -125,7 +125,7 @@ msgstr ""
 #: addons/pro/trello/class-forminator-addon-trello-settings-trait.php:333
 #: addons/pro/trello/class-forminator-addon-trello.php:303 admin/locale.php:798
 #: library/helpers/helper-core.php:493
-#: library/modules/custom-forms/front/front-render.php:1437
+#: library/modules/custom-forms/front/front-render.php:1438
 msgid "Next"
 msgstr ""
 
@@ -157,7 +157,7 @@ msgstr ""
 #: addons/pro/activecampaign/class-forminator-addon-activecampaign-settings-trait.php:273
 #: addons/pro/hubspot/class-forminator-addon-hubspot-settings-trait.php:105
 #: admin/locale.php:1274 library/field-autofill-providers/class-wp-user.php:71
-#: library/fields/name.php:92 library/model/class-form-entry-model.php:709
+#: library/fields/name.php:92 library/model/class-form-entry-model.php:723
 #: library/modules/custom-forms/form-templates/template-contact-form.php:53
 #: library/modules/custom-forms/form-templates/template-contact-form.php:55
 #: library/modules/custom-forms/form-templates/template-leads.php:80
@@ -172,7 +172,7 @@ msgstr ""
 #: addons/pro/activecampaign/class-forminator-addon-activecampaign-settings-trait.php:274
 #: addons/pro/hubspot/class-forminator-addon-hubspot-settings-trait.php:106
 #: admin/locale.php:1276 library/field-autofill-providers/class-wp-user.php:75
-#: library/fields/name.php:94 library/model/class-form-entry-model.php:711
+#: library/fields/name.php:94 library/model/class-form-entry-model.php:725
 #: library/modules/custom-forms/form-templates/template-contact-form.php:57
 #: library/modules/custom-forms/form-templates/template-leads.php:84
 #: library/modules/custom-forms/form-templates/template-newsletter.php:57
@@ -963,7 +963,7 @@ msgid ""
 msgstr ""
 
 #: addons/pro/e-signature/e-signature.php:107
-#: library/model/class-form-entry-model.php:1684
+#: library/model/class-form-entry-model.php:1698
 msgid "(no filename)"
 msgstr ""
 
@@ -1022,14 +1022,14 @@ msgstr ""
 #: addons/pro/googlesheet/class-forminator-addon-googlesheet-quiz-hooks.php:145
 #: addons/pro/slack/class-forminator-addon-slack-quiz-hooks.php:220
 #: admin/views/quiz/entries/content-leads-none.php:172
-#: admin/views/quiz/entries/content-leads.php:255 library/class-export.php:655
+#: admin/views/quiz/entries/content-leads.php:255 library/class-export.php:656
 msgid "Correct"
 msgstr ""
 
 #: addons/pro/googlesheet/class-forminator-addon-googlesheet-quiz-hooks.php:145
 #: addons/pro/slack/class-forminator-addon-slack-quiz-hooks.php:220
 #: admin/views/quiz/entries/content-leads-none.php:174
-#: admin/views/quiz/entries/content-leads.php:257 library/class-export.php:655
+#: admin/views/quiz/entries/content-leads.php:257 library/class-export.php:656
 msgid "Incorrect"
 msgstr ""
 
@@ -1689,7 +1689,7 @@ msgid "Mailchimp GDPR"
 msgstr ""
 
 #: addons/pro/mailchimp/class-forminator-addon-mailchimp-form-hooks.php:290
-#: addons/pro/mailchimp/class-forminator-addon-mailchimp-quiz-hooks.php:94
+#: addons/pro/mailchimp/class-forminator-addon-mailchimp-quiz-hooks.php:95
 msgid ""
 "Forminator Mailchimp integration did not send subscriber to Mailchimp as "
 "GDPR field was not checked on input"
@@ -1698,9 +1698,9 @@ msgstr ""
 #: addons/pro/mailchimp/class-forminator-addon-mailchimp-form-hooks.php:301
 #: addons/pro/mailchimp/class-forminator-addon-mailchimp-form-hooks.php:350
 #: addons/pro/mailchimp/class-forminator-addon-mailchimp-form-hooks.php:372
-#: addons/pro/mailchimp/class-forminator-addon-mailchimp-quiz-hooks.php:109
-#: addons/pro/mailchimp/class-forminator-addon-mailchimp-quiz-hooks.php:163
-#: addons/pro/mailchimp/class-forminator-addon-mailchimp-quiz-hooks.php:186
+#: addons/pro/mailchimp/class-forminator-addon-mailchimp-quiz-hooks.php:110
+#: addons/pro/mailchimp/class-forminator-addon-mailchimp-quiz-hooks.php:164
+#: addons/pro/mailchimp/class-forminator-addon-mailchimp-quiz-hooks.php:187
 #. translators: 1: EMAIL
 #. translators: 1: Required field name
 #. translators: 1: Required field name
@@ -1710,7 +1710,7 @@ msgid ""
 msgstr ""
 
 #: addons/pro/mailchimp/class-forminator-addon-mailchimp-form-hooks.php:308
-#: addons/pro/mailchimp/class-forminator-addon-mailchimp-quiz-hooks.php:119
+#: addons/pro/mailchimp/class-forminator-addon-mailchimp-quiz-hooks.php:120
 #: library/addon/class-integration-hooks.php:207
 #. translators: 1: Email
 #. translators: 1: EMAIL
@@ -1720,23 +1720,28 @@ msgstr ""
 
 #: addons/pro/mailchimp/class-forminator-addon-mailchimp-form-hooks.php:361
 #: addons/pro/mailchimp/class-forminator-addon-mailchimp-form-hooks.php:387
-#: addons/pro/mailchimp/class-forminator-addon-mailchimp-quiz-hooks.php:174
-#: addons/pro/mailchimp/class-forminator-addon-mailchimp-quiz-hooks.php:201
+#: addons/pro/mailchimp/class-forminator-addon-mailchimp-quiz-hooks.php:175
+#: addons/pro/mailchimp/class-forminator-addon-mailchimp-quiz-hooks.php:202
 #. translators: 1: Required field name
 msgid "Required Field %1$s not filled by user"
 msgstr ""
 
-#: addons/pro/mailchimp/class-forminator-addon-mailchimp-form-hooks.php:531
-#: addons/pro/mailchimp/class-forminator-addon-mailchimp-quiz-hooks.php:342
+#: addons/pro/mailchimp/class-forminator-addon-mailchimp-form-hooks.php:424
+#: addons/pro/mailchimp/class-forminator-addon-mailchimp-quiz-hooks.php:239
+msgid "Member already exists, only its owner can update it."
+msgstr ""
+
+#: addons/pro/mailchimp/class-forminator-addon-mailchimp-form-hooks.php:538
+#: addons/pro/mailchimp/class-forminator-addon-mailchimp-quiz-hooks.php:350
 msgid "Failed adding or updating member on Mailchimp list"
 msgstr ""
 
-#: addons/pro/mailchimp/class-forminator-addon-mailchimp-form-hooks.php:544
-#: addons/pro/mailchimp/class-forminator-addon-mailchimp-quiz-hooks.php:355
+#: addons/pro/mailchimp/class-forminator-addon-mailchimp-form-hooks.php:551
+#: addons/pro/mailchimp/class-forminator-addon-mailchimp-quiz-hooks.php:363
 msgid "Successfully added or updated member on Mailchimp list"
 msgstr ""
 
-#: addons/pro/mailchimp/class-forminator-addon-mailchimp-form-hooks.php:629
+#: addons/pro/mailchimp/class-forminator-addon-mailchimp-form-hooks.php:636
 msgid "Member Status"
 msgstr ""
 
@@ -2103,7 +2108,7 @@ msgstr ""
 
 #: addons/pro/slack/class-forminator-addon-slack-poll-hooks.php:204
 #: addons/pro/trello/class-forminator-addon-trello-poll-hooks.php:280
-#: library/class-export.php:707
+#: library/class-export.php:708
 msgid "Extra"
 msgstr ""
 
@@ -2389,7 +2394,7 @@ msgstr ""
 #: addons/pro/trello/class-forminator-addon-trello-form-hooks.php:275
 #: addons/pro/trello/class-forminator-addon-trello-form-hooks.php:290
 #: library/helpers/helper-fields.php:1953
-#: library/model/class-form-entry-model.php:1986
+#: library/model/class-form-entry-model.php:2000
 msgid "Edit Post"
 msgstr ""
 
@@ -2870,7 +2875,7 @@ msgstr ""
 
 #: admin/abstracts/class-admin-module-edit-page.php:422 admin/locale.php:1058
 #: admin/views/common/dashboard/widget-recent-modules.php:124
-#: library/class-export.php:1634
+#: library/class-export.php:1653
 msgid "View Submissions"
 msgstr ""
 
@@ -2967,7 +2972,7 @@ msgstr ""
 #: admin/views/settings/content.php:24
 #: admin/views/settings/tab-pagination.php:39
 #: admin/views/settings/tab-submissions.php:15
-#: library/helpers/helper-core.php:1936
+#: library/helpers/helper-core.php:1932
 msgid "Submissions"
 msgstr ""
 
@@ -3029,7 +3034,7 @@ msgid "Invalid module ID provided."
 msgstr ""
 
 #: admin/abstracts/class-admin-module-edit-page.php:895
-#: library/class-export.php:220
+#: library/class-export.php:227
 msgid "forminator"
 msgstr ""
 
@@ -3333,7 +3338,7 @@ msgid "Please use a valid numeric ID (for example: 100)."
 msgstr ""
 
 #: admin/classes/class-addons-page.php:65
-#: admin/classes/class-addons-page.php:98 library/class-core.php:218
+#: admin/classes/class-addons-page.php:98 library/class-core.php:219
 msgid ""
 "Unfortunately, you do not have the required permissions to perform this "
 "action."
@@ -3519,12 +3524,12 @@ msgstr ""
 #: admin/classes/class-admin-ajax.php:2969
 #: admin/classes/class-admin-ajax.php:3043
 #: library/addon/admin/class-integration-admin-ajax.php:97
-#: library/class-export.php:247 library/helpers/helper-core.php:148
+#: library/class-export.php:254 library/helpers/helper-core.php:148
 #: library/helpers/helper-core.php:162
-#: library/modules/custom-forms/front/front-action.php:5018
-#: library/modules/custom-forms/front/front-action.php:5032
-#: library/modules/custom-forms/front/front-action.php:5061
-#: library/modules/custom-forms/front/front-action.php:5087
+#: library/modules/custom-forms/front/front-action.php:5080
+#: library/modules/custom-forms/front/front-action.php:5094
+#: library/modules/custom-forms/front/front-action.php:5123
+#: library/modules/custom-forms/front/front-action.php:5149
 msgid "Invalid request, you are not allowed to do that action."
 msgstr ""
 
@@ -3809,7 +3814,7 @@ msgstr ""
 msgid "Current user cannot add recipient."
 msgstr ""
 
-#: admin/classes/class-admin-ajax.php:2842 library/class-export.php:287
+#: admin/classes/class-admin-ajax.php:2842 library/class-export.php:294
 msgid "Invalid email."
 msgstr ""
 
@@ -3830,8 +3835,8 @@ msgid "Fields"
 msgstr ""
 
 #: admin/classes/class-admin-l10n.php:66 admin/classes/class-admin-l10n.php:345
-#: admin/locale.php:388 library/class-export.php:543
-#: library/class-export.php:705 library/fields/date.php:86
+#: admin/locale.php:388 library/class-export.php:544
+#: library/class-export.php:706 library/fields/date.php:86
 msgid "Date"
 msgstr ""
 
@@ -3880,37 +3885,37 @@ msgid "Month of the year"
 msgstr ""
 
 #: admin/classes/class-admin-l10n.php:78 admin/locale.php:1319
-#: library/helpers/helper-core.php:1194 library/helpers/helper-fields.php:605
+#: library/helpers/helper-core.php:1190 library/helpers/helper-fields.php:605
 msgid "Monday"
 msgstr ""
 
 #: admin/classes/class-admin-l10n.php:79 admin/locale.php:1321
-#: library/helpers/helper-core.php:1195 library/helpers/helper-fields.php:606
+#: library/helpers/helper-core.php:1191 library/helpers/helper-fields.php:606
 msgid "Tuesday"
 msgstr ""
 
 #: admin/classes/class-admin-l10n.php:80 admin/locale.php:1317
-#: library/helpers/helper-core.php:1196 library/helpers/helper-fields.php:607
+#: library/helpers/helper-core.php:1192 library/helpers/helper-fields.php:607
 msgid "Wednesday"
 msgstr ""
 
 #: admin/classes/class-admin-l10n.php:81 admin/locale.php:1320
-#: library/helpers/helper-core.php:1197 library/helpers/helper-fields.php:608
+#: library/helpers/helper-core.php:1193 library/helpers/helper-fields.php:608
 msgid "Thursday"
 msgstr ""
 
 #: admin/classes/class-admin-l10n.php:82 admin/locale.php:1322
-#: library/helpers/helper-core.php:1198 library/helpers/helper-fields.php:609
+#: library/helpers/helper-core.php:1194 library/helpers/helper-fields.php:609
 msgid "Friday"
 msgstr ""
 
 #: admin/classes/class-admin-l10n.php:83 admin/locale.php:1318
-#: library/helpers/helper-core.php:1199 library/helpers/helper-fields.php:610
+#: library/helpers/helper-core.php:1195 library/helpers/helper-fields.php:610
 msgid "Saturday"
 msgstr ""
 
 #: admin/classes/class-admin-l10n.php:84 admin/locale.php:1316
-#: library/helpers/helper-core.php:1200 library/helpers/helper-fields.php:604
+#: library/helpers/helper-core.php:1196 library/helpers/helper-fields.php:604
 msgid "Sunday"
 msgstr ""
 
@@ -4246,7 +4251,7 @@ msgstr ""
 
 #: admin/classes/class-admin-l10n.php:173 admin/classes/class-admin.php:260
 #: admin/locale.php:456 admin/views/settings/header.php:10
-#: library/helpers/helper-core.php:1962
+#: library/helpers/helper-core.php:1958
 #: library/modules/quizzes/admin/admin-loader.php:552
 msgid "Settings"
 msgstr ""
@@ -4779,7 +4784,7 @@ msgstr ""
 #: admin/classes/class-admin-l10n.php:317 admin/locale.php:430
 #: library/field-autofill-providers/class-wp-post.php:59
 #: library/helpers/helper-fields.php:1950
-#: library/model/class-form-entry-model.php:1979
+#: library/model/class-form-entry-model.php:1993
 #: library/modules/polls/admin/admin-loader.php:195
 #: library/modules/quizzes/admin/admin-loader.php:561
 #: library/render/class-widget.php:127
@@ -5201,8 +5206,8 @@ msgid "Material Design"
 msgstr ""
 
 #: admin/classes/class-admin-l10n.php:429
-#: library/abstracts/abstract-class-field.php:945
-#: library/abstracts/abstract-class-field.php:946
+#: library/abstracts/abstract-class-field.php:949
+#: library/abstracts/abstract-class-field.php:950
 #: library/helpers/helper-core.php:501
 msgid "No file chosen"
 msgstr ""
@@ -5493,37 +5498,37 @@ msgid "The selected preset has been successfully deleted."
 msgstr ""
 
 #: admin/classes/class-admin-l10n.php:589
-#: library/modules/custom-forms/front/front-render.php:2722
+#: library/modules/custom-forms/front/front-render.php:2723
 msgid "Su"
 msgstr ""
 
 #: admin/classes/class-admin-l10n.php:590
-#: library/modules/custom-forms/front/front-render.php:2723
+#: library/modules/custom-forms/front/front-render.php:2724
 msgid "Mo"
 msgstr ""
 
 #: admin/classes/class-admin-l10n.php:591
-#: library/modules/custom-forms/front/front-render.php:2724
+#: library/modules/custom-forms/front/front-render.php:2725
 msgid "Tu"
 msgstr ""
 
 #: admin/classes/class-admin-l10n.php:592
-#: library/modules/custom-forms/front/front-render.php:2725
+#: library/modules/custom-forms/front/front-render.php:2726
 msgid "We"
 msgstr ""
 
 #: admin/classes/class-admin-l10n.php:593
-#: library/modules/custom-forms/front/front-render.php:2726
+#: library/modules/custom-forms/front/front-render.php:2727
 msgid "Th"
 msgstr ""
 
 #: admin/classes/class-admin-l10n.php:594
-#: library/modules/custom-forms/front/front-render.php:2727
+#: library/modules/custom-forms/front/front-render.php:2728
 msgid "Fr"
 msgstr ""
 
 #: admin/classes/class-admin-l10n.php:595
-#: library/modules/custom-forms/front/front-render.php:2728
+#: library/modules/custom-forms/front/front-render.php:2729
 msgid "Sa"
 msgstr ""
 
@@ -5544,7 +5549,7 @@ msgid "April"
 msgstr ""
 
 #: admin/classes/class-admin-l10n.php:611
-#: library/modules/custom-forms/front/front-render.php:2735
+#: library/modules/custom-forms/front/front-render.php:2736
 msgid "May"
 msgstr ""
 
@@ -5602,7 +5607,7 @@ msgstr ""
 
 #: admin/classes/class-admin.php:229 admin/classes/class-admin.php:230
 #: admin/locale.php:455 admin/views/integrations/header.php:10
-#: library/helpers/helper-core.php:1949
+#: library/helpers/helper-core.php:1945
 msgid "Integrations"
 msgstr ""
 
@@ -5611,7 +5616,7 @@ msgid "Global Settings"
 msgstr ""
 
 #: admin/classes/class-admin.php:278 admin/views/templates/header.php:10
-#: library/helpers/helper-core.php:1930
+#: library/helpers/helper-core.php:1926
 msgid "Templates"
 msgstr ""
 
@@ -5630,12 +5635,12 @@ msgstr ""
 
 #: admin/classes/class-admin.php:350
 #: admin/views/custom-form/popup/import-cf7.php:174
-#: library/helpers/helper-core.php:1942
+#: library/helpers/helper-core.php:1938
 msgid "Add-ons"
 msgstr ""
 
 #: admin/classes/class-admin.php:370 admin/views/common/reports/header.php:10
-#: library/helpers/helper-core.php:1955
+#: library/helpers/helper-core.php:1951
 msgid "Reports"
 msgstr ""
 
@@ -5711,6 +5716,7 @@ msgstr ""
 #: library/lib/dash-notice/wpmudev-dash-notification.php:330
 #: library/lib/dash-notice/wpmudev-dash-notification.php:372
 #: library/lib/recommended-plugins/notice.php:485
+#: library/lib/wpmudev-blackfriday/includes/class-banner.php:433
 msgid "Dismiss"
 msgstr ""
 
@@ -5834,7 +5840,7 @@ msgstr ""
 
 #: admin/classes/thirdparty-importers/class-importer-cf7.php:108
 #: library/modules/custom-forms/admin/admin-loader.php:410
-#: library/modules/custom-forms/front/front-render.php:3214
+#: library/modules/custom-forms/front/front-render.php:3223
 msgid "Submitting..."
 msgstr ""
 
@@ -5859,25 +5865,25 @@ msgid "null"
 msgstr ""
 
 #: admin/locale.php:9 library/fields/date.php:89
-#: library/model/class-form-entry-model.php:706
+#: library/model/class-form-entry-model.php:720
 msgid "Day"
 msgstr ""
 
 #: admin/locale.php:10 library/fields/date.php:91
-#: library/model/class-form-entry-model.php:707
+#: library/model/class-form-entry-model.php:721
 msgid "Month"
 msgstr ""
 
 #: admin/locale.php:11 library/fields/date.php:93
-#: library/model/class-form-entry-model.php:705
+#: library/model/class-form-entry-model.php:719
 msgid "Year"
 msgstr ""
 
-#: admin/locale.php:12 library/model/class-form-entry-model.php:696
+#: admin/locale.php:12 library/model/class-form-entry-model.php:710
 msgid "Hour"
 msgstr ""
 
-#: admin/locale.php:13 library/model/class-form-entry-model.php:697
+#: admin/locale.php:13 library/model/class-form-entry-model.php:711
 msgid "Minute"
 msgstr ""
 
@@ -6563,7 +6569,7 @@ msgid "10 January 2020"
 msgstr ""
 
 #: admin/locale.php:390 library/fields/time.php:91
-#: library/model/class-form-entry-model.php:698
+#: library/model/class-form-entry-model.php:712
 msgid "AM/PM"
 msgstr ""
 
@@ -6699,7 +6705,7 @@ msgstr ""
 
 #: admin/locale.php:424 admin/views/quiz/entries/content-leads-none.php:197
 #: admin/views/quiz/entries/content-leads.php:208
-#: admin/views/quiz/entries/content-leads.php:280 library/class-export.php:544
+#: admin/views/quiz/entries/content-leads.php:280 library/class-export.php:545
 #: library/modules/polls/admin/admin-loader.php:197
 #: library/modules/quizzes/admin/admin-loader.php:683
 msgid "Question"
@@ -6857,7 +6863,7 @@ msgid "Retake"
 msgstr ""
 
 #: admin/locale.php:475 library/helpers/helper-fields.php:1959
-#: library/model/class-form-entry-model.php:2012
+#: library/model/class-form-entry-model.php:2026
 #: library/modules/quizzes/admin/admin-loader.php:643
 msgid "Content"
 msgstr ""
@@ -6886,8 +6892,8 @@ msgstr ""
 
 #: admin/locale.php:481 admin/views/quiz/entries/content-leads-none.php:198
 #: admin/views/quiz/entries/content-leads.php:209
-#: admin/views/quiz/entries/content-leads.php:281 library/class-export.php:545
-#: library/class-export.php:706
+#: admin/views/quiz/entries/content-leads.php:281 library/class-export.php:546
+#: library/class-export.php:707
 #: library/modules/quizzes/admin/admin-loader.php:663
 msgid "Answer"
 msgstr ""
@@ -7122,7 +7128,7 @@ msgid "Link text"
 msgstr ""
 
 #: admin/locale.php:544
-#: library/modules/custom-forms/front/front-render.php:3592
+#: library/modules/custom-forms/front/front-render.php:3601
 msgid "Skip and continue"
 msgstr ""
 
@@ -7302,7 +7308,7 @@ msgstr ""
 msgid "Do not Send Email"
 msgstr ""
 
-#: admin/locale.php:588 library/model/class-form-entry-model.php:1631
+#: admin/locale.php:588 library/model/class-form-entry-model.php:1645
 msgid "Send Email"
 msgstr ""
 
@@ -8132,8 +8138,8 @@ msgstr ""
 
 #: admin/locale.php:796 admin/views/common/reports/integration-report.php:58
 #: library/helpers/helper-core.php:492
-#: library/modules/custom-forms/front/front-render.php:1411
-#: library/modules/custom-forms/front/front-render.php:1436
+#: library/modules/custom-forms/front/front-render.php:1412
+#: library/modules/custom-forms/front/front-render.php:1437
 msgid "Previous"
 msgstr ""
 
@@ -8690,7 +8696,7 @@ msgstr ""
 #: admin/views/common/dashboard/widget-recent-modules.php:44
 #: admin/views/settings/dashboard/content.php:41
 #: admin/views/settings/payments/section-stripe.php:139
-#: library/class-export.php:1252 library/helpers/helper-fields.php:549
+#: library/class-export.php:1271 library/helpers/helper-fields.php:549
 #: library/lib/action-scheduler/classes/ActionScheduler_AdminView.php:301
 #: library/lib/action-scheduler/classes/ActionScheduler_ListTable.php:97
 #: library/modules/custom-forms/admin/admin-page-entries.php:528
@@ -10155,7 +10161,7 @@ msgid "Submission limit"
 msgstr ""
 
 #: admin/locale.php:1275 library/fields/name.php:93
-#: library/model/class-form-entry-model.php:710
+#: library/model/class-form-entry-model.php:724
 #: library/modules/custom-forms/form-templates/template-contact-form.php:56
 #: library/modules/custom-forms/form-templates/template-leads.php:83
 #: library/modules/custom-forms/form-templates/template-newsletter.php:56
@@ -10164,7 +10170,7 @@ msgid "Middle Name"
 msgstr ""
 
 #: admin/locale.php:1277 library/fields/name.php:91
-#: library/model/class-form-entry-model.php:708
+#: library/model/class-form-entry-model.php:722
 #: library/modules/custom-forms/form-templates/template-contact-form.php:54
 #: library/modules/custom-forms/form-templates/template-leads.php:81
 #: library/modules/custom-forms/form-templates/template-newsletter.php:54
@@ -10553,7 +10559,7 @@ msgid ""
 "For security reasons, the following file types are disabled by default: "
 ".htm, .html, .shtml, .phtml, .jse, .jar, .xml, .css, .asp, .aspx, .jsp, "
 ".sql, .hta, .dll, .bat, .com, .sh, .bash, .py, .pl, .js, .php, .svg, .swf, "
-".dfxp, .rar and .exe. The above file types could potentially allow "
+".dfxp, .rar, .rtx and .exe. The above file types could potentially allow "
 "malicious files to be uploaded, which could be used to gain access to your "
 "site."
 msgstr ""
@@ -11348,8 +11354,8 @@ msgid ""
 msgstr ""
 
 #: admin/locale.php:1549
-#: library/modules/custom-forms/front/front-render.php:1356
-#: library/modules/custom-forms/front/front-render.php:1410
+#: library/modules/custom-forms/front/front-render.php:1357
+#: library/modules/custom-forms/front/front-render.php:1411
 #: library/modules/polls/admin/admin-loader.php:211
 #: library/modules/quizzes/admin/admin-loader.php:608
 msgid "Finish"
@@ -12935,7 +12941,7 @@ msgid "Choose whether to allow this field to be used in calculations or not."
 msgstr ""
 
 #: admin/locale.php:1910 library/helpers/helper-fields.php:1969
-#: library/model/class-form-entry-model.php:2042
+#: library/model/class-form-entry-model.php:2056
 msgid "Excerpt"
 msgstr ""
 
@@ -13667,7 +13673,7 @@ msgstr ""
 msgid "To"
 msgstr ""
 
-#: admin/locale.php:2076 library/class-export.php:1240
+#: admin/locale.php:2076 library/class-export.php:1259
 #: library/fields/currency.php:83 library/fields/currency.php:103
 #: library/helpers/helper-fields.php:547
 #: library/modules/custom-forms/admin/admin-page-entries.php:511
@@ -14002,7 +14008,7 @@ msgid "Apartment, suite, etc."
 msgstr ""
 
 #: admin/locale.php:2153 library/fields/address.php:102
-#: library/model/class-form-entry-model.php:700
+#: library/model/class-form-entry-model.php:714
 msgid "City"
 msgstr ""
 
@@ -14015,7 +14021,7 @@ msgid "ZIP / Postal code"
 msgstr ""
 
 #: admin/locale.php:2156 library/fields/address.php:105
-#: library/model/class-form-entry-model.php:699
+#: library/model/class-form-entry-model.php:713
 msgid "Country"
 msgstr ""
 
@@ -14047,7 +14053,7 @@ msgstr ""
 msgid "Enter an amount or select a value from a form field in the Variable tab."
 msgstr ""
 
-#: admin/locale.php:2162 library/class-export.php:1236
+#: admin/locale.php:2162 library/class-export.php:1255
 #: library/helpers/helper-fields.php:546
 #: library/modules/custom-forms/admin/admin-page-entries.php:507
 #: library/modules/custom-forms/admin/admin-page-entries.php:556
@@ -14058,7 +14064,7 @@ msgstr ""
 msgid "Choose form field"
 msgstr ""
 
-#: admin/locale.php:2164 library/class-export.php:1244
+#: admin/locale.php:2164 library/class-export.php:1263
 #: library/modules/custom-forms/admin/admin-page-entries.php:515
 msgid "Quantity"
 msgstr ""
@@ -14165,7 +14171,7 @@ msgstr ""
 msgid "Plan Name is required."
 msgstr ""
 
-#: admin/locale.php:2189 library/class-export.php:1232
+#: admin/locale.php:2189 library/class-export.php:1251
 #: library/modules/custom-forms/admin/admin-page-entries.php:503
 msgid "Payment type"
 msgstr ""
@@ -14412,7 +14418,7 @@ msgid ""
 "Appearance settings, but you can remove those styles with this option."
 msgstr ""
 
-#: admin/locale.php:2248 library/abstracts/abstract-class-field.php:909
+#: admin/locale.php:2248 library/abstracts/abstract-class-field.php:913
 msgid "Remove"
 msgstr ""
 
@@ -14801,7 +14807,7 @@ msgid "Email input label"
 msgstr ""
 
 #: admin/locale.php:2330
-#: library/modules/custom-forms/front/front-action.php:3262
+#: library/modules/custom-forms/front/front-action.php:3307
 msgid "Send draft link to"
 msgstr ""
 
@@ -14810,7 +14816,7 @@ msgid "Placeholder (Optional)"
 msgstr ""
 
 #: admin/locale.php:2332
-#: library/modules/custom-forms/front/front-action.php:3263
+#: library/modules/custom-forms/front/front-action.php:3308
 msgid "E.g., johndoe@gmail.com"
 msgstr ""
 
@@ -14819,7 +14825,7 @@ msgid "Send link button label"
 msgstr ""
 
 #: admin/locale.php:2334
-#: library/modules/custom-forms/front/front-action.php:3264
+#: library/modules/custom-forms/front/front-action.php:3309
 msgid "Send draft link"
 msgstr ""
 
@@ -15738,7 +15744,7 @@ msgstr ""
 msgid "This Year"
 msgstr ""
 
-#: admin/pages/settings-page.php:238
+#: admin/pages/settings-page.php:245
 msgid "Default Preset"
 msgstr ""
 
@@ -16195,7 +16201,7 @@ msgid "Your Forminator %1$s summary for %2$s"
 msgstr ""
 
 #: admin/views/common/reports/email-report.php:117
-#: library/class-export.php:1604
+#: library/class-export.php:1623
 #. translators: %s: Recipient name
 #. translators: %s is Blog name.
 msgid "Hi %s,"
@@ -17599,7 +17605,7 @@ msgid "Connect Live"
 msgstr ""
 
 #: admin/views/settings/payments/section-stripe.php:124
-#: library/class-export.php:1224 library/helpers/helper-fields.php:548
+#: library/class-export.php:1243 library/helpers/helper-fields.php:548
 #: library/modules/custom-forms/admin/admin-page-entries.php:494
 #: library/modules/custom-forms/admin/admin-page-entries.php:546
 msgid "Mode"
@@ -17966,7 +17972,7 @@ msgid ""
 msgstr ""
 
 #: admin/views/settings/tab-pagination.php:20
-#: library/helpers/helper-core.php:1924
+#: library/helpers/helper-core.php:1920
 msgid "Modules"
 msgstr ""
 
@@ -18242,36 +18248,36 @@ msgid ""
 "noreferrer\">WPMU DEV Hosting</a>.%4$s"
 msgstr ""
 
-#: library/abstracts/abstract-class-field.php:919
+#: library/abstracts/abstract-class-field.php:923
 #. translators: %1$s - Opening anchor tag, %2$s - Closing anchor tag.
 msgid "Drag and Drop (or) %1$sChoose Files%2$s"
 msgstr ""
 
-#: library/abstracts/abstract-class-field.php:932
-#: library/abstracts/abstract-class-field.php:938
+#: library/abstracts/abstract-class-field.php:936
+#: library/abstracts/abstract-class-field.php:942
 msgid "Choose File"
 msgstr ""
 
-#: library/abstracts/abstract-class-field.php:955
+#: library/abstracts/abstract-class-field.php:959
 msgid "Delete uploaded file"
 msgstr ""
 
-#: library/abstracts/abstract-class-field.php:2635
+#: library/abstracts/abstract-class-field.php:2690
 msgid ""
 "The rich text editor can't be previewed in the block editor. Save the post "
 "and view the form on the frontend to see it."
 msgstr ""
 
-#: library/abstracts/abstract-class-field.php:2726
+#: library/abstracts/abstract-class-field.php:2781
 #. translators: %d: maximum number of selections allowed
 msgid "You can only select up to %d options."
 msgstr ""
 
 #: library/abstracts/abstract-class-front-action.php:188
-#: library/modules/custom-forms/front/front-action.php:1854
-#: library/modules/custom-forms/front/front-action.php:1865
+#: library/modules/custom-forms/front/front-action.php:1887
+#: library/modules/custom-forms/front/front-action.php:1898
 #: library/modules/custom-forms/user/class-forminator-cform-user-data.php:208
-#: library/modules/quizzes/front/front-action.php:935
+#: library/modules/quizzes/front/front-action.php:949
 msgid "Error: Module object is corrupted!"
 msgstr ""
 
@@ -18323,7 +18329,7 @@ msgstr ""
 #: library/abstracts/abstract-class-front-action.php:1283
 #: library/abstracts/abstract-class-front-action.php:1289
 #: library/abstracts/abstract-class-front-action.php:1296
-#: library/class-handle-webhooks.php:72
+#: library/class-handle-webhooks.php:81
 msgid "Invalid request."
 msgstr ""
 
@@ -18358,7 +18364,7 @@ msgid "Failed to disconnected from this module"
 msgstr ""
 
 #: library/addon/admin/class-integration-admin-ajax.php:370
-#: library/modules/custom-forms/front/front-action.php:2944
+#: library/modules/custom-forms/front/front-action.php:2989
 #. translators: %s: Required field
 #. translators: %s: Field name
 msgid "Field %s is required"
@@ -18744,73 +18750,73 @@ msgstr ""
 msgid "Failed to save new entry meta."
 msgstr ""
 
-#: library/class-core.php:304
+#: library/class-core.php:305
 msgid "Invalid form meta data."
 msgstr ""
 
-#: library/class-core.php:719
+#: library/class-core.php:736
 msgid "Post Custom Data"
 msgstr ""
 
-#: library/class-export.php:162
+#: library/class-export.php:169
 msgid "You are not allowed to export submissions."
 msgstr ""
 
-#: library/class-export.php:168
+#: library/class-export.php:175
 msgid "Invalid nonce."
 msgstr ""
 
-#: library/class-export.php:263
-#: library/modules/custom-forms/front/front-action.php:5075
+#: library/class-export.php:270
+#: library/modules/custom-forms/front/front-action.php:5137
 #: library/modules/custom-forms/user/class-forminator-cform-user-data.php:97
 #: library/modules/custom-forms/user/class-forminator-cform-user-data.php:249
 msgid "Invalid form ID."
 msgstr ""
 
-#: library/class-export.php:274
+#: library/class-export.php:281
 msgid "Invalid form type."
 msgstr ""
 
-#: library/class-export.php:542 library/class-export.php:704
-#: library/class-export.php:1047 library/helpers/helper-fields.php:504
+#: library/class-export.php:543 library/class-export.php:705
+#: library/class-export.php:1066 library/helpers/helper-fields.php:504
 msgid "Submission ID"
 msgstr ""
 
-#: library/class-export.php:546
+#: library/class-export.php:547
 msgid "Result"
 msgstr ""
 
-#: library/class-export.php:862
+#: library/class-export.php:863
 #. Translators: 1. Rating value, 2. Maximum rating
 msgid " %1$d out of %2$d"
 msgstr ""
 
-#: library/class-export.php:1053
+#: library/class-export.php:1072
 msgid "Submission Time"
 msgstr ""
 
-#: library/class-export.php:1228
+#: library/class-export.php:1247
 #: library/modules/custom-forms/admin/admin-page-entries.php:499
 msgid "Product / Plan Name"
 msgstr ""
 
-#: library/class-export.php:1248 library/helpers/helper-fields.php:550
+#: library/class-export.php:1267 library/helpers/helper-fields.php:550
 #: library/modules/custom-forms/admin/admin-page-entries.php:519
 #: library/modules/custom-forms/admin/admin-page-entries.php:565
 msgid "Transaction ID"
 msgstr ""
 
-#: library/class-export.php:1256
+#: library/class-export.php:1275
 #: library/modules/custom-forms/admin/admin-page-entries.php:534
 msgid "Manage"
 msgstr ""
 
-#: library/class-export.php:1538
+#: library/class-export.php:1557
 #. translators: %s is form name.
 msgid "Submissions data for %s"
 msgstr ""
 
-#: library/class-export.php:1608
+#: library/class-export.php:1627
 #. translators: 1$s is total new submission(s), %2$s is total submissions.
 msgid ""
 "Your scheduled exports have arrived! Forminator has captured %1$s new "
@@ -18818,15 +18824,15 @@ msgid ""
 "scheduled export sent."
 msgstr ""
 
-#: library/class-export.php:1629
+#: library/class-export.php:1648
 msgid "New Submissions"
 msgstr ""
 
-#: library/class-export.php:1631
+#: library/class-export.php:1650
 msgid "Total Submissions"
 msgstr ""
 
-#: library/class-export.php:1639
+#: library/class-export.php:1658
 msgid "Cheers,"
 msgstr ""
 
@@ -18857,35 +18863,35 @@ msgid ""
 "with one click."
 msgstr ""
 
-#: library/class-handle-webhooks.php:100
+#: library/class-handle-webhooks.php:109
 msgid "Webhook event type not supported."
 msgstr ""
 
-#: library/class-handle-webhooks.php:134
+#: library/class-handle-webhooks.php:143
 msgid "Session ID not found in the event data."
 msgstr ""
 
-#: library/class-handle-webhooks.php:140
+#: library/class-handle-webhooks.php:149
 msgid "Entry not found for the given session ID."
 msgstr ""
 
-#: library/class-handle-webhooks.php:145
+#: library/class-handle-webhooks.php:154
 msgid "Entry not found or invalid entry type."
 msgstr ""
 
-#: library/class-handle-webhooks.php:155 library/class-handle-webhooks.php:176
+#: library/class-handle-webhooks.php:164 library/class-handle-webhooks.php:185
 msgid "Webhook received successfully."
 msgstr ""
 
-#: library/class-handle-webhooks.php:165
+#: library/class-handle-webhooks.php:174
 msgid "Webhook processing is already in progress for this entry."
 msgstr ""
 
-#: library/class-handle-webhooks.php:174
+#: library/class-handle-webhooks.php:183
 msgid "Failed during webhook processing."
 msgstr ""
 
-#: library/class-handle-webhooks.php:179
+#: library/class-handle-webhooks.php:188
 msgid "Webhook error while validating signature."
 msgstr ""
 
@@ -19067,7 +19073,7 @@ msgstr ""
 msgid "This field is required. Please select the country."
 msgstr ""
 
-#: library/fields/address.php:101 library/model/class-form-entry-model.php:703
+#: library/fields/address.php:101 library/model/class-form-entry-model.php:717
 msgid "Street Address"
 msgstr ""
 
@@ -19111,7 +19117,7 @@ msgid ""
 msgstr ""
 
 #: library/fields/captcha.php:377
-#: library/modules/custom-forms/front/front-action.php:871
+#: library/modules/custom-forms/front/front-action.php:873
 msgid "Captcha verification failed. Please try again."
 msgstr ""
 
@@ -19411,13 +19417,13 @@ msgstr ""
 
 #: library/fields/password.php:572 library/fields/password.php:664
 #: library/fields/text.php:358 library/fields/text.php:411
-#: library/fields/textarea.php:317 library/fields/textarea.php:372
+#: library/fields/textarea.php:320 library/fields/textarea.php:375
 msgid "You exceeded the allowed amount of characters. Please check again."
 msgstr ""
 
 #: library/fields/password.php:580 library/fields/password.php:673
 #: library/fields/text.php:366 library/fields/text.php:420
-#: library/fields/textarea.php:325 library/fields/textarea.php:384
+#: library/fields/textarea.php:328 library/fields/textarea.php:387
 msgid "You exceeded the allowed amount of words. Please check again."
 msgstr ""
 
@@ -19440,7 +19446,7 @@ msgstr ""
 
 #: library/fields/paypal.php:377 library/fields/stripe.php:2436
 #: library/fields/stripe.php:2446
-#: library/modules/custom-forms/front/front-action.php:4106
+#: library/modules/custom-forms/front/front-action.php:4164
 msgid "Error! Invalid payment amount!"
 msgstr ""
 
@@ -19451,8 +19457,8 @@ msgstr ""
 #: library/fields/paypal.php:641 library/fields/paypal.php:649
 #: library/fields/paypal.php:662 library/fields/stripe.php:2410
 #: library/fields/stripe.php:2422
-#: library/modules/custom-forms/front/front-action.php:2652
-#: library/modules/custom-forms/front/front-action.php:3897
+#: library/modules/custom-forms/front/front-action.php:2694
+#: library/modules/custom-forms/front/front-action.php:3942
 msgid "Payment failed, please try again!"
 msgstr ""
 
@@ -19503,24 +19509,24 @@ msgstr ""
 msgid "This field is required. Please enter the post title."
 msgstr ""
 
-#: library/fields/postdata.php:108 library/model/class-form-entry-model.php:712
+#: library/fields/postdata.php:108 library/model/class-form-entry-model.php:726
 #: library/modules/custom-forms/form-templates/template-post.php:53
 msgid "Post Title"
 msgstr ""
 
-#: library/fields/postdata.php:109 library/model/class-form-entry-model.php:713
+#: library/fields/postdata.php:109 library/model/class-form-entry-model.php:727
 #: library/modules/custom-forms/form-templates/template-post.php:54
 msgid "Post Content"
 msgstr ""
 
-#: library/fields/postdata.php:110 library/model/class-form-entry-model.php:714
+#: library/fields/postdata.php:110 library/model/class-form-entry-model.php:728
 #: library/modules/custom-forms/form-templates/template-post.php:55
 msgid "Post Excerpt"
 msgstr ""
 
 #: library/fields/postdata.php:112 library/helpers/helper-fields.php:1990
-#: library/model/class-form-entry-model.php:2073
-#: library/model/class-form-entry-model.php:2090
+#: library/model/class-form-entry-model.php:2087
+#: library/model/class-form-entry-model.php:2104
 #: library/modules/custom-forms/form-templates/template-post.php:57
 msgid "Category"
 msgstr ""
@@ -19611,7 +19617,7 @@ msgstr ""
 
 #: library/fields/stripe.php:1498 library/fields/stripe.php:1654
 #: library/fields/stripe.php:2200
-#: library/modules/custom-forms/front/front-action.php:1498
+#: library/modules/custom-forms/front/front-action.php:1531
 msgid "Payment amount should be greater than 0."
 msgstr ""
 
@@ -19624,7 +19630,7 @@ msgid "Your Payment Method is empty!"
 msgstr ""
 
 #: library/fields/stripe.php:1585
-#: library/modules/custom-forms/front/front-action.php:1541
+#: library/modules/custom-forms/front/front-action.php:1574
 msgid "Forminator Stripe Subscription Add-on is required to submit this form."
 msgstr ""
 
@@ -19786,7 +19792,7 @@ msgstr ""
 #: library/fields/upload.php:511 library/fields/upload.php:583
 #: library/fields/upload.php:594 library/fields/upload.php:765
 #: library/fields/upload.php:899 library/fields/upload.php:990
-#: library/modules/custom-forms/front/front-action.php:3648
+#: library/modules/custom-forms/front/front-action.php:3693
 msgid "Error saving form. Upload error."
 msgstr ""
 
@@ -19938,379 +19944,379 @@ msgstr ""
 msgid "The results could not be loaded."
 msgstr ""
 
-#: library/helpers/helper-core.php:1358
+#: library/helpers/helper-core.php:1354
 msgid "Arabic"
 msgstr ""
 
-#: library/helpers/helper-core.php:1359
+#: library/helpers/helper-core.php:1355
 msgid "Afrikaans"
 msgstr ""
 
-#: library/helpers/helper-core.php:1360
+#: library/helpers/helper-core.php:1356
 msgid "Amharic"
 msgstr ""
 
-#: library/helpers/helper-core.php:1361
+#: library/helpers/helper-core.php:1357
 msgid "Armenian"
 msgstr ""
 
-#: library/helpers/helper-core.php:1362
+#: library/helpers/helper-core.php:1358
 msgid "Azerbaijani"
 msgstr ""
 
-#: library/helpers/helper-core.php:1363
+#: library/helpers/helper-core.php:1359
 msgid "Basque"
 msgstr ""
 
-#: library/helpers/helper-core.php:1364
+#: library/helpers/helper-core.php:1360
 msgid "Bengali"
 msgstr ""
 
-#: library/helpers/helper-core.php:1365
+#: library/helpers/helper-core.php:1361
 msgid "Bulgarian"
 msgstr ""
 
-#: library/helpers/helper-core.php:1366
+#: library/helpers/helper-core.php:1362
 msgid "Catalan"
 msgstr ""
 
-#: library/helpers/helper-core.php:1367
+#: library/helpers/helper-core.php:1363
 msgid "Chinese (Hong Kong)"
 msgstr ""
 
-#: library/helpers/helper-core.php:1368
+#: library/helpers/helper-core.php:1364
 msgid "Chinese (Simplified)"
 msgstr ""
 
-#: library/helpers/helper-core.php:1369
+#: library/helpers/helper-core.php:1365
 msgid "Chinese (Traditional)"
 msgstr ""
 
-#: library/helpers/helper-core.php:1370
+#: library/helpers/helper-core.php:1366
 msgid "Croatian"
 msgstr ""
 
-#: library/helpers/helper-core.php:1371
+#: library/helpers/helper-core.php:1367
 msgid "Czech"
 msgstr ""
 
-#: library/helpers/helper-core.php:1372
+#: library/helpers/helper-core.php:1368
 msgid "Danish"
 msgstr ""
 
-#: library/helpers/helper-core.php:1373
+#: library/helpers/helper-core.php:1369
 msgid "Dutch"
 msgstr ""
 
-#: library/helpers/helper-core.php:1374
+#: library/helpers/helper-core.php:1370
 msgid "English (UK)"
 msgstr ""
 
-#: library/helpers/helper-core.php:1375
+#: library/helpers/helper-core.php:1371
 msgid "English (US)"
 msgstr ""
 
-#: library/helpers/helper-core.php:1376
+#: library/helpers/helper-core.php:1372
 msgid "Estonian"
 msgstr ""
 
-#: library/helpers/helper-core.php:1377
+#: library/helpers/helper-core.php:1373
 msgid "Filipino"
 msgstr ""
 
-#: library/helpers/helper-core.php:1378
+#: library/helpers/helper-core.php:1374
 msgid "Finnish"
 msgstr ""
 
-#: library/helpers/helper-core.php:1379
+#: library/helpers/helper-core.php:1375
 msgid "French"
 msgstr ""
 
-#: library/helpers/helper-core.php:1380
+#: library/helpers/helper-core.php:1376
 msgid "French (Canadian)"
 msgstr ""
 
-#: library/helpers/helper-core.php:1381
+#: library/helpers/helper-core.php:1377
 msgid "Galician"
 msgstr ""
 
-#: library/helpers/helper-core.php:1382
+#: library/helpers/helper-core.php:1378
 msgid "Georgian"
 msgstr ""
 
-#: library/helpers/helper-core.php:1383
+#: library/helpers/helper-core.php:1379
 msgid "German"
 msgstr ""
 
-#: library/helpers/helper-core.php:1384
+#: library/helpers/helper-core.php:1380
 msgid "German (Austria)"
 msgstr ""
 
-#: library/helpers/helper-core.php:1385
+#: library/helpers/helper-core.php:1381
 msgid "German (Switzerland)"
 msgstr ""
 
-#: library/helpers/helper-core.php:1386
+#: library/helpers/helper-core.php:1382
 msgid "Greek"
 msgstr ""
 
-#: library/helpers/helper-core.php:1387
+#: library/helpers/helper-core.php:1383
 msgid "Gujarati"
 msgstr ""
 
-#: library/helpers/helper-core.php:1388
+#: library/helpers/helper-core.php:1384
 msgid "Hebrew"
 msgstr ""
 
-#: library/helpers/helper-core.php:1389
+#: library/helpers/helper-core.php:1385
 msgid "Hindi"
 msgstr ""
 
-#: library/helpers/helper-core.php:1390
+#: library/helpers/helper-core.php:1386
 msgid "Hungarain"
 msgstr ""
 
-#: library/helpers/helper-core.php:1391
+#: library/helpers/helper-core.php:1387
 msgid "Icelandic"
 msgstr ""
 
-#: library/helpers/helper-core.php:1392
+#: library/helpers/helper-core.php:1388
 msgid "Indonesian"
 msgstr ""
 
-#: library/helpers/helper-core.php:1393
+#: library/helpers/helper-core.php:1389
 msgid "Italian"
 msgstr ""
 
-#: library/helpers/helper-core.php:1394
+#: library/helpers/helper-core.php:1390
 msgid "Japanese"
 msgstr ""
 
-#: library/helpers/helper-core.php:1395
+#: library/helpers/helper-core.php:1391
 msgid "Kannada"
 msgstr ""
 
-#: library/helpers/helper-core.php:1396
+#: library/helpers/helper-core.php:1392
 msgid "Korean"
 msgstr ""
 
-#: library/helpers/helper-core.php:1397
+#: library/helpers/helper-core.php:1393
 msgid "Laothian"
 msgstr ""
 
-#: library/helpers/helper-core.php:1398
+#: library/helpers/helper-core.php:1394
 msgid "Latvian"
 msgstr ""
 
-#: library/helpers/helper-core.php:1399
+#: library/helpers/helper-core.php:1395
 msgid "Lithuanian"
 msgstr ""
 
-#: library/helpers/helper-core.php:1400
+#: library/helpers/helper-core.php:1396
 msgid "Malay"
 msgstr ""
 
-#: library/helpers/helper-core.php:1401
+#: library/helpers/helper-core.php:1397
 msgid "Malayalam"
 msgstr ""
 
-#: library/helpers/helper-core.php:1402
+#: library/helpers/helper-core.php:1398
 msgid "Marathi"
 msgstr ""
 
-#: library/helpers/helper-core.php:1403
+#: library/helpers/helper-core.php:1399
 msgid "Mongolian"
 msgstr ""
 
-#: library/helpers/helper-core.php:1404
+#: library/helpers/helper-core.php:1400
 msgid "Norwegian"
 msgstr ""
 
-#: library/helpers/helper-core.php:1405
+#: library/helpers/helper-core.php:1401
 msgid "Persian"
 msgstr ""
 
-#: library/helpers/helper-core.php:1406
+#: library/helpers/helper-core.php:1402
 msgid "Polish"
 msgstr ""
 
-#: library/helpers/helper-core.php:1407
+#: library/helpers/helper-core.php:1403
 msgid "Portuguese"
 msgstr ""
 
-#: library/helpers/helper-core.php:1408
+#: library/helpers/helper-core.php:1404
 msgid "Portuguese (Brazil)"
 msgstr ""
 
-#: library/helpers/helper-core.php:1409
+#: library/helpers/helper-core.php:1405
 msgid "Portuguese (Portugal)"
 msgstr ""
 
-#: library/helpers/helper-core.php:1410
+#: library/helpers/helper-core.php:1406
 msgid "Romanian"
 msgstr ""
 
-#: library/helpers/helper-core.php:1411
+#: library/helpers/helper-core.php:1407
 msgid "Russian"
 msgstr ""
 
-#: library/helpers/helper-core.php:1412
+#: library/helpers/helper-core.php:1408
 msgid "Serbian"
 msgstr ""
 
-#: library/helpers/helper-core.php:1413
+#: library/helpers/helper-core.php:1409
 msgid "Sinhalese"
 msgstr ""
 
-#: library/helpers/helper-core.php:1414
+#: library/helpers/helper-core.php:1410
 msgid "Slovak"
 msgstr ""
 
-#: library/helpers/helper-core.php:1415
+#: library/helpers/helper-core.php:1411
 msgid "Slovenian"
 msgstr ""
 
-#: library/helpers/helper-core.php:1416
+#: library/helpers/helper-core.php:1412
 msgid "Spanish"
 msgstr ""
 
-#: library/helpers/helper-core.php:1417
+#: library/helpers/helper-core.php:1413
 msgid "Spanish (Latin America)"
 msgstr ""
 
-#: library/helpers/helper-core.php:1418
+#: library/helpers/helper-core.php:1414
 msgid "Swahili"
 msgstr ""
 
-#: library/helpers/helper-core.php:1419
+#: library/helpers/helper-core.php:1415
 msgid "Swedish"
 msgstr ""
 
-#: library/helpers/helper-core.php:1420
+#: library/helpers/helper-core.php:1416
 msgid "Tamil"
 msgstr ""
 
-#: library/helpers/helper-core.php:1421
+#: library/helpers/helper-core.php:1417
 msgid "Telugu"
 msgstr ""
 
-#: library/helpers/helper-core.php:1422
+#: library/helpers/helper-core.php:1418
 msgid "Thai"
 msgstr ""
 
-#: library/helpers/helper-core.php:1423
+#: library/helpers/helper-core.php:1419
 msgid "Turkish"
 msgstr ""
 
-#: library/helpers/helper-core.php:1424
+#: library/helpers/helper-core.php:1420
 msgid "Ukrainian"
 msgstr ""
 
-#: library/helpers/helper-core.php:1425
+#: library/helpers/helper-core.php:1421
 msgid "Urdu"
 msgstr ""
 
-#: library/helpers/helper-core.php:1426
+#: library/helpers/helper-core.php:1422
 msgid "Vietnamese"
 msgstr ""
 
-#: library/helpers/helper-core.php:1427
+#: library/helpers/helper-core.php:1423
 msgid "Zulu"
 msgstr ""
 
-#: library/helpers/helper-core.php:1925
+#: library/helpers/helper-core.php:1921
 msgid "Create, edit, and delete modules (Forms, Polls, Quizzes)."
 msgstr ""
 
-#: library/helpers/helper-core.php:1926
+#: library/helpers/helper-core.php:1922
 msgid "Can create, edit, and delete modules (Forms, Polls, and Quizzes)."
 msgstr ""
 
-#: library/helpers/helper-core.php:1927
+#: library/helpers/helper-core.php:1923
 msgid "Can't create, edit, and delete modules (Forms, Polls, and Quizzes)."
 msgstr ""
 
-#: library/helpers/helper-core.php:1931
+#: library/helpers/helper-core.php:1927
 msgid "View templates page and manage cloud templates."
 msgstr ""
 
-#: library/helpers/helper-core.php:1932
+#: library/helpers/helper-core.php:1928
 msgid "Can create, edit, and delete templates."
 msgstr ""
 
-#: library/helpers/helper-core.php:1933
+#: library/helpers/helper-core.php:1929
 msgid "Can't create, edit, and delete templates."
 msgstr ""
 
-#: library/helpers/helper-core.php:1937
+#: library/helpers/helper-core.php:1933
 msgid "Access, export, and delete submissions."
 msgstr ""
 
-#: library/helpers/helper-core.php:1938
+#: library/helpers/helper-core.php:1934
 msgid "Can view and delete submissions."
 msgstr ""
 
-#: library/helpers/helper-core.php:1939
+#: library/helpers/helper-core.php:1935
 msgid "Can't view and delete submissions."
 msgstr ""
 
-#: library/helpers/helper-core.php:1943
+#: library/helpers/helper-core.php:1939
 msgid "View, install/uninstall, and configure Add-ons."
 msgstr ""
 
-#: library/helpers/helper-core.php:1944
+#: library/helpers/helper-core.php:1940
 msgid "Can configure add-ons."
 msgstr ""
 
-#: library/helpers/helper-core.php:1945
+#: library/helpers/helper-core.php:1941
 msgid "Can't configure add-ons."
 msgstr ""
 
-#: library/helpers/helper-core.php:1950
+#: library/helpers/helper-core.php:1946
 msgid "Access and configure global integrations."
 msgstr ""
 
-#: library/helpers/helper-core.php:1951
+#: library/helpers/helper-core.php:1947
 msgid "Can configure integrations."
 msgstr ""
 
-#: library/helpers/helper-core.php:1952
+#: library/helpers/helper-core.php:1948
 msgid "Can't configure integrations."
 msgstr ""
 
-#: library/helpers/helper-core.php:1956
+#: library/helpers/helper-core.php:1952
 msgid "View reports and schedule email notifications for modules."
 msgstr ""
 
-#: library/helpers/helper-core.php:1957
+#: library/helpers/helper-core.php:1953
 msgid "Can configure reports."
 msgstr ""
 
-#: library/helpers/helper-core.php:1958
+#: library/helpers/helper-core.php:1954
 msgid "Can't configure reports."
 msgstr ""
 
-#: library/helpers/helper-core.php:1963
+#: library/helpers/helper-core.php:1959
 msgid "Access and configure plugin settings."
 msgstr ""
 
-#: library/helpers/helper-core.php:1964
+#: library/helpers/helper-core.php:1960
 msgid "Can configure settings except permissions."
 msgstr ""
 
-#: library/helpers/helper-core.php:1965
+#: library/helpers/helper-core.php:1961
 msgid "Can't configure settings."
 msgstr ""
 
-#: library/helpers/helper-core.php:1966
+#: library/helpers/helper-core.php:1962
 msgid "Can configure all settings."
 msgstr ""
 
-#: library/helpers/helper-core.php:2259
+#: library/helpers/helper-core.php:2261
 msgid "Captcha can only be placed on the last page in a paginated form."
 msgstr ""
 
-#: library/helpers/helper-core.php:2342
+#: library/helpers/helper-core.php:2344
 #: library/modules/custom-forms/admin/admin-page-entries.php:123
 #: library/modules/custom-forms/user/class-forminator-cform-user-signups.php:509
 #: library/modules/custom-forms/user/class-forminator-cform-user-signups.php:521
@@ -20320,33 +20326,33 @@ msgid ""
 "perform this action."
 msgstr ""
 
-#: library/helpers/helper-core.php:2381
+#: library/helpers/helper-core.php:2383
 msgid "Please map all required user fields before saving this registration form."
 msgstr ""
 
-#: library/helpers/helper-core.php:2679
+#: library/helpers/helper-core.php:2681
 msgid "Stripe - Failed Email Notification"
 msgstr ""
 
-#: library/helpers/helper-core.php:2683
+#: library/helpers/helper-core.php:2685
 msgid "Payment Failed for {form_name} (submission #{submission_id})"
 msgstr ""
 
-#: library/helpers/helper-core.php:2686
+#: library/helpers/helper-core.php:2688
 msgid ""
 "A payment attempt for {form_name} could not be completed. The submission "
 "details have been saved, but payment processing failed."
 msgstr ""
 
-#: library/helpers/helper-core.php:2687
+#: library/helpers/helper-core.php:2689
 msgid "Details:"
 msgstr ""
 
-#: library/helpers/helper-core.php:2688
+#: library/helpers/helper-core.php:2690
 msgid "Submission ID: #{submission_id}"
 msgstr ""
 
-#: library/helpers/helper-core.php:2689
+#: library/helpers/helper-core.php:2691
 msgid "Amount: {payment_amount} {payment_currency}"
 msgstr ""
 
@@ -20395,29 +20401,29 @@ msgid "here"
 msgstr ""
 
 #: library/helpers/helper-fields.php:1929
-#: library/model/class-form-entry-model.php:1695
+#: library/model/class-form-entry-model.php:1709
 msgid "View File"
 msgstr ""
 
 #: library/helpers/helper-fields.php:1946
-#: library/model/class-form-entry-model.php:1977
+#: library/model/class-form-entry-model.php:1991
 msgid "(no title)"
 msgstr ""
 
 #: library/helpers/helper-fields.php:2013
-#: library/model/class-form-entry-model.php:2197
+#: library/model/class-form-entry-model.php:2211
 msgid "Tag"
 msgstr ""
 
 #: library/helpers/helper-fields.php:2025
-#: library/model/class-form-entry-model.php:2226
+#: library/model/class-form-entry-model.php:2240
 #: library/modules/quizzes/admin/admin-loader.php:567
 #: library/modules/quizzes/admin/admin-loader.php:656
 msgid "Featured image"
 msgstr ""
 
 #: library/helpers/helper-fields.php:2036
-#: library/model/class-form-entry-model.php:2257
+#: library/model/class-form-entry-model.php:2271
 msgid "Custom fields"
 msgstr ""
 
@@ -24268,6 +24274,37 @@ msgstr ""
 msgid "Generate leads with pop-ups, slide-ins and email opt-ins."
 msgstr ""
 
+#: library/lib/wpmudev-blackfriday/includes/class-action-links.php:77
+msgid "Get Black Friday Deal"
+msgstr ""
+
+#: library/lib/wpmudev-blackfriday/includes/class-admin-menu.php:86
+msgid "Black Friday"
+msgstr ""
+
+#: library/lib/wpmudev-blackfriday/includes/class-admin-menu.php:87
+msgid "WPMUDEV Black Friday Deal"
+msgstr ""
+
+#: library/lib/wpmudev-blackfriday/includes/class-admin-menu.php:182
+msgid "Sale"
+msgstr ""
+
+#: library/lib/wpmudev-blackfriday/includes/class-banner.php:434
+#: library/lib/wpmudev-blackfriday/includes/class-upsell-widget.php:199
+msgid "Black Friday Special"
+msgstr ""
+
+#: library/lib/wpmudev-blackfriday/includes/class-banner.php:437
+#. translators: %s: The deal price, eg $3.33/m.
+msgid "%s for unlimited sites"
+msgstr ""
+
+#: library/lib/wpmudev-blackfriday/includes/class-banner.php:440
+#: library/lib/wpmudev-blackfriday/includes/class-upsell-widget.php:200
+msgid "See the deal"
+msgstr ""
+
 #: library/model/class-base-form-model.php:1430
 msgid "Export Import feature disabled"
 msgstr ""
@@ -24322,51 +24359,51 @@ msgstr ""
 msgid "Unfortunately this %s has expired."
 msgstr ""
 
-#: library/model/class-form-entry-model.php:701
+#: library/model/class-form-entry-model.php:715
 msgid "State"
 msgstr ""
 
-#: library/model/class-form-entry-model.php:702
+#: library/model/class-form-entry-model.php:716
 msgid "Zip"
 msgstr ""
 
-#: library/model/class-form-entry-model.php:704
+#: library/model/class-form-entry-model.php:718
 msgid "Address Line 2"
 msgstr ""
 
-#: library/model/class-form-entry-model.php:715
+#: library/model/class-form-entry-model.php:729
 msgid "Post Image"
 msgstr ""
 
-#: library/model/class-form-entry-model.php:716
+#: library/model/class-form-entry-model.php:730
 msgid "Post Category"
 msgstr ""
 
-#: library/model/class-form-entry-model.php:717
+#: library/model/class-form-entry-model.php:731
 msgid "Post Tags"
 msgstr ""
 
-#: library/model/class-form-entry-model.php:718
+#: library/model/class-form-entry-model.php:732
 msgid "Product ID"
 msgstr ""
 
-#: library/model/class-form-entry-model.php:719
+#: library/model/class-form-entry-model.php:733
 msgid "Product Quantity"
 msgstr ""
 
-#: library/model/class-form-entry-model.php:1656
+#: library/model/class-form-entry-model.php:1670
 msgid "View Website"
 msgstr ""
 
-#: library/model/class-poll-form-model.php:467
+#: library/model/class-poll-form-model.php:482
 msgid "Voting is closed"
 msgstr ""
 
-#: library/model/class-poll-form-model.php:472
+#: library/model/class-poll-form-model.php:487
 msgid "Voting is paused, check again later"
 msgstr ""
 
-#: library/model/class-poll-form-model.php:477
+#: library/model/class-poll-form-model.php:492
 msgid "Voting has not been started yet, check again later"
 msgstr ""
 
@@ -24679,8 +24716,8 @@ msgstr ""
 #: library/modules/custom-forms/form-templates/template-post.php:92
 #: library/modules/custom-forms/form-templates/template-quote.php:153
 #: library/modules/custom-forms/form-templates/template-registration.php:109
-#: library/modules/custom-forms/front/front-action.php:3361
-#: library/modules/custom-forms/front/front-action.php:3742
+#: library/modules/custom-forms/front/front-action.php:3406
+#: library/modules/custom-forms/front/front-action.php:3787
 msgid "Error: Your form is not valid, please fix the errors!"
 msgstr ""
 
@@ -24740,7 +24777,7 @@ msgid "Welcome back! You’re now logged in."
 msgstr ""
 
 #: library/modules/custom-forms/form-templates/template-login.php:184
-#: library/modules/custom-forms/front/front-user-login.php:358
+#: library/modules/custom-forms/front/front-user-login.php:408
 msgid "Remember Me"
 msgstr ""
 
@@ -24861,138 +24898,138 @@ msgstr ""
 msgid "Stripe Checkout is not enabled for this form."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:946
+#: library/modules/custom-forms/front/front-action.php:979
 msgid "Whoops, the passcode you entered was incorrect or expired."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:1387
+#: library/modules/custom-forms/front/front-action.php:1420
 msgid ""
 "The form is empty and cannot be saved as a draft. Please fill out at least "
 "one form field and try again."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:1390
-#: library/modules/custom-forms/front/front-action.php:3328
+#: library/modules/custom-forms/front/front-action.php:1423
+#: library/modules/custom-forms/front/front-action.php:3373
 msgid "At least one field must be filled out to submit the form."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:1668
+#: library/modules/custom-forms/front/front-action.php:1701
 msgid ""
 "This payment requires additional authentication! Please follow the "
 "instructions."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:1684
+#: library/modules/custom-forms/front/front-action.php:1717
 msgid ""
 "This payment requires 3D Secure authentication! Please follow the "
 "instructions."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:1712
-#: library/modules/custom-forms/front/front-action.php:1789
+#: library/modules/custom-forms/front/front-action.php:1745
+#: library/modules/custom-forms/front/front-action.php:1822
 msgid "Payment is currently unavailable. Please try again later."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:1798
-#: library/modules/custom-forms/front/front-render.php:3105
+#: library/modules/custom-forms/front/front-action.php:1831
+#: library/modules/custom-forms/front/front-render.php:3114
 msgid "SSL required to submit this form, please check your URL."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:1869
+#: library/modules/custom-forms/front/front-action.php:1902
 msgid "Error: Invalid module"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:1933
+#: library/modules/custom-forms/front/front-action.php:1966
 msgid "Failed to load Stripe session."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:1957
+#: library/modules/custom-forms/front/front-action.php:1990
 msgid "Failed to load Stripe payment intent."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:2192
-#: library/modules/custom-forms/front/front-action.php:2416
+#: library/modules/custom-forms/front/front-action.php:2228
+#: library/modules/custom-forms/front/front-action.php:2458
 msgid "Failed to decrypt user password."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:2737
+#: library/modules/custom-forms/front/front-action.php:2779
 msgid "Payment is not complete. Please finish payment and try again."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:2748
+#: library/modules/custom-forms/front/front-action.php:2790
 msgid ""
 "This payment was started in a different browser. If it was completed, it "
 "will be processed shortly."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:3055
-#: library/modules/custom-forms/front/front-user-login.php:234
+#: library/modules/custom-forms/front/front-action.php:3100
+#: library/modules/custom-forms/front/front-user-login.php:235
 msgid "Failed to encrypt the password."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:3617
+#: library/modules/custom-forms/front/front-action.php:3662
 msgid "Upload field ID is missing."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:3629
+#: library/modules/custom-forms/front/front-action.php:3674
 msgid "Upload field doesn't exist in your form!"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:4866
+#: library/modules/custom-forms/front/front-action.php:4924
 msgid "There was an error saving the post data. Please try again"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:4900
+#: library/modules/custom-forms/front/front-action.php:4958
 msgid "Please try again."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:4915
+#: library/modules/custom-forms/front/front-action.php:4973
 msgid "Your code has been sent to your email."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:5026
+#: library/modules/custom-forms/front/front-action.php:5088
 #: library/modules/custom-forms/user/class-forminator-cform-user-data.php:242
 msgid "Draft entry was not found."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:5041
+#: library/modules/custom-forms/front/front-action.php:5103
 msgid "Email is required."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:5052
+#: library/modules/custom-forms/front/front-action.php:5114
 msgid "Please enter a valid email."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:5093
+#: library/modules/custom-forms/front/front-action.php:5155
 #: library/modules/custom-forms/user/class-forminator-cform-user-data.php:257
 msgid ""
 "Could not determine the page for this draft. The draft link cannot be "
 "reconstructed."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:5109
+#: library/modules/custom-forms/front/front-action.php:5171
 #: library/modules/custom-forms/user/class-forminator-cform-user-data.php:275
 msgid "No draft email notification is configured for this form."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:5125
+#: library/modules/custom-forms/front/front-action.php:5187
 msgid ""
 "We've sent the resume form link to your email address. Please check your "
 "spam folder if you can't find the link in your inbox."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:5126
+#: library/modules/custom-forms/front/front-action.php:5188
 msgid "Change email"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:5133
+#: library/modules/custom-forms/front/front-action.php:5195
 msgid ""
 "We couldn't send the form resume link to your email at this time. Click on "
 "the link below to resend it or manually copy and save the link in a safe "
 "place."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-action.php:5134
+#: library/modules/custom-forms/front/front-action.php:5196
 msgid "Resend link"
 msgstr ""
 
@@ -25024,84 +25061,84 @@ msgstr ""
 msgid "Having problems? Try another way to log in"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:1360
-#: library/modules/custom-forms/front/front-render.php:1607
+#: library/modules/custom-forms/front/front-render.php:1361
+#: library/modules/custom-forms/front/front-render.php:1608
 #. translators: %d: Page number.
 msgid "Page %d"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:1416
+#: library/modules/custom-forms/front/front-render.php:1417
 #: library/modules/quizzes/front/front-render.php:314
 #. Translators: 1. Current page number, 2. Total number of pages.
 #. translators: 1. Step, 2. Total steps.
 msgid "Page %1$s of %2$s"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:1603
+#: library/modules/custom-forms/front/front-render.php:1604
 msgid "Page "
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:2608
+#: library/modules/custom-forms/front/front-render.php:2609
 msgid "Please do not fill in this field."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:2731
+#: library/modules/custom-forms/front/front-render.php:2732
 msgid "Jan"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:2732
+#: library/modules/custom-forms/front/front-render.php:2733
 msgid "Feb"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:2733
+#: library/modules/custom-forms/front/front-render.php:2734
 msgid "Mar"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:2734
+#: library/modules/custom-forms/front/front-render.php:2735
 msgid "Apr"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:2736
+#: library/modules/custom-forms/front/front-render.php:2737
 msgid "Jun"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:2737
+#: library/modules/custom-forms/front/front-render.php:2738
 msgid "Jul"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:2738
+#: library/modules/custom-forms/front/front-render.php:2739
 msgid "Aug"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:2739
+#: library/modules/custom-forms/front/front-render.php:2740
 msgid "Sep"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:2740
+#: library/modules/custom-forms/front/front-render.php:2741
 msgid "Oct"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:2741
+#: library/modules/custom-forms/front/front-render.php:2742
 msgid "Nov"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:2742
+#: library/modules/custom-forms/front/front-render.php:2743
 msgid "Dec"
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:3107
+#: library/modules/custom-forms/front/front-render.php:3116
 msgid "PayPal amount must be greater than 0."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:3108
+#: library/modules/custom-forms/front/front-render.php:3117
 msgid "Please correct the errors before submission."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:3291
+#: library/modules/custom-forms/front/front-render.php:3300
 msgid "User is logged in."
 msgstr ""
 
-#: library/modules/custom-forms/front/front-render.php:3669
+#: library/modules/custom-forms/front/front-render.php:3678
 msgid "Fill in form fields before saving it as a draft"
 msgstr ""
 
@@ -26649,28 +26686,28 @@ msgid "View Answers"
 msgstr ""
 
 #: library/modules/quizzes/front/front-action.php:421
-#: library/modules/quizzes/front/front-action.php:865
+#: library/modules/quizzes/front/front-action.php:879
 msgid "Share your results"
 msgstr ""
 
 #: library/modules/quizzes/front/front-action.php:427
 #: library/modules/quizzes/front/front-action.php:429
-#: library/modules/quizzes/front/front-action.php:871
-#: library/modules/quizzes/front/front-action.php:873
+#: library/modules/quizzes/front/front-action.php:885
+#: library/modules/quizzes/front/front-action.php:887
 msgid "Share on Facebook"
 msgstr ""
 
 #: library/modules/quizzes/front/front-action.php:435
 #: library/modules/quizzes/front/front-action.php:437
-#: library/modules/quizzes/front/front-action.php:879
-#: library/modules/quizzes/front/front-action.php:881
+#: library/modules/quizzes/front/front-action.php:893
+#: library/modules/quizzes/front/front-action.php:895
 msgid "Share on X"
 msgstr ""
 
 #: library/modules/quizzes/front/front-action.php:443
 #: library/modules/quizzes/front/front-action.php:445
-#: library/modules/quizzes/front/front-action.php:887
-#: library/modules/quizzes/front/front-action.php:889
+#: library/modules/quizzes/front/front-action.php:901
+#: library/modules/quizzes/front/front-action.php:903
 msgid "Share on LinkedIn"
 msgstr ""
 
@@ -26684,7 +26721,11 @@ msgstr ""
 msgid "Please answer all the questions"
 msgstr ""
 
-#: library/modules/quizzes/front/front-action.php:727
+#: library/modules/quizzes/front/front-action.php:706
+msgid "Invalid answer."
+msgstr ""
+
+#: library/modules/quizzes/front/front-action.php:741
 msgid " and"
 msgstr ""
 

@@ -141,11 +141,12 @@ class Forminator_Textarea extends Forminator_Field {
 		$this->form_settings = $settings;
 		$descr_position      = self::get_description_position( $field, $settings );
 
-		$html           = '';
-		$name           = self::get_property( 'element_id', $field );
-		$id             = self::get_field_id( $name );
-		$required       = self::get_property( 'required', $field, false, 'bool' );
-		$default        = esc_html( self::get_property( 'default', $field, false ) );
+		$html     = '';
+		$name     = self::get_property( 'element_id', $field );
+		$id       = self::get_field_id( $name );
+		$required = self::get_property( 'required', $field, false, 'bool' );
+		// create_textarea() applies esc_textarea(); do not pre-escape HTML entities here.
+		$default        = self::get_property( 'default', $field, false );
 		$placeholder    = $this->sanitize_value( self::get_property( 'placeholder', $field ) );
 		$label          = esc_html( self::get_property( 'field_label', $field, '' ) );
 		$description    = self::get_property( 'description', $field, '' );
@@ -172,8 +173,10 @@ class Forminator_Textarea extends Forminator_Field {
 		}
 
 		if ( isset( $draft_value['value'] ) ) {
-
-			$default = wp_kses_post( $draft_value['value'] );
+			// Keep draft HTML for the rich editor; create_textarea() escapes for the text context.
+			$default = true === $editor_type
+				? forminator_sanitize_rich_textarea_widget_hooks( $draft_value['value'] )
+				: forminator_sanitize_textarea( $draft_value['value'] );
 
 		} elseif ( $this->has_prefill( $field ) ) {
 			// We have pre-fill parameter, use its value or $value.

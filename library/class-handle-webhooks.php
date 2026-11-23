@@ -25,6 +25,15 @@ class Forminator_Handle_Webhooks {
 	private static $instance = null;
 
 	/**
+	 * Lock values acquired by this request, keyed by entry ID.
+	 *
+	 * @since 1.59.0
+	 *
+	 * @var array
+	 */
+	private $lock_values = array();
+
+	/**
 	 * Return the plugin instance
 	 *
 	 * @return Forminator_Handle_Webhooks
@@ -218,8 +227,11 @@ class Forminator_Handle_Webhooks {
 	 * Lock the webhook processing for the given entry to prevent concurrent processing.
 	 *
 	 * @param Forminator_Form_Entry_Model $entry The entry object.
+	 * @return bool True if the processing is already locked, false otherwise.
 	 */
 	public function lock_webhook_processing( $entry ) {
+		global $wpdb;
+
 		if ( $this->is_webhook_processing_locked( $entry ) ) {
 			// If the lock already exists, return early to prevent concurrent processing.
 			return true;
@@ -230,26 +242,29 @@ class Forminator_Handle_Webhooks {
 
 		$entry->add_meta( '_stripe_webhook_processing_lock', $expire_time );
 
-		// This is a safeguard to ensure that we don't allow concurrent processing.
-		$result = add_option( 'forminator_stripe_webhook_processing_lock_' . $entry->entry_id, $expire_time, '', 'no' );
+		$option_name = 'forminator_stripe_webhook_processing_lock_' . $entry->entry_id;
+		// Add a random token so only this request can release the lock.
+		$lock_value = $expire_time . ':' . wp_generate_password( 32, false );
+
+		// Use direct queries, as the options API cannot add or update atomically.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$result = $wpdb->query( $wpdb->prepare( "INSERT IGNORE INTO {$wpdb->options} (`option_name`, `option_value`, `autoload`) VALUES (%s, %s, 'no')", $option_name, $lock_value ) );
 		if ( ! $result ) {
-			$expiration = get_option( 'forminator_stripe_webhook_processing_lock_' . $entry->entry_id, false );
-			// If the lock does not exist, return true to block parallel processing.
-			if ( false === $expiration ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$current_value = $wpdb->get_var( $wpdb->prepare( "SELECT `option_value` FROM {$wpdb->options} WHERE `option_name` = %s", $option_name ) );
+			// If the lock does not exist or is still active, return true to block parallel processing.
+			if ( is_null( $current_value ) || time() <= (int) $current_value ) {
 				return true;
 			}
-			// If the lock is still active, return true.
-			if ( time() <= (int) $expiration ) {
+			// If the lock has expired, take it over unless another request already did.
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$result = $wpdb->query( $wpdb->prepare( "UPDATE {$wpdb->options} SET `option_value` = %s WHERE `option_name` = %s AND `option_value` = %s", $lock_value, $option_name, $current_value ) );
+			if ( ! $result ) {
 				return true;
-			} else {
-				// If the lock has expired, delete the lock option and try to acquire the lock again.
-				delete_option( 'forminator_stripe_webhook_processing_lock_' . $entry->entry_id );
-				$result = add_option( 'forminator_stripe_webhook_processing_lock_' . $entry->entry_id, $expire_time, '', 'no' );
-				if ( ! $result ) {
-					return true;
-				}
 			}
 		}
+		$this->lock_values[ $entry->entry_id ] = $lock_value;
+
 		return false;
 	}
 
@@ -283,8 +298,19 @@ class Forminator_Handle_Webhooks {
 	 * @param Forminator_Form_Entry_Model $entry The entry object.
 	 */
 	public function unlock_webhook_processing( $entry ) {
-		delete_option( 'forminator_stripe_webhook_processing_lock_' . $entry->entry_id );
-		if ( ! empty( $entry->status ) && 'pending' === $entry->status ) {
+		global $wpdb;
+
+		// If the lock was not acquired by this request, return early.
+		if ( empty( $this->lock_values[ $entry->entry_id ] ) ) {
+			return;
+		}
+		$lock_value = $this->lock_values[ $entry->entry_id ];
+		unset( $this->lock_values[ $entry->entry_id ] );
+
+		// Delete the lock only if this request still owns it.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$released = $wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE `option_name` = %s AND `option_value` = %s", 'forminator_stripe_webhook_processing_lock_' . $entry->entry_id, $lock_value ) );
+		if ( $released && ! empty( $entry->status ) && 'pending' === $entry->status ) {
 			// If the entry is still pending, we can remove the lock meta to allow immediate future processing attempts.
 			$entry->delete_meta_by_key( '_stripe_webhook_processing_lock' );
 		}

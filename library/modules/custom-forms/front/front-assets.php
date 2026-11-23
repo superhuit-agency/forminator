@@ -59,10 +59,9 @@ class Forminator_Assets_Enqueue_Form extends Forminator_Assets_Enqueue {
 			$this->load_phone_scripts();
 		}
 
-		// FIELD: HTML.
-		if ( $render_obj->has_field_type( 'html' ) ) {
-			self::load_dompurify_scripts();
-		}
+		// HTML merge-tag output always goes through DOMPurify, including forms
+		// without an HTML field (rich-text drafts can inject merge-tag markup).
+		self::load_dompurify_scripts();
 
 		// FIELD: Date picker.
 		if ( $render_obj->has_field_type( 'date' ) ) {
