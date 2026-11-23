@@ -3595,12 +3595,12 @@ function forminator_count_field_type_in_page( $field_type, $post_id = 0 ) {
 			continue;
 		}
 
-		$form = $form->load( absint( $shortcode_attr['id'] ) );
-		if ( ! is_object( $form ) ) {
+		$form_model = $form->load( absint( $shortcode_attr['id'] ) );
+		if ( ! is_object( $form_model ) ) {
 			continue;
 		}
 
-		$form_fields = $form->get_fields();
+		$form_fields = $form_model->get_fields();
 
 		foreach ( $form_fields as $field ) {
 			if ( false !== strpos( $field->slug, $field_type ) ) {
@@ -3753,7 +3753,7 @@ function forminator_allowed_mime_types( $mimes = array(), $allow = true ) {
 		$mimes = get_allowed_mime_types();
 	}
 	if ( ! $allow ) {
-		$blocked_extensions = array( 'htm', 'html', 'js', 'jse', 'jar', 'php', 'php3', 'php4', 'php5', 'phtml', 'svg', 'swf', 'exe', 'shtml', 'xhtml', 'xml', 'css', 'asp', 'aspx', 'jsp', 'sql', 'hta', 'dll', 'bat', 'com', 'sh', 'bash', 'py', 'pl', 'dfxp', 'rar' );
+		$blocked_extensions = array( 'htm', 'html', 'js', 'jse', 'jar', 'php', 'php3', 'php4', 'php5', 'phtml', 'svg', 'swf', 'exe', 'shtml', 'xhtml', 'xml', 'css', 'asp', 'aspx', 'jsp', 'sql', 'hta', 'dll', 'bat', 'com', 'sh', 'bash', 'py', 'pl', 'dfxp', 'rar', 'rtx' );
 
 		foreach ( array_keys( $mimes ) as $mime_key ) {
 			$alternatives = explode( '|', strtolower( (string) $mime_key ) );

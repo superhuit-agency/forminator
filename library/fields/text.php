@@ -187,17 +187,17 @@ class Forminator_Text extends Forminator_Field {
 				$textarea['maxlength'] = $limit;
 			}
 
+			// create_textarea() applies esc_textarea(); pass plain values, not pre-escaped HTML.
 			if ( isset( $draft_value['value'] ) ) {
-
-				$default = wp_kses_post( $draft_value['value'] );
-
+				$textarea_content = forminator_sanitize_textarea( $draft_value['value'] );
 			} elseif ( $this->has_prefill( $field ) ) {
-				// We have pre-fill parameter, use its value or $value.
-				$default = $this->get_prefill( $field, $default );
+				$textarea_content = $this->get_prefill( $field, self::get_property( 'default', $field, false ) );
+			} else {
+				$textarea_content = self::get_property( 'default', $field, false );
 			}
 
-			if ( ! empty( $default ) ) {
-				$textarea['content'] = $default;
+			if ( ! empty( $textarea_content ) ) {
+				$textarea['content'] = $textarea_content;
 			} elseif ( isset( $autofill_markup['value'] ) ) {
 				$textarea['content'] = $autofill_markup['value'];
 				unset( $autofill_markup['value'] );

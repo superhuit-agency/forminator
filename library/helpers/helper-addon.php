@@ -1314,7 +1314,7 @@ function forminator_addon_format_quiz_settings( Forminator_Quiz_Model $quiz ) {
  */
 function forminator_lead_form_data( $submitted_data ) {
 	$entry_data = null;
-	$data_entry = isset( $submitted_data['entry_id'] ) ? $submitted_data['entry_id'] : 0;
+	$data_entry = isset( $submitted_data['entry_id'] ) ? absint( $submitted_data['entry_id'] ) : 0;
 	$entries    = new Forminator_Form_Entry_Model( $data_entry );
 	if ( ! empty( $entries ) ) {
 		$entry_data = $entries;

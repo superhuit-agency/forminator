@@ -170,16 +170,17 @@ class Forminator_CForm_Front_User_Login extends Forminator_User {
 			$two_fa_component = new $defender_data['two_fa_component']();
 			if ( ! is_wp_error( $sign_on ) ) {
 				$available_providers = $two_fa_component->get_available_providers_for_user( $sign_on );
-				$token               = uniqid();
-				// create and store a login token so we can query this user again.
-				update_user_meta( $sign_on->ID, 'defender_two_fa_token', $token );
-				$enable_otp = $two_fa_component->is_user_enabled_otp( $sign_on->ID );
+				$enable_otp          = $two_fa_component->is_user_enabled_otp( $sign_on->ID );
 				if ( $enable_otp && ! empty( $available_providers ) ) {
 					$auth_method = isset( Forminator_CForm_Front_Action::$prepared_data['auth_method'] ) ? Forminator_CForm_Front_Action::$prepared_data['auth_method'] : '';
 					if ( empty( $auth_method ) ) {
 						$auth_method = $two_fa_component->get_default_provider_slug_for_user( $sign_on->ID );
 					}
 					if ( ! isset( Forminator_CForm_Front_Action::$prepared_data['auth_method'] ) ) {
+						// Store a short-lived login token for the 2FA step.
+						$token = wp_generate_password( 32, false );
+						set_transient( self::get_two_fa_token_key( $sign_on->ID ), $token, 10 * MINUTE_IN_SECONDS );
+
 						$response['authentication'] = 'show';
 						$response['user']           = $sign_on;
 						$response['username']       = $sign_on->user_login;
@@ -193,7 +194,7 @@ class Forminator_CForm_Front_User_Login extends Forminator_User {
 						if ( ! is_wp_error( $provider ) ) {
 							$result = $provider->validate_authentication( $sign_on );
 							if ( ! empty( $result ) && ! is_wp_error( $result ) ) {
-								delete_user_meta( $sign_on->ID, 'defender_two_fa_token' );
+								delete_transient( self::get_two_fa_token_key( $sign_on->ID ) );
 								$response['authentication'] = 'valid';
 							} else {
 								$response['authentication'] = 'invalid';
@@ -257,6 +258,55 @@ class Forminator_CForm_Front_User_Login extends Forminator_User {
 		$response['user']           = $sign_on;
 
 		return $response;
+	}
+
+	/**
+	 * Check the 2FA login token issued to the submitted user.
+	 *
+	 * @since 1.58.5
+	 *
+	 * @param array  $settings         Form settings.
+	 * @param array  $field_data_array Field data.
+	 * @param string $token            Submitted login token.
+	 *
+	 * @return bool
+	 */
+	public static function is_valid_two_fa_token( $settings, $field_data_array, $token ) {
+		if ( empty( $settings['login-username-field'] ) || ! is_string( $token ) || '' === $token ) {
+			return false;
+		}
+
+		// Same value the sign on uses.
+		$values   = array_column( $field_data_array, 'value', 'name' );
+		$username = $values[ $settings['login-username-field'] ] ?? '';
+		if ( ! is_string( $username ) || '' === $username ) {
+			return false;
+		}
+
+		$user = get_user_by( 'login', $username );
+		if ( ! $user && is_email( $username ) ) {
+			$user = get_user_by( 'email', $username );
+		}
+		if ( ! $user ) {
+			return false;
+		}
+
+		$stored = get_transient( self::get_two_fa_token_key( $user->ID ) );
+
+		return is_string( $stored ) && '' !== $stored && hash_equals( $stored, $token );
+	}
+
+	/**
+	 * Get the transient key of a user's 2FA login token.
+	 *
+	 * @since 1.58.5
+	 *
+	 * @param int $user_id User ID.
+	 *
+	 * @return string
+	 */
+	private static function get_two_fa_token_key( $user_id ) {
+		return 'forminator_two_fa_token_' . $user_id;
 	}
 
 	/**

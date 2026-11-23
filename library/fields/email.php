@@ -471,6 +471,11 @@ class Forminator_Email extends Forminator_Field {
 			$item = preg_quote( $item, '/' );
 			// Support * as wildcard.
 			$item = str_replace( '\*', '.*', $item );
+			if ( 0 !== strpos( $item, '@' ) && 0 !== strpos( $item, '.*' ) ) {
+				// If the item does not start with @ or *, add ^ to match the start of the email address.
+				$item = '^' . $item;
+			}
+
 			// Add start and end delimiters (case-insensitive; email domains are not case-sensitive).
 			$item = '/' . $item . '$/i';
 			if ( preg_match( $item, $email ) ) {

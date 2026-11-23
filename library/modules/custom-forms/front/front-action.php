@@ -828,10 +828,12 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 		}
 
 		// Ignore CAPTCHA re-check (only for the v2 checkbox option) during two-factor authentication.
+		// The login token proves the CAPTCHA already passed.
 		if ( isset( self::$prepared_data['g-recaptcha-response'] )
 			&& isset( self::$module_settings['form-type'] ) && 'login' === self::$module_settings['form-type']
 			&& ! empty( self::$prepared_data['auth_method'] )
-			&& 'v2_checkbox' === self::$info['captcha_settings']['captcha_type'] ) {
+			&& 'v2_checkbox' === self::$info['captcha_settings']['captcha_type']
+			&& Forminator_CForm_Front_User_Login::is_valid_two_fa_token( self::$module_settings, self::$info['field_data_array'], self::$prepared_data['auth_token'] ?? '' ) ) {
 			return '';
 		}
 
@@ -855,23 +857,23 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 	 *
 	 * @since 1.58.0
 	 *
-	 * @param bool $require_token Whether a missing token should fail. Early amount updates
-	 *                            run before one exists and take no payment.
+	 * @param bool $require_token Whether the captcha is checked. Amount updates outside the
+	 *                            submission take no payment, so they are not.
 	 *
 	 * @return string Empty when the form has no captcha or the token is good, the error message otherwise.
 	 */
 	private static function verify_payment_captcha( $require_token = true ) {
-		if ( empty( self::$info['captcha_settings'] ) ) {
+		if ( empty( self::$info['captcha_settings'] ) || ! $require_token ) {
 			return '';
 		}
 
 		$token = self::get_captcha_user_response();
 
 		if ( ! is_string( $token ) || '' === $token ) {
-			return $require_token ? __( 'Captcha verification failed. Please try again.', 'forminator' ) : '';
+			return __( 'Captcha verification failed. Please try again.', 'forminator' );
 		}
 
-		$cache_key = 'forminator_captcha_' . md5( self::$module_id . '|' . $token );
+		$cache_key = self::get_payment_captcha_cache_key( $token );
 		$cached    = get_transient( $cache_key );
 
 		if ( false !== $cached ) {
@@ -884,6 +886,37 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 		set_transient( $cache_key, '' === $error ? '1' : $error, 5 * MINUTE_IN_SECONDS );
 
 		return $error;
+	}
+
+	/**
+	 * Get the cache key of a payment captcha verdict.
+	 *
+	 * @since 1.58.5
+	 *
+	 * @param string $token Captcha token.
+	 *
+	 * @return string
+	 */
+	private static function get_payment_captcha_cache_key( $token ) {
+		return 'forminator_captcha_' . md5( self::$module_id . '|' . $token );
+	}
+
+	/**
+	 * Use up the cached payment captcha verdict once it let a submission through.
+	 *
+	 * @since 1.58.5
+	 *
+	 * @return void
+	 */
+	private static function consume_payment_captcha() {
+		if ( empty( self::$info['captcha_settings'] ) || self::$is_draft ) {
+			return;
+		}
+
+		$token = self::get_captcha_user_response();
+		if ( is_string( $token ) && '' !== $token ) {
+			delete_transient( self::get_payment_captcha_cache_key( $token ) );
+		}
 	}
 
 	/**
@@ -2158,10 +2191,13 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 				if ( false === $event_data['is_session'] || ( 'paid' === $session->payment_status || 'no_payment_required' === $session->payment_status ) ) {
 					if ( self::$is_leads ) {
 
-						// Update the entry status to active.
-						if ( $entry->update_status( 'active' ) ) {
-							self::fire_checkout_after_stripe_charge( $stripe_data );
+						// Update the entry status to active, if not already processed.
+						if ( ! $entry->update_status( 'active', 'pending' ) ) {
+							// Already processed, nothing to retry.
+							return 'pending' !== $entry->status;
 						}
+
+						self::fire_checkout_after_stripe_charge( $stripe_data );
 
 						// Process integrated add-ons and emails for quizzes.
 						$form_action = new Forminator_Quiz_Front_Action();
@@ -2206,10 +2242,13 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 						}
 					}
 
-					// Update the entry status to active.
-					if ( $entry->update_status( 'active' ) ) {
-						self::fire_checkout_after_stripe_charge( $stripe_data );
+					// Update the entry status to active, if not already processed.
+					if ( ! $entry->update_status( 'active', 'pending' ) ) {
+						// Already processed, nothing to retry.
+						return 'pending' !== $entry->status;
 					}
+
+					self::fire_checkout_after_stripe_charge( $stripe_data );
 
 					// Update hidden fields with submission ID if they exist in the prepared data.
 					$this->maybe_update_hidden_fields( $entry );
@@ -2327,8 +2366,11 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 				// Update stripe data in entry meta.
 				$this->update_stripe_meta( $entry, $stripe_data );
 			}
-			// Update the entry status to failed.
-			$entry->update_status( 'failed' );
+			// Update the entry status to failed, if not already processed.
+			if ( ! $entry->update_status( 'failed', 'pending' ) ) {
+				// Already processed, nothing to retry.
+				return 'pending' !== $entry->status;
+			}
 
 			// Remove the user registration data from entry fields, as the payment failed and it is no longer needed.
 			if ( isset( self::$module_settings['form-type'] ) && 'registration' === self::$module_settings['form-type'] ) {
@@ -2875,6 +2917,9 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 
 			$response             = self::get_response( $entry );
 			$response['entry_id'] = absint( $entry->entry_id );
+
+			// A solved captcha lets one submission through.
+			self::consume_payment_captcha();
 
 			// If is lead, and storing in database is disabled, then store the $entry object temporarily in transient.
 			if ( self::$is_leads && self::prevent_store() && 0 === $response['entry_id'] ) {
@@ -3946,6 +3991,19 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 		if ( true === self::$is_fields_visibility_checked ) {
 			return;
 		}
+
+		// Never trust a client-supplied post image; it is set from the uploaded file.
+		foreach ( array_keys( self::$prepared_data ) as $key ) {
+			if ( 0 !== strpos( (string) $key, 'postdata-' ) ) {
+				continue;
+			}
+			if ( false !== strpos( $key, '-post-image' ) ) {
+				unset( self::$prepared_data[ $key ] );
+			} elseif ( is_array( self::$prepared_data[ $key ] ) ) {
+				unset( self::$prepared_data[ $key ]['post-image'] );
+			}
+		}
+
 		$fields         = self::$module_object->get_fields();
 		$visible_fields = array(); // Visible fields with calculable values.
 		$unspecified    = array(); // it's not clear these fields are hidden or visible.
@@ -4959,7 +5017,11 @@ class Forminator_CForm_Front_Action extends Forminator_Front_Action {
 		// Must guarantee alphanumeric.
 		$draft_id  = wp_rand( 0, 9 );
 		$draft_id .= substr( str_shuffle( 'abcdefghijklmnopqrstvwxyz' ), 0, 1 );
-		$draft_id .= substr( str_replace( '-', '', wp_generate_uuid4() ), 0, 10 );
+		// Use secure random characters, as the ID is the only key to the draft.
+		$chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+		for ( $i = 0; $i < 10; $i++ ) {
+			$draft_id .= $chars[ wp_rand( 0, 35 ) ];
+		}
 
 		return apply_filters( 'forminator_create_draft_id', $draft_id, $form_id );
 	}

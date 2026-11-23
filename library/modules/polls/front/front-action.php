@@ -454,8 +454,9 @@ class Forminator_Poll_Front_Action extends Forminator_Front_Action {
 					break;
 			}
 		}
-		$current_date = date_i18n( 'Y-m-d H:i:s' );
+		// Sign the vote time to prevent tampering.
+		$cookie_value = $poll->get_vote_cookie_value( time() );
 		$secure       = ( 'https' === wp_parse_url( wp_login_url(), PHP_URL_SCHEME ) );
-		setcookie( $cookie_name, $current_date, $expire, COOKIEPATH, COOKIE_DOMAIN, $secure, true );
+		setcookie( $cookie_name, $cookie_value, $expire, COOKIEPATH, COOKIE_DOMAIN, $secure, true );
 	}
 }

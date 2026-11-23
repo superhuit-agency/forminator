@@ -483,6 +483,12 @@
 						}
 
 						try {
+							const validationResult =
+								await self.validateElements();
+							// Stop the submit if Stripe Elements validation fails, but do not show an error message because the Stripe field already shows its own.
+							if ( false === validationResult ) {
+								return;
+							}
 							await self.validateCheckoutSessionSubmission();
 						} catch ( error ) {
 							// updateAmount() already renders regular Forminator validation errors.
@@ -632,6 +638,35 @@
 				self.refreshCheckoutSession().catch(function() {});
 			});
 
+		},
+
+		validateElements: async function() {
+			if (
+				this._checkoutActions &&
+				typeof this._checkoutActions.validateElements === 'function'
+			) {
+				// Validate the Stripe Elements.
+				const stripeValidation =
+					await this._checkoutActions.validateElements();
+				if (
+					stripeValidation &&
+					stripeValidation.error &&
+					'validation_error' === stripeValidation.error.code
+				) {
+					this._form.find( 'button' ).removeAttr( 'disabled' );
+					const $paymentEl = this.settings.paymentEl;
+					if ( $paymentEl && $paymentEl.length ) {
+						this.focus_to_element(
+							$paymentEl.closest( '.forminator-field' )
+						);
+					}
+					this._beforeSubmitCallback = null;
+					this.intent = true;
+					this.enable_form();
+					return false;
+				}
+			}
+			return true;
 		},
 
 		paymentMethodRedirect: function( e, redirectUrl, clientSecret, subscription ) {

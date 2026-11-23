@@ -893,11 +893,7 @@ function forminator_get_form_type_helper( $common_name = false ) {
 	}
 
 	$form_type = '';
-	$page      = Forminator_Core::sanitize_text_field( 'page', null );
-
-	if ( is_null( $page ) ) {
-		return null;
-	}
+	$page      = substr( $screen->id, strpos( $screen->id, '_page_' ) + 6 );
 
 	switch ( $page ) {
 		case 'forminator-quiz-view':
@@ -2119,8 +2115,9 @@ function forminator_get_permission( $page_slug ) {
 	 */
 	$cap = apply_filters( 'forminator_permission_cap', $cap, $page_slug, $default_cap, $permission_map );
 
-	$user_allowed = false;
-	$role_allowed = false;
+	$user_allowed  = false;
+	$role_allowed  = false;
+	$role_excluded = false;
 
 	// Check permissions for excluded users.
 	foreach ( $permissions as $permission ) {
@@ -2136,7 +2133,7 @@ function forminator_get_permission( $page_slug ) {
 
 			// If current user is in excluded users, return the default admin cap.
 			if ( in_array( intval( $user->ID ), array_map( 'intval', $permission['exclude_users'] ), true ) ) {
-				$role_allowed = false;
+				$role_excluded = true;
 			} else {
 				$role_allowed = true;
 			}
@@ -2151,6 +2148,11 @@ function forminator_get_permission( $page_slug ) {
 				$user_allowed = false;
 			}
 		}
+	}
+
+	// Other role rules can't undo an exclusion.
+	if ( $role_excluded ) {
+		$role_allowed = false;
 	}
 
 	if (
@@ -2309,8 +2311,8 @@ function forminator_get_accessible_user_roles() {
 	// Get roles.
 	$roles = get_editable_roles();
 
-	// Allow all roles if the user is a super admin or has the administrator role.
-	if ( ( is_multisite() && is_super_admin() ) || in_array( 'administrator', $current_user->roles, true ) ) {
+	// Allow all roles if the user is a super admin, or an administrator who can promote users.
+	if ( ( is_multisite() && is_super_admin() ) || ( in_array( 'administrator', $current_user->roles, true ) && current_user_can( 'promote_users' ) ) ) {
 		return $roles;
 	}
 

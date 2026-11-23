@@ -704,9 +704,10 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 
 			// Ensure TinyMCE toolbar and WP link dialog appear above
 			// modal/popup overlays by setting a high z-index.
+			// .ui-autocomplete is the link search list, appended to body.
 			wp_add_inline_style(
 				'buttons',
-				'div.mce-inline-toolbar-grp, #wp-link-wrap { z-index: 999991 !important; }'
+				'div.mce-inline-toolbar-grp, #wp-link-wrap, .ui-autocomplete { z-index: 999991 !important; }'
 			);
 		}
 
@@ -3083,6 +3084,13 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 		}
 		$has_stripe = $this->has_stripe();
 
+		$form_field_ids = array();
+		foreach ( $this->get_fields() as $form_field ) {
+			if ( ! empty( $form_field['element_id'] ) ) {
+				$form_field_ids[] = $form_field['element_id'];
+			}
+		}
+
 		$options = array(
 			'form_type'           => $this->get_form_type(),
 			'inline_validation'   => filter_var( $form_properties['inline_validation'], FILTER_VALIDATE_BOOLEAN ),
@@ -3098,6 +3106,7 @@ class Forminator_CForm_Front extends Forminator_Render_Form {
 			'pagination_config'   => $form_properties['pagination'],
 			'paypal_config'       => $form_properties['paypal_payment'],
 			'forminator_fields'   => Forminator_Core::get_field_types(),
+			'form_field_ids'      => $form_field_ids,
 			'general_messages'    => array(
 				'calculation_error'            => Forminator_Calculation::default_error_message(),
 				'payment_require_ssl_error'    => apply_filters(

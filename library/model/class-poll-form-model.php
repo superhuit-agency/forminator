@@ -183,10 +183,13 @@ class Forminator_Poll_Model extends Forminator_Base_Form_Model {
 						$interval = 'year';
 						break;
 				}
-				$cookie_value  = date_i18n( 'Y-m-d H:i:s', strtotime( sanitize_text_field( wp_unslash( $_COOKIE[ $poll_cookie ] ) ) ) );
-				$cookie_expire = $cookie_value . ' +' . $duration . ' ' . $interval;
-				$current_date  = date_i18n( 'Y-m-d H:i:s' );
-				if ( strtotime( $current_date ) < strtotime( $cookie_expire ) ) {
+				$cookie_value = sanitize_text_field( wp_unslash( $_COOKIE[ $poll_cookie ] ) );
+				$voted_at     = (int) $cookie_value;
+				// If the cookie is invalid, block voting until it expires.
+				if ( ! hash_equals( $this->get_vote_cookie_value( $voted_at ), $cookie_value ) ) {
+					return false;
+				}
+				if ( time() < strtotime( '+' . $duration . ' ' . $interval, $voted_at ) ) {
 					return false;
 				} else {
 					return true;
@@ -199,6 +202,18 @@ class Forminator_Poll_Model extends Forminator_Base_Form_Model {
 		}
 	}
 
+
+	/**
+	 * Get the signed vote cookie value.
+	 *
+	 * @since 1.59.0
+	 *
+	 * @param int $voted_at Vote timestamp.
+	 * @return string
+	 */
+	public function get_vote_cookie_value( $voted_at ) {
+		return $voted_at . '|' . wp_hash( 'forminator_poll_vote_' . $this->id . '|' . $voted_at );
+	}
 
 	/**
 	 * Check user can vote by user IP

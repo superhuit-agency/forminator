@@ -600,6 +600,10 @@
 			item = item.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 			// Support * as wildcard.
 			item = item.replace(/\\\*/g, '.*');
+			// Add start delimiter if the item doesn't start with a wildcard or @.
+			if ( ! item.startsWith( '.*' ) && ! item.startsWith( '@' ) ) {
+				item = '^' + item;
+			}
 			// Add end delimiter (case-insensitive; email domains are not case-sensitive).
 			const regex = new RegExp(item + '$', 'i');
 			if (regex.test(email)) {

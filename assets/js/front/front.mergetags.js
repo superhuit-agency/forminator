@@ -19,6 +19,7 @@
 	    defaults   = {
 		    print_value: false,
 		    forminatorFields: [],
+		    formFieldIds: [],
 	    };
 
 	// The actual plugin constructor
@@ -145,10 +146,23 @@
 
 		replace: function ( field, $input ) {
 			var res = this.maybeReplaceValue(field.value);
+			res = this.sanitizeMergeTagHtml( res, field.value );
+			$input.html(res);
+		},
+
+		/**
+		 * Sanitize merge-tag HTML before inserting it into the DOM.
+		 * Always prefers DOMPurify; falls back to text escaping when unavailable.
+		 *
+		 * @param {string} html Resolved merge-tag HTML.
+		 * @param {string} originalTemplate Original field template (for iframe allow-list).
+		 * @return {string}
+		 */
+		sanitizeMergeTagHtml: function ( html, originalTemplate ) {
 			if ( typeof window.DOMPurify !== 'undefined' ) {
 				let config = { ADD_ATTR: [ 'target' ] };
 				// Allow iframe tags and attributes if the original value contains iframes.
-				if( this.hasIframes(field.value) ) {
+				if ( this.hasIframes( originalTemplate ) ) {
 					config.ADD_TAGS = [ 'iframe' ];
 					config.ADD_ATTR = [
 						'align',
@@ -167,9 +181,35 @@
 						'target'
 					];
 				}
-				res = window.DOMPurify.sanitize( res, config );
+				return window.DOMPurify.sanitize( html, config );
 			}
-			$input.html(res);
+
+			return this.sanitize_text_field( html );
+		},
+
+		/**
+		 * Whether a merge-tag field id belongs to this form configuration.
+		 *
+		 * @param {string} elementId Field element id, e.g. postdata-1 or textarea-1-2.
+		 * @return {boolean}
+		 */
+		isConfiguredFormField: function ( elementId ) {
+			var configuredIds = this.settings.formFieldIds || [];
+			if ( ! configuredIds.length || ! elementId ) {
+				return false;
+			}
+
+			elementId = String( elementId );
+
+			for ( var i = 0; i < configuredIds.length; i++ ) {
+				var configuredId = configuredIds[ i ];
+				// Exact field, repeater clone (field-N), or postdata sub-field (field-post-content).
+				if ( elementId === configuredId || 0 === elementId.indexOf( configuredId + '-' ) ) {
+					return true;
+				}
+			}
+
+			return false;
 		},
 
 		hasIframes: function ( html ) {
@@ -195,12 +235,18 @@
 					continue;
 				}
 
+				// Only resolve tags for fields that exist in this form's configuration.
+				var lookupName = inputName.endsWith( '-*' ) ? inputName.replace( '-*', '' ) : inputName;
+				if ( ! this.isConfiguredFormField( lookupName ) ) {
+					parsedValue = parsedValue.replace( fullMatch, '' );
+					continue;
+				}
+
 				// Check if the field is a grouped field.
-				if( inputName.endsWith( '-*' ) ){
-					inputName = inputName.replace( '-*', '' );
-					replace = this.get_group_field_values( inputName );
+				if ( inputName.endsWith( '-*' ) ) {
+					replace = this.get_group_field_values( lookupName );
 				} else {
-					replace = this.get_field_value(inputName);
+					replace = this.get_field_value( inputName );
 				}
 
 				parsedValue = parsedValue.replace(fullMatch, replace);
@@ -436,6 +482,10 @@
 			var $form = this.$el,
 				parts = [];
 
+			if ( ! this.isConfiguredFormField( element_id ) ) {
+				return '';
+			}
+
 			if ($form.hasClass('forminator-grouped-fields')) {
 				$form = $form.closest('form.forminator-ui');
 			}
@@ -461,8 +511,8 @@
 				}
 
 				if (contentVal) {
-					// Don't sanitize - preserve HTML formatting from editor.
-					parts.push(contentVal);
+					// Sanitize before merge-tag insertion; formatting is preserved by DOMPurify.
+					parts.push( this.sanitizeMergeTagHtml( contentVal, contentVal ) );
 				}
 			}
 
